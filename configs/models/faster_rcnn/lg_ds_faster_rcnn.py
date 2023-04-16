@@ -3,7 +3,7 @@ import copy
 
 # modify base for different detectors
 _base_ = [
-    '../lg_ds_base_box.py',
+    '../lg_ds_base.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/models/faster-rcnn_r50_fpn.py'),
 ]
 
@@ -20,7 +20,6 @@ del detector.data_preprocessor
 model = copy.deepcopy(_base_.lg_model)
 model.data_preprocessor = dp
 model.detector = detector
-model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 model.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.roi_extractor.roi_layer.output_size = 1
 del _base_.lg_model

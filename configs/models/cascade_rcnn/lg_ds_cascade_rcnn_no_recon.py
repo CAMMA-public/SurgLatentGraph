@@ -1,5 +1,5 @@
 # modify base for different detectors
-_base_ = ['../lg_ds_mask_rcnn.py']
+_base_ = ['lg_ds_cascade_rcnn.py']
 
 model = dict(
     reconstruction_head=None,
@@ -7,4 +7,4 @@ model = dict(
 )
 
 # modify load_from
-load_from = 'weights/lg_mask_rcnn_no_recon.pth'
+load_from = 'weights/lg_cascade_rcnn_no_recon.pth'

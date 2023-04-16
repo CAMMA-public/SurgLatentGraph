@@ -24,7 +24,6 @@ del detector.data_preprocessor
 # extract lg config, set detector
 model = copy.deepcopy(_base_.lg_model)
 model.data_preprocessor = dp
-model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 model.detector = detector
 del _base_.lg_model
 

@@ -102,3 +102,6 @@ auto_scale_lr = dict(enable=False)
 
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
+default_hooks = dict(
+    checkpoint=dict(save_best='ds_average_precision'),
+)

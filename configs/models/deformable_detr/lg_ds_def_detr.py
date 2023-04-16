@@ -3,7 +3,7 @@ import copy
 
 # modify base for different detectors
 _base_ = [
-    '../lg_ds_base_box.py',
+    '../lg_ds_base.py',
     os.path.expandvars('$MMDETECTION/configs/deformable_detr/deformable-detr_r50_16xb2-50e_coco_no_base.py'),
 ]
 custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.def_detr_with_queries'],
@@ -27,7 +27,6 @@ del detector.data_preprocessor
 model = copy.deepcopy(_base_.lg_model)
 model.data_preprocessor = dp
 model.detector = detector
-model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.lg_model
 
 # modify load_from
