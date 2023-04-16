@@ -1,12 +1,14 @@
 from mmdet.registry import MODELS
 from mmdet.models.detectors import Mask2Former
 from mmdet.models.dense_heads import Mask2FormerHead
+from mmdet.models.seg_heads.panoptic_fusion_heads import MaskFormerFusionHead
 from mmdet.structures import SampleList, OptSampleList
-from mmdet.structures.bbox import bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh
+from mmdet.structures.mask import mask2bbox
 from mmengine.structures import InstanceData
 import torch
+import torch.nn.functional as F
 from torch import Tensor
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 
 @MODELS.register_module()
 class Mask2FormerWithQueries(Mask2Former):
@@ -30,14 +32,13 @@ class Mask2FormerWithQueries(Mask2Former):
         _, _, all_queries = self.panoptic_head(neck_feats, batch_data_samples, return_queries=True)
 
         # select top queries
-        breakpoint()
         queries = torch.stack([q[r.pred_instances.selected_inds] for q, r in zip(
             all_queries[-1], batch_data_samples)])
 
         return bb_feats, neck_feats, queries
 
 @MODELS.register_module()
-class Mask2FormerHead(Mask2FormerHead):
+class Mask2FormerHeadWithQueries(Mask2FormerHead):
     def forward(self, x: List[Tensor],
                 batch_data_samples: SampleList,
                 return_queries: bool = False) -> Tuple[List[Tensor]]:
@@ -169,6 +170,6 @@ class MaskFormerFusionHeadWithIndices(MaskFormerFusionHead):
         results.labels = labels_per_image
         results.scores = det_scores
         results.masks = mask_pred_binary
-        results.selected_inds = top_indices
+        results.selected_inds = query_indices
 
         return results

@@ -5,6 +5,8 @@ import copy
 _base_ = [
     '../lg_ds_base.py',
     os.path.expandvars('$MMDETECTION/configs/mask2former/mask2former_r50_8xb2-lsj-50e_coco-panoptic_no_base.py'),
+custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.mask2former_with_queries'],
+        allow_failed_imports=False)
 ]
 # extract detector, data preprocessor config from base
 num_things_classes = 6
@@ -22,7 +24,7 @@ detector.panoptic_head.loss_cls=dict(
 )
 detector.panoptic_fusion_head.num_things_classes = num_things_classes
 detector.panoptic_fusion_head.num_stuff_classes = num_stuff_classes
-detector.test_cfg.max_per_img = _base_.num_nodes
+detector.test_cfg.max_per_image = _base_.num_nodes
 
 dp = copy.deepcopy(_base_.model.data_preprocessor)
 dp.pad_size_divisor = 1
