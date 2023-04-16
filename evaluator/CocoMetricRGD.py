@@ -164,7 +164,6 @@ class CocoMetricRGD(CocoMetric):
         if 'ds' in results[0]:
             # save ds preds
             pred_ds = torch.stack([r['ds'] for r in results]).sigmoid()
-            breakpoint()
 
             if not os.path.exists(outfile_prefix):
                 os.makedirs(outfile_prefix)
@@ -173,9 +172,9 @@ class CocoMetricRGD(CocoMetric):
             np.savetxt(pred_outname, pred_ds.detach().cpu().numpy())
 
             if gts is not None:
-                gt_ds = torch.stack([g['ds'] for g in gts])
+                gt_ds = np.stack([g['ds'] for g in gts])
                 gt_outname = os.path.join(outfile_prefix, 'gt_ds.txt')
-                np.savetxt(gt_outname, gt_ds.detach().cpu().numpy())
+                np.savetxt(gt_outname, gt_ds)
 
         return result_files
 

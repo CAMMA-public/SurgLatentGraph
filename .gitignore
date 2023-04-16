@@ -2,3 +2,4 @@ results/
 work_dirs/
 weights/
 data
+**/*.pyc

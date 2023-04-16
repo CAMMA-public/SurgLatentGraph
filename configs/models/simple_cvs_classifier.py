@@ -101,6 +101,14 @@ optim_wrapper = dict(
 )
 auto_scale_lr = dict(enable=False)
 
+# Running settings
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=20,
+    val_interval=1)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+
 # hooks
 default_hooks = dict(
     checkpoint=dict(save_best='endoscapes/ds_average_precision'),
