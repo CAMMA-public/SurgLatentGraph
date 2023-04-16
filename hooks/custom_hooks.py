@@ -24,6 +24,16 @@ class CopyDetectorBackbone(Hook):
                     print()
                 except AttributeError as e:
                     print(e)
+
+            elif 'Mask2Former' in type(runner.model.detector).__name__:
+                try:
+                    runner.model.trainable_backbone.load_state_dict(runner.model.detector.state_dict())
+                    print()
+                    print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
+                    print()
+                except AttributeError as e:
+                    print(e)
+
             else:
                 try:
                     runner.model.trainable_backbone.backbone.load_state_dict(runner.model.detector.backbone.state_dict())

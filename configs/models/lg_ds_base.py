@@ -10,6 +10,11 @@ custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_faile
 # feat sizes
 ds_input_feat_size = 128 # downproject each node and edge feature to this size for ds pred
 
+# recon params
+bottleneck_feat_size = 64
+layout_noise_dim = 32
+recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat_size
+
 # model
 lg_model = _base_.lg_model
 lg_model.trainable_backbone=True
@@ -36,10 +41,39 @@ lg_model.ds_head=dict(
     num_predictor_layers=3,
     weight=[3.19852941, 4.46153846, 2.79518072],
 )
-#lg_model.reconstruction_head=None
-lg_model.reconstruction_head.use_seg_recon = False
-lg_model.reconstruction_head.use_pred_boxes_whiteout = True
-lg_model.reconstruction_loss.box_loss_weight = 0.5
+lg_model.reconstruction_head = dict(
+    type='ReconstructionHead',
+    layout_noise_dim=layout_noise_dim,
+    num_classes=_base_.num_classes,
+    num_nodes=_base_.num_nodes,
+    bottleneck_feat_size=bottleneck_feat_size,
+    decoder_cfg=dict(
+        type='DecoderNetwork',
+        dims=(recon_input_dim, 1024, 512, 256, 128, 64),
+        spade_blocks=True,
+        source_image_dims=layout_noise_dim,
+        normalization='batch',
+        activation='leakyrelu-0.2',
+    ),
+    aspect_ratio=[2, 3],
+    use_seg_recon=True,
+    use_pred_boxes_whiteout=True,
+)
+lg_model.reconstruction_loss=dict(
+    type='ReconstructionLoss',
+    l1_weight=0.15,
+    ssim_weight=0.0,
+    deep_loss_weight=0.6,
+    perceptual_weight=1.0,
+    box_loss_weight=0.5,
+    recon_loss_weight=1.0,
+    use_content=True,
+    use_style=False,
+    use_ssim=False,
+    use_l1=True,
+    #deep_loss_backbone='resnet50',
+    #load_backbone_weights='weights/converted_moco.torch',
+)
 
 # dataset
 train_dataloader = dict(
