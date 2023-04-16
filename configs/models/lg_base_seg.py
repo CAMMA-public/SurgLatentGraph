@@ -26,10 +26,10 @@ test_evaluator = [
         metric=['bbox', 'segm'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./work_dirs/coco_instance/test'
+        outfile_prefix='./results/endoscapes_preds/test'
     ),
 ]
 
 default_hooks = dict(
-    checkpoint=dict(save_best='segm_mAP'),
+    checkpoint=dict(save_best='endoscapes/segm_mAP'),
 )

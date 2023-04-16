@@ -23,7 +23,26 @@ class CocoMetricRGD(CocoMetric):
         self.additional_metrics = additional_metrics
 
     def process(self, data_batch: Dict, data_samples: Sequence[dict]) -> None:
-        super().process(data_batch, data_samples)
+        if len(self.metrics) > 0:
+            super().process(data_batch, data_samples)
+        else:
+            for data_sample in data_samples:
+                result = dict()
+                result['img_id'] = data_sample['img_id']
+
+                # parse gt
+                gt = dict()
+                gt['width'] = data_sample['ori_shape'][1]
+                gt['height'] = data_sample['ori_shape'][0]
+                gt['img_id'] = data_sample['img_id']
+                if self._coco_api is None:
+                    # TODO: Need to refactor to support LoadAnnotations
+                    assert 'instances' in data_sample, \
+                        'ground truth is required for evaluation when ' \
+                        '`ann_file` is not provided'
+                    gt['anns'] = data_sample['instances']
+                # add converted result to the results list
+                self.results.append((gt, result))
 
         gts, preds = list(map(list, zip(*self.results[-1 * len(data_samples):])))
         for p, g, data_sample in zip(preds, gts, data_samples):
@@ -37,7 +56,10 @@ class CocoMetricRGD(CocoMetric):
         self.results[-1 * len(data_samples):] = zip(gts, preds)
 
     def compute_metrics(self, results: list) -> Dict[str, float]:
-        eval_results = super().compute_metrics(results)
+        if len(self.metrics) > 0:
+            eval_results = super().compute_metrics(results)
+        else:
+            eval_results = {}
 
         # init logger
         logger: MMLogger = MMLogger.get_current_instance()
@@ -46,6 +68,9 @@ class CocoMetricRGD(CocoMetric):
         # load data
         img_paths = self._coco_api.load_imgs(self.img_ids)
         gts, preds = list(map(list, zip(*results)))
+
+        if self.outfile_prefix is not None:
+            result_files = self.results2json(preds, self.outfile_prefix, gts=gts)
 
         # compute reconstruction metrics
         if 'reconstruction' in preds[0] and 'reconstruction' in self.additional_metrics:
@@ -110,8 +135,11 @@ class CocoMetricRGD(CocoMetric):
         logger.info(' '.join(logger_info))
         return eval_results
 
-    def results2json(self, results: Sequence[dict], outfile_prefix: str) -> dict:
-        result_files = super().results2json(results, outfile_prefix)
+    def results2json(self, results: Sequence[dict], outfile_prefix: str, gts: Sequence[dict] = None) -> dict:
+        if len(self.metrics) > 0:
+            result_files = super().results2json(results, outfile_prefix)
+        else:
+            result_files = None
 
         if 'reconstruction' in results[0]:
             recon_imgs = []
@@ -132,6 +160,22 @@ class CocoMetricRGD(CocoMetric):
                 cv2.imwrite(outname, cv2_img)
 
             result_files['reconstruction'] = os.path.join(outfile_prefix, 'reconstructions')
+
+        if 'ds' in results[0]:
+            # save ds preds
+            pred_ds = torch.stack([r['ds'] for r in results]).sigmoid()
+            breakpoint()
+
+            if not os.path.exists(outfile_prefix):
+                os.makedirs(outfile_prefix)
+
+            pred_outname = os.path.join(outfile_prefix, 'pred_ds.txt')
+            np.savetxt(pred_outname, pred_ds.detach().cpu().numpy())
+
+            if gts is not None:
+                gt_ds = torch.stack([g['ds'] for g in gts])
+                gt_outname = os.path.join(outfile_prefix, 'gt_ds.txt')
+                np.savetxt(gt_outname, gt_ds.detach().cpu().numpy())
 
         return result_files
 

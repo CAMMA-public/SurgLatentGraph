@@ -12,7 +12,7 @@ val_data_prefix = _base_.val_dataloader.dataset.data_prefix.img
 test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['model.lg_detector', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
 
 # feat sizes
 viz_feat_size = 256
@@ -106,7 +106,7 @@ test_evaluator = [
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./work_dirs/coco_instance/test'
+        outfile_prefix='./results/endoscapes_preds/test'
     ),
 ]
 
@@ -134,5 +134,5 @@ log_config = dict( # config to register logger hook
 )
 
 default_hooks = dict(
-    checkpoint=dict(save_best='bbox_mAP'),
+    checkpoint=dict(save_best='endoscapes/bbox_mAP'),
 )
