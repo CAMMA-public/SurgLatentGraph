@@ -132,6 +132,15 @@ optim_wrapper = dict(
     optimizer=dict(type='AdamW', lr=0.00001),
     #clip_grad=dict(max_norm=0.1, norm_type=2),
 )
+param_scheduler = [
+    dict(
+        type='MultiStepLR',
+        begin=0,
+        end=_base_.train_cfg.max_epochs,
+        by_epoch=True,
+        milestones=[10], # cut lr after 10 epochs
+        gamma=0.1)
+]
 auto_scale_lr = dict(enable=False)
 
 # hooks

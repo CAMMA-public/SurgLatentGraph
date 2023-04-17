@@ -37,6 +37,9 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
 
     def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
         feats = self.extract_feat(batch_inputs)
+
+        # TODO reconstruction if recon head is not None
+
         ds_preds = self.predictor(feats)
         for r, dp in zip(batch_data_samples, ds_preds):
             r.pred_ds = dp
