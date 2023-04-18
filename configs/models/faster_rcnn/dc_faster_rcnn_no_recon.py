@@ -1,4 +1,4 @@
-_base_ = ['dc_mask2former.py']
+_base_ = ['dc_faster_rcnn.py']
 
 model = dict(
     reconstruction_head = None,
