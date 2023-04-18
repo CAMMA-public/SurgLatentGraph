@@ -138,7 +138,7 @@ param_scheduler = [
         begin=0,
         end=_base_.train_cfg.max_epochs,
         by_epoch=True,
-        milestones=[10], # cut lr after 10 epochs
+        milestones=[15], # cut lr after 15 epochs
         gamma=0.1)
 ]
 auto_scale_lr = dict(enable=False)
