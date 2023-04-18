@@ -9,7 +9,7 @@ class FreezeDetectorHook(Hook):
             p.requires_grad = False
         for m in model.detector.modules():
             m.eval()
-        model.detector = model.detector.eval()
+        model.detector.eval()
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):
