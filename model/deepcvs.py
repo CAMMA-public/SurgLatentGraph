@@ -6,6 +6,7 @@ import torchvision.transforms.functional as TF
 from torchvision.transforms import InterpolationMode
 from torch.nn.utils.rnn import pad_sequence
 from mmdet.registry import MODELS
+from mmengine.structures import BaseDataElement
 from mmdet.structures import SampleList, OptSampleList
 from mmdet.structures.bbox import scale_boxes
 from mmdet.utils import ConfigType
@@ -47,7 +48,7 @@ class DeepCVS(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_feat_size = 256
+            reconstruction_head.obj_feat_size = self.decoder_backbone.feat_dim
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None
@@ -98,13 +99,32 @@ class DeepCVS(BaseDetector):
         # get feats
         ds_feats = self.extract_feat(batch_inputs, results)
 
-        # TODO reconstruction if recon head is not None
+        # reconstruction if recon head is not None
+        recon_imgs, _, _ = self.reconstruct(batch_inputs, results, ds_feats)
 
         ds_preds = self.decoder_predictor(ds_feats)
-        for r, dp in zip(results, ds_preds):
+        for r, dp, r_img in zip(results, ds_preds, recon_imgs):
             r.pred_ds = dp
+            if r_img is not None:
+                # renormalize img
+                norm_r_img = r_img * Tensor(self.reconstruction_img_stats.std).view(-1, 1, 1).to(r_img.device) / 255 + \
+                        Tensor(self.reconstruction_img_stats.mean).view(-1, 1, 1).to(r_img.device) / 255
+                r.reconstruction = torch.clamp(norm_r_img, 0, 1)
 
         return results
+
+    def reconstruct(self, batch_inputs: Tensor, results: SampleList, ds_feats: Tensor) -> Tensor:
+        if self.reconstruction_head is None:
+            return [None] * len(results), None, None
+
+        feats = BaseDataElement()
+        feats.bb_feats = ds_feats
+        feats.instance_feats = ds_feats.unsqueeze(1).repeat(1, 16, 1)
+        feats.semantic_feats = None
+        reconstructed_imgs, img_targets, rescaled_results = \
+                self.reconstruction_head.predict(results, feats, batch_inputs)
+
+        return reconstructed_imgs, img_targets, rescaled_results
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
@@ -115,7 +135,19 @@ class DeepCVS(BaseDetector):
         # get feats
         ds_feats = self.extract_feat(batch_inputs, results)
 
-        # TODO reconstruction if recon head is not None
+        # reconstruction and loss if recon head is not None
+        recon_imgs, img_targets, rescaled_results = self.reconstruct(
+                batch_inputs, results, ds_feats)
+
+        if self.use_pred_boxes_recon_loss:
+            recon_boxes = [r.pred_instances.bboxes for r in rescaled_results]
+        else:
+            recon_boxes = [r.gt_instances.bboxes for r in rescaled_results]
+
+        recon_losses = self.reconstruction_loss(recon_imgs, img_targets, recon_boxes)
+        losses.update(recon_losses)
+
+        # ds prediction and loss
         ds_preds = self.decoder_predictor(ds_feats)
 
         # get gt
@@ -140,7 +172,7 @@ class DeepCVS(BaseDetector):
                 interpolation=InterpolationMode.NEAREST) for r in results]
             _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
         else:
-            layout, _, _  = self._construct_layout(detections_size, classes, boxes)
+            layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
         # concatenate layout and batch inputs
         decoder_input = torch.cat([batch_inputs, layout], 1)

@@ -72,7 +72,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                 gt_layouts = None
 
         # node features is (f, s)
-        node_features = torch.cat([viz_feats, semantic_feats], dim=-1)
+        node_features = torch.cat([viz_feats, semantic_feats], dim=-1) if semantic_feats is not None else viz_feats
 
         # build input to img decoder using input image, layout
         reconstruction_input = self._construct_reconstruction_input(imgs,
@@ -147,7 +147,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         processed_bg_img = self._whiteout(images, gt_layouts, layouts)
 
         # combine processed_bg_img, layout_with_features, semantics
-        input_feat = torch.cat([processed_bg_img, feature_layout], dim=1)
+        input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
 
         return input_feat
 

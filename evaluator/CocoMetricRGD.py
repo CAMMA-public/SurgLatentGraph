@@ -139,7 +139,7 @@ class CocoMetricRGD(CocoMetric):
         if len(self.metrics) > 0:
             result_files = super().results2json(results, outfile_prefix)
         else:
-            result_files = None
+            result_files = {}
 
         if 'reconstruction' in results[0]:
             recon_imgs = []
