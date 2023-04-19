@@ -9,6 +9,7 @@
 #SBATCH --error latentgraph_def_detr_error.log
 #SBATCH --output latentgraph_def_detr.log
 #SBATCH -A lbw@v100
+#SBATCH -C v100-32g
 
 module purge
 module load anaconda-py3/2019.03
