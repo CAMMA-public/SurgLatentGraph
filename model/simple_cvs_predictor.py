@@ -19,6 +19,7 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
             bottleneck_feat_size: int = 64,
             img_decoder: OptConfigType = None,
             reconstruction_loss: OptConfigType = None,
+            reconstruction_img_stats: ConfigType = None,
             neck: OptConfigType = None,
             data_preprocessor: OptConfigType = None,
             init_cfg: OptMultiConfig = None) -> None:
@@ -37,6 +38,8 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
             num_upsampling_stages = len(img_decoder.dims) - 1
             self.reconstruction_size = (Tensor(aspect_ratio) * (2 ** num_upsampling_stages)).int()
             self.reconstruction_loss = MODELS.build(reconstruction_loss)
+        else:
+            self.img_decoder = None
 
         self.loss_fn = MODELS.build(loss)
         self.reconstruction_loss = MODELS.build(reconstruction_loss) \
@@ -53,7 +56,7 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
 
         # reconstruction if recon head is not None
-        recon_imgs, _ = self.reconstruct(batch_inputs, ds_feats)
+        recon_imgs, _ = self.reconstruct(batch_inputs, feats)
 
         for r, dp, r_img in zip(batch_data_samples, ds_preds, recon_imgs):
             r.pred_ds = dp
@@ -67,7 +70,7 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
 
     def reconstruct(self, batch_inputs: Tensor, feats: Tensor) -> Tensor:
         if self.img_decoder is None:
-            return [None] * len(results), None
+            return [None] * len(batch_inputs), None
 
         # resize feats to aspect ratio, bottleneck
         recon_feats = self.bottleneck(TF.resize(feats, self.reconstruction_size.tolist()).transpose(1, -1)).transpose(1, -1)
@@ -95,7 +98,8 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
 
         # reconstruction if recon head is not None
         recon_imgs, img_targets = self.reconstruct(batch_inputs, feats)
-        loss.update(self.reconstruction_loss(recon_imgs, img_targets))
+        if self.reconstruction_loss is not None:
+            loss.update(self.reconstruction_loss(recon_imgs, img_targets))
 
         return loss
 

@@ -139,13 +139,14 @@ class DeepCVS(BaseDetector):
         recon_imgs, img_targets, rescaled_results = self.reconstruct(
                 batch_inputs, results, ds_feats)
 
-        if self.use_pred_boxes_recon_loss:
-            recon_boxes = [r.pred_instances.bboxes for r in rescaled_results]
-        else:
-            recon_boxes = [r.gt_instances.bboxes for r in rescaled_results]
+        if self.reconstruction_loss is not None:
+            if self.use_pred_boxes_recon_loss:
+                recon_boxes = [r.pred_instances.bboxes for r in rescaled_results]
+            else:
+                recon_boxes = [r.gt_instances.bboxes for r in rescaled_results]
 
-        recon_losses = self.reconstruction_loss(recon_imgs, img_targets, recon_boxes)
-        losses.update(recon_losses)
+            recon_losses = self.reconstruction_loss(recon_imgs, img_targets, recon_boxes)
+            losses.update(recon_losses)
 
         # ds prediction and loss
         ds_preds = self.decoder_predictor(ds_feats)
@@ -168,9 +169,16 @@ class DeepCVS(BaseDetector):
         classes = [r.pred_instances.labels for r in results]
         boxes = [scale_boxes(r.pred_instances.bboxes, scale_factor) for r in results]
         if 'masks' in results[0].pred_instances:
-            masks = [TF.resize(r.pred_instances.masks, img_size,
-                interpolation=InterpolationMode.NEAREST) for r in results]
+            masks = []
+            for r in results:
+                if r.pred_instances.masks.shape[0] == 0:
+                    masks.append(torch.zeros(0, *img_size).to(r.pred_instances.masks.device))
+                else:
+                    masks.append(TF.resize(r.pred_instances.masks, img_size,
+                        interpolation=InterpolationMode.NEAREST))
+
             _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
+
         else:
             layout, _, _  = self._construct_layout(img_size, classes, boxes)
 

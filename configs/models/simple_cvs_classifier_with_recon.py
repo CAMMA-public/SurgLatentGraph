@@ -1,3 +1,5 @@
+import os
+
 _base_ = ['simple_cvs_classifier.py']
 
 orig_imports = _base_.custom_imports.imports
@@ -27,7 +29,11 @@ model = dict(
         use_l1=True,
         #deep_loss_backbone='resnet50',
         #load_backbone_weights='weights/converted_moco.torch',
-    )
+    ),
+    reconstruction_img_stats=dict(
+        mean=_base_.model.data_preprocessor.mean,
+        std=_base_.model.data_preprocessor.std,
+    ),
 )
 
 # evaluators

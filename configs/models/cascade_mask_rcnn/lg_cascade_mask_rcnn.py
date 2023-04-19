@@ -1,7 +1,7 @@
 import copy
 import os
 
-_base_=['lg_base_seg.py',
+_base_=['../lg_base_seg.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/models/cascade-mask-rcnn_r50_fpn.py'),
 ]
 

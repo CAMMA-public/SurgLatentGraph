@@ -19,7 +19,7 @@ custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMe
 # additional params
 num_nodes = 16
 layout_noise_dim = 32
-bottleneck_feat_size = 2048
+bottleneck_feat_size = 1024
 recon_input_dim = bottleneck_feat_size + layout_noise_dim
 
 dc_model = dict(
@@ -81,21 +81,21 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
     dataset=dict(
         ann_file='train/annotation_cvs_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
     dataset=dict(
         ann_file='val/annotation_cvs_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=4,
     dataset=dict(
         ann_file='test/annotation_cvs_coco.json',

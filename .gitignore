@@ -1,6 +1,6 @@
 results/
 work_dirs/
-weights/
+weights/*.pth
 data
 **/*.pyc
 *.zip
