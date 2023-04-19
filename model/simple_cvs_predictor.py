@@ -44,6 +44,7 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         self.loss_fn = MODELS.build(loss)
         self.reconstruction_loss = MODELS.build(reconstruction_loss) \
                 if reconstruction_loss is not None else None
+        self.reconstruction_img_stats = reconstruction_img_stats
 
     def _forward(self, batch_inputs: Tensor,
             batch_data_samples: SampleList = None):

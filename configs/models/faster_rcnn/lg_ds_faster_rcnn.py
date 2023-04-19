@@ -26,4 +26,4 @@ model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.lg_model
 
 # modify load_from
-load_from = 'weights/lg_faster_rcnn.pth'
+load_from = 'weights/lg_faster_rcnn_no_recon.pth'

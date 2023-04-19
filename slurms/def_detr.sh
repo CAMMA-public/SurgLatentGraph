@@ -2,9 +2,9 @@
 #SBATCH -N 1
 #SBATCH -c 8
 #SBATCH --qos=qos_gpu-t4
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --time=20:00:00
-#SBATCH -p gpu_p2
+#SBATCH -p gpu_p13
 #SBATCH -J latentgraph_def_detr
 #SBATCH --error latentgraph_def_detr_error.log
 #SBATCH --output latentgraph_def_detr.log
@@ -22,4 +22,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_all.sh def_detr
+./slurms/run_all_mgpu.sh def_detr

@@ -4,3 +4,4 @@ weights/*.pth
 data
 **/*.pyc
 *.zip
+**/*.log
