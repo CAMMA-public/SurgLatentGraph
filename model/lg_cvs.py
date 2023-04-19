@@ -88,10 +88,11 @@ class LGDetector(BaseDetector):
             losses = {}
 
         # now run detector predict fn, we will pass the output of that to reconstructor
-        self.detector.training = False
-        results = self.detector.predict(batch_inputs, batch_data_samples)
-        detached_results = self.detach_results(results)
-        self.detector.training = True
+        with torch.no_grad():
+            self.detector.training = False
+            results = self.detector.predict(batch_inputs, batch_data_samples)
+            detached_results = self.detach_results(results)
+            self.detector.training = True
 
         # get bb and fpn features TODO(adit98) see if we can prevent running bb twice
         feats = self.extract_feat(batch_inputs, detached_results)

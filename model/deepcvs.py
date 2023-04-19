@@ -129,8 +129,9 @@ class DeepCVS(BaseDetector):
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
 
-        # run detector
-        results = self.detector.predict(batch_inputs, batch_data_samples)
+        with torch.no_grad():
+            # run detector
+            results = self.detector.predict(batch_inputs, batch_data_samples)
 
         # get feats
         ds_feats = self.extract_feat(batch_inputs, results)
