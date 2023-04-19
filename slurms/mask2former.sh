@@ -22,4 +22,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_all_mgpu.sh mask2former 2
+./slurms/run_all_mgpu.sh mask2former
