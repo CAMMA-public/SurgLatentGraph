@@ -29,6 +29,17 @@ export CUDA_VISIBLE_DEVICES=0 && python $MMDETECTION/tools/test.py ${cfg_dir}/lg
 export CUDA_VISIBLE_DEVICES=1 && python $MMDETECTION/tools/test.py ${cfg_dir}/lg_ds_${detector}_no_recon.py $(ls work_dirs/lg_ds_${detector}_no_recon/best_${dataset}* | tail -1) &
 wait
 
+# RUN LAYOUTCVS (WITH/WITHOUT RECON IN PARALLEL)
+# train
+export CUDA_VISIBLE_DEVICES=0 && python $MMDETECTION/tools/train.py ${cfg_dir}/layout_${detector}.py &
+export CUDA_VISIBLE_DEVICES=1 && python $MMDETECTION/tools/train.py ${cfg_dir}/layout_${detector}_no_recon.py &
+wait
+
+# test
+export CUDA_VISIBLE_DEVICES=0 && python $MMDETECTION/tools/test.py ${cfg_dir}/layout_${detector}.py $(ls work_dirs/layout_${detector}/best_${dataset}* | tail -1) &
+export CUDA_VISIBLE_DEVICES=1 && python $MMDETECTION/tools/test.py ${cfg_dir}/layout_${detector}_no_recon.py $(ls work_dirs/layout_${detector}_no_recon/best_${dataset}* | tail -1) &
+wait
+
 # RUN DEEPCVS (WITH/WITHOUT RECON IN PARALLEL)
 
 # train

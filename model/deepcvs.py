@@ -31,6 +31,7 @@ class DeepCVS(BaseDetector):
             decoder_backbone: ConfigType,
             loss: ConfigType,
             num_nodes: int,
+            layout_only: bool = False,
             use_pred_boxes_recon_loss: bool = False,
             reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None,
@@ -183,8 +184,18 @@ class DeepCVS(BaseDetector):
         else:
             layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
-        # concatenate layout and batch inputs
-        decoder_input = torch.cat([batch_inputs, layout], 1)
+        if self.layout_only:
+            decoder_input = layout
+        else:
+            # renormalize img to be b/w 0 and 1
+            if (batch_inputs.max() - batch_inputs.min()) == 0:
+                batch_inputs = torch.zeros_like(batch_inputs)
+            else:
+                batch_inputs = (batch_inputs - batch_inputs.min()) / \
+                        (batch_inputs.max() - batch_inputs.min())
+
+            # concatenate layout and batch inputs
+            decoder_input = torch.cat([batch_inputs, layout], 1)
 
         # ds prediction
         ds_feats = F.adaptive_avg_pool2d(self.decoder_backbone(decoder_input)[-1],
