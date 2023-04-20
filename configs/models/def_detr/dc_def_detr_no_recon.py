@@ -1,4 +1,4 @@
-_base_ = ['dc_def_detr_no_recon.py']
+_base_ = ['dc_def_detr.py']
 
 model = dict(
     reconstruction_head = None,

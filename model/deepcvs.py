@@ -42,6 +42,10 @@ class DeepCVS(BaseDetector):
         self.detector_num_classes = detector_num_classes
         self.num_classes = num_classes
         self.num_nodes = num_nodes
+        self.layout_only = layout_only
+        if self.layout_only:
+            decoder_backbone.in_channels = detector_num_classes + 1
+
         self.decoder_backbone = MODELS.build(decoder_backbone)
         self.decoder_predictor = torch.nn.Linear(self.decoder_backbone.feat_dim,
                 self.num_classes)
