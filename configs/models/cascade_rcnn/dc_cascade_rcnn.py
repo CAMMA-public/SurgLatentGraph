@@ -9,7 +9,12 @@ _base_ = [
 
 # extract detector, data preprocessor config from base
 detector = copy.deepcopy(_base_.model)
-detector.roi_head.bbox_head.num_classes = 6
+detector.roi_head.bbox_head = [
+        dict(type='Shared2FCBBoxHead', num_classes=6),
+        dict(type='Shared2FCBBoxHead', num_classes=6),
+        dict(type='Shared2FCBBoxHead', num_classes=6)
+]
+
 detector.test_cfg.rcnn.max_per_img = _base_.num_nodes
 dp = copy.deepcopy(_base_.model.data_preprocessor)
 dp.pad_size_divisor = 1

@@ -37,6 +37,10 @@ dc_model = dict(
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
+        init_cfg=dict(
+            type='Pretrained',
+            checkpoint='torchvision://resnet18'
+        ),
     ),
     loss=dict(
         type='CrossEntropyLoss',
@@ -133,7 +137,7 @@ test_evaluator = [
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.0003),
+    optimizer=dict(type='AdamW', lr=0.00001),
 )
 auto_scale_lr = dict(enable=False)
 

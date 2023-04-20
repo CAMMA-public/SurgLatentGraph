@@ -188,6 +188,9 @@ class DeepCVS(BaseDetector):
         else:
             layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
+        # make sure we only store pure bg pixels with a 0 in channel 0
+        layout[:, 0] = 1 - layout[:, 1:].max(1).values
+
         if self.layout_only:
             decoder_input = layout
         else:
