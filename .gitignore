@@ -1,5 +1,5 @@
-results/
-work_dirs/
+results
+work_dirs
 weights/*.pth
 data
 **/*.pyc
