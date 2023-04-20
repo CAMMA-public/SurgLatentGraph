@@ -6,8 +6,8 @@
 #SBATCH --time=20:00:00
 #SBATCH -p gpu_p13
 #SBATCH -J latentgraph_faster_rcnn
-#SBATCH --error latentgraph_faster_rcnn_error.log
-#SBATCH --output latentgraph_faster_rcnn.log
+#SBATCH --error simple_classifier_error.log
+#SBATCH --output simple_classifier.log
 #SBATCH -A lbw@v100
 #SBATCH -C v100-32g
 
