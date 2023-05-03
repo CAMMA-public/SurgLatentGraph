@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/endoscapes_instance.py',
+    '../../datasets/c80_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -110,7 +110,7 @@ test_dataloader = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='c80',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_cvs_coco.json'),
@@ -122,14 +122,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='c80',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_cvs_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/endoscapes_preds/test'
+        outfile_prefix='./results/c80_preds/test'
     ),
 ]
 
@@ -152,5 +152,5 @@ test_cfg = dict(type='TestLoop')
 # hooks
 custom_hooks = [dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='endoscapes/ds_average_precision'),
+    checkpoint=dict(save_best='c80/ds_average_precision'),
 )
