@@ -27,7 +27,6 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
             init_cfg=init_cfg, data_preprocessor=data_preprocessor)
         self.backbone = MODELS.build(backbone)
         self.neck = MODELS.build(neck) if neck is not None else torch.nn.Identity()
-        self.predictor = torch.nn.Linear(self.backbone.feat_dim, num_classes)
 
         if img_decoder is not None:
             self.bottleneck = torch.nn.Linear(self.backbone.feat_dim, bottleneck_feat_size)
@@ -41,7 +40,15 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         else:
             self.img_decoder = None
 
-        self.loss_fn = MODELS.build(loss)
+        if isinstance(loss, list):
+            self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
+            self.predictor = torch.nn.ModuleList([
+                torch.nn.Linear(self.backbone.feat_dim, num_classes) for i in range(len(loss))
+            ])
+        else:
+            self.loss_fn = MODELS.build(loss)
+            self.predictor = torch.nn.Linear(self.backbone.feat_dim, num_classes)
+
         self.reconstruction_loss = MODELS.build(reconstruction_loss) \
                 if reconstruction_loss is not None else None
         self.reconstruction_img_stats = reconstruction_img_stats
@@ -54,7 +61,11 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         feats = self.extract_feat(batch_inputs)
 
         # ds preds
-        ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
+        if isinstance(self.predictor, torch.nn.ModuleList):
+            ds_preds = torch.stack([p(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1)) \
+                    for p in self.predictor], 1)
+        else:
+            ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
 
         # reconstruction if recon head is not None
         recon_imgs, _ = self.reconstruct(batch_inputs, feats)
@@ -92,10 +103,24 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         feats = self.extract_feat(batch_inputs)
 
         # ds preds and loss
-        ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
+        if isinstance(self.predictor, torch.nn.ModuleList):
+            ds_preds = torch.stack([p(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1)) \
+                    for p in self.predictor], 1)
+        else:
+            ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
+
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
-                ds_preds.device).round()
-        loss = {'ds_loss': self.loss_fn(ds_preds, ds_gt)}
+                ds_preds.device).float().round().long()
+
+        if isinstance(self.loss_fn, torch.nn.ModuleList):
+            # compute loss for each criterion and sum
+            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+
+        else:
+            ds_loss = self.loss_fn(ds_preds, ds_gt)
+
+        # loss dict
+        loss = {'ds_loss': ds_loss}
 
         # reconstruction if recon head is not None
         recon_imgs, img_targets = self.reconstruct(batch_inputs, feats)

@@ -38,8 +38,10 @@ lg_model.ds_head=dict(
     loss_consensus='mode',
     loss='bce',
     loss_weight=1.0,
-    num_predictor_layers=3,
-    weight=[3.19852941, 4.46153846, 2.79518072],
+    prediction_mode='mlmc',
+    num_predictor_layers=2,
+    weight=[[0.40815294, 2.41808192, 7.33207119], [0.36943623, 3.71313519, 41.91341991],
+        [0.35056847,  9.23414402, 25.51251647]],
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',

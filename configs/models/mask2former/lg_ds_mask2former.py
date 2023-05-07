@@ -10,7 +10,7 @@ _base_ = [
 custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.mask2former_with_queries'],
         allow_failed_imports=False)
 # extract detector, data preprocessor config from base
-num_things_classes = 6
+num_things_classes = _base_.num_classes
 num_stuff_classes = 0
 num_classes = num_things_classes + num_stuff_classes
 detector = copy.deepcopy(_base_.model)

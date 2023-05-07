@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../../datasets/c80_instance.py',
+    '../datasets/c80_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -42,11 +42,23 @@ dc_model = dict(
             checkpoint='torchvision://resnet18'
         ),
     ),
-    loss=dict(
-        type='CrossEntropyLoss',
-        use_sigmoid=True,
-        class_weight=[3.19852941, 4.46153846, 2.79518072],
-    ),
+    loss = [
+        dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=False,
+            class_weight=[0.40815294, 2.41808192, 7.33207119],
+        ),
+        dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=False,
+            class_weight=[0.36943623, 3.71313519, 41.91341991],
+        ),
+        dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=False,
+            class_weight=[0.35056847,  9.23414402, 25.51251647],
+        ),
+    ],
     use_pred_boxes_recon_loss=True,
     reconstruction_head=dict(
         type='ReconstructionHead',

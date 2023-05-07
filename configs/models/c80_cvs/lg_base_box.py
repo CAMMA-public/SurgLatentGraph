@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../../datasets/c80_instance.py',
+    '../datasets/c80_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -76,10 +76,23 @@ test_evaluator = [
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=20,
-    val_interval=1)
+    max_epochs=200,
+    val_interval=10)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
+
+# learning rate
+param_scheduler = [
+    dict(
+        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
+    dict(
+        type='MultiStepLR',
+        begin=0,
+        end=200,
+        by_epoch=True,
+        milestones=[80, 110],
+        gamma=0.1)
+]
 
 # hooks
 log_config = dict( # config to register logger hook

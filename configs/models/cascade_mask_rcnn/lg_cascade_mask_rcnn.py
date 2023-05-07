@@ -8,9 +8,9 @@ _base_=['../lg_base_seg.py',
 # extract detector, data preprocessor config from base
 detector = copy.deepcopy(_base_.model)
 detector.roi_head.bbox_head = [
-        dict(type='Shared2FCBBoxHead', num_classes=6),
-        dict(type='Shared2FCBBoxHead', num_classes=6),
-        dict(type='Shared2FCBBoxHead', num_classes=6)
+        dict(type='Shared2FCBBoxHead', num_classes=_base_.num_classes),
+        dict(type='Shared2FCBBoxHead', num_classes=_base_.num_classes),
+        dict(type='Shared2FCBBoxHead', num_classes=_base_.num_classes)
 ]
 detector.roi_head.mask_head.num_classes = 6
 detector.test_cfg.rcnn.max_per_img = _base_.num_nodes

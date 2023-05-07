@@ -47,9 +47,16 @@ class DeepCVS(BaseDetector):
             decoder_backbone.in_channels = detector_num_classes + 1
 
         self.decoder_backbone = MODELS.build(decoder_backbone)
-        self.decoder_predictor = torch.nn.Linear(self.decoder_backbone.feat_dim,
-                self.num_classes)
-        self.loss_fn = MODELS.build(loss)
+
+        if isinstance(loss, list):
+            self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
+            self.decoder_predictor = torch.nn.ModuleList([
+                torch.nn.Linear(self.decoder_backbone.feat_dim, self.num_classes) for i in range(len(loss))
+            ])
+        else:
+            self.loss_fn = MODELS.build(loss)
+            self.decoder_predictor = torch.nn.Linear(self.decoder_backbone.feat_dim,
+                    self.num_classes)
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
@@ -107,7 +114,11 @@ class DeepCVS(BaseDetector):
         # reconstruction if recon head is not None
         recon_imgs, _, _ = self.reconstruct(batch_inputs, results, ds_feats)
 
-        ds_preds = self.decoder_predictor(ds_feats)
+        if isinstance(self.decoder_predictor, torch.nn.ModuleList):
+            ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
+        else:
+            ds_preds = self.decoder_predictor(ds_feats)
+
         for r, dp, r_img in zip(results, ds_preds, recon_imgs):
             r.pred_ds = dp
             if r_img is not None:
@@ -155,14 +166,24 @@ class DeepCVS(BaseDetector):
             losses.update(recon_losses)
 
         # ds prediction and loss
-        ds_preds = self.decoder_predictor(ds_feats)
+        if isinstance(self.decoder_predictor, torch.nn.ModuleList):
+            ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
+        else:
+            ds_preds = self.decoder_predictor(ds_feats)
 
         # get gt
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
-                ds_preds.device).round()
+                ds_preds.device).float().round().long()
+
+        if isinstance(self.loss_fn, torch.nn.ModuleList):
+            # compute loss for each criterion and sum
+            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+
+        else:
+            ds_loss = self.loss_fn(ds_preds, ds_gt)
 
         # update loss
-        losses.update({'ds_loss': self.loss_fn(ds_preds, ds_gt)})
+        losses.update({'ds_loss': ds_loss})
 
         return losses
 
