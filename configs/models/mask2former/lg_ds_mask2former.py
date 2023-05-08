@@ -45,7 +45,7 @@ model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.lg_model
 
 # modify load_from
-load_from = 'weights/lg_mask2former_no_recon.pth'
+load_from = _base_.load_from.replace('base', 'mask2former')
 
 # optimizer
 embed_multi = dict(lr_mult=1.0, decay_mult=0.0)

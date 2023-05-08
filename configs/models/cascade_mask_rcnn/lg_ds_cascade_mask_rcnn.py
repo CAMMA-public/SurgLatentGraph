@@ -33,4 +33,4 @@ model.roi_extractor.roi_layer.output_size = 1
 del _base_.lg_model
 
 # modify load_from
-load_from = 'weights/lg_cascade_mask_rcnn_no_recon.pth'
+load_from = _base_.load_from.replace('base', 'cascade_mask_rcnn')

@@ -30,4 +30,4 @@ model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.dc_model
 
 # modify load_from
-load_from = 'weights/lg_cascade_mask_rcnn_no_recon.pth'
+load_from = _base_.load_from.replace('base', 'cascade_mask_rcnn')

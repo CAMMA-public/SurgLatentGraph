@@ -147,3 +147,6 @@ custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook
 default_hooks = dict(
     checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
 )
+
+# weight loading
+load_from = 'weights/c80/lg_base_no_recon.pth'

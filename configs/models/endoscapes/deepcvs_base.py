@@ -154,3 +154,6 @@ custom_hooks = [dict(type="FreezeDetectorHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='endoscapes/ds_average_precision'),
 )
+
+# loading
+load_from = 'weights/endoscapes/lg_base_no_recon.pth'
