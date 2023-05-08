@@ -5,12 +5,17 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Modify dataset related settings
 
-data_root='data/mmdet_datasets/endoscapes_mmdet'
+data_root='data/mmdet_datasets/cholec80_cvs'
 metainfo = {
-    'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
-        'gallbladder', 'tool'),
-    'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
+    'classes': ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper',
+        'connective_tissue', 'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein',
+        'liver_ligament'),
 }
+#metainfo = {
+#    'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
+#        'gallbladder', 'tool'),
+#    'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
+#}
 
 rand_aug_surg = [
         [dict(type='ShearX', level=8)],

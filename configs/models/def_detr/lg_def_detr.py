@@ -13,7 +13,7 @@ detector.type = 'DeformableDETRWithQueries'
 detector.bbox_head.type = 'DeformableDETRHeadWithIndices'
 detector.as_two_stage = True
 detector.with_box_refine = True
-detector.bbox_head.num_classes = 6
+detector.bbox_head.num_classes = _base_.num_classes
 detector.test_cfg.max_per_img = _base_.num_nodes
 
 dp = copy.deepcopy(_base_.model.data_preprocessor)
