@@ -100,7 +100,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         final_feats = img_feats + graph_feats
         if isinstance(self.ds_predictor, torch.nn.ModuleList):
             ds_feats = self.ds_predictor_head(final_feats)
-            ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor])
+            ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)
         else:
             ds_preds = self.ds_predictor(final_feats)
 
@@ -116,7 +116,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
-            ds_loss = sum([self.loss_fn[i](ds_preds[i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)

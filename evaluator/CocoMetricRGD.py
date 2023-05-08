@@ -7,7 +7,7 @@ from torchmetrics.functional import multiscale_structural_similarity_index_measu
 import torch
 from torch import Tensor
 import torchvision.transforms.functional as TF
-from torchmetrics import AveragePrecision as AP
+from torchmetrics import AveragePrecision as AP, Precision, Recall, F1Score
 import os
 import cv2
 import numpy as np
@@ -123,14 +123,36 @@ class CocoMetricRGD(CocoMetric):
         # compute DS metrics
         # TODO(adit98) add other metrics besides AP
         if 'ds' in preds[0]:
-            torch_ap = AP(3)
-            ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
-            ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts])
-            ds_ap = torch_ap(ds_preds, ds_gt)
+            if preds[0]['ds'].ndim > 1:
+                ds_preds = torch.stack([p['ds'] for p in preds]).max(-1).indices
+                ds_gt = torch.stack([Tensor(g['ds']) for g in gts])
 
-            logger_info.append(f'ds_average_precision: {ds_ap:.4f}')
+                # compute precision, recall, f1
+                torch_prec = Precision(task='multiclass', average='macro', num_classes=3)
+                torch_rec = Recall(task='multiclass', average='macro', num_classes=3)
+                torch_f1 = F1Score(task='multiclass', average='macro', num_classes=3)
 
-            eval_results['ds_average_precision'] = ds_ap
+                ds_prec = np.mean([torch_prec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
+                ds_rec = np.mean([torch_rec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
+                ds_f1 = np.mean([torch_f1(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
+
+                # log
+                logger_info.append(f'ds_precision: {ds_prec:.4f}')
+                logger_info.append(f'ds_recall: {ds_rec:.4f}')
+                logger_info.append(f'ds_f1: {ds_f1:.4f}')
+                eval_results['ds_precision'] = ds_prec
+                eval_results['ds_recall'] = ds_rec
+                eval_results['ds_f1'] = ds_f1
+
+            else:
+                torch_ap = AP(task='multilabel', num_labels=3)
+                ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
+                ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
+                ds_ap = torch_ap(ds_preds, ds_gt)
+
+                # log
+                logger_info.append(f'ds_average_precision: {ds_ap:.4f}')
+                eval_results['ds_average_precision'] = ds_ap
 
         logger.info(' '.join(logger_info))
         return eval_results
@@ -168,8 +190,12 @@ class CocoMetricRGD(CocoMetric):
             if not os.path.exists(outfile_prefix):
                 os.makedirs(outfile_prefix)
 
-            pred_outname = os.path.join(outfile_prefix, 'pred_ds.txt')
-            np.savetxt(pred_outname, pred_ds.detach().cpu().numpy())
+            if pred_ds.ndim > 2:
+                pred_outname = os.path.join(outfile_prefix, 'pred_ds.npy')
+                np.save(pred_outname, pred_ds.detach().cpu().numpy())
+            else:
+                pred_outname = os.path.join(outfile_prefix, 'pred_ds.txt')
+                np.savetxt(pred_outname, pred_ds.detach().cpu().numpy())
 
             if gts is not None:
                 gt_ds = np.stack([g['ds'] for g in gts])
