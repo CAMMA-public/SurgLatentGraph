@@ -23,4 +23,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_rn_mgpu.sh
+./slurms/run_rn_mgpu.sh endoscapes

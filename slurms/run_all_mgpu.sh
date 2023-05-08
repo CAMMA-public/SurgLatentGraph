@@ -3,7 +3,7 @@ dataset=$2
 base_cfg_dir=configs/models
 cfg_dir=${base_cfg_dir}/${detector}
 
-# RUN LG PRETRAINING
+# RUN LG PRETRAINING (TRAINING OF DETECTOR)
 export CUDA_VISIBLE_DEVICES=0 && python ${MMDETECTION}/tools/train.py ${cfg_dir}/lg_${detector}.py
 best_model_path=$(ls work_dirs/lg_${detector}/best_${dataset}* | tail -1)
 echo $best_model_path
