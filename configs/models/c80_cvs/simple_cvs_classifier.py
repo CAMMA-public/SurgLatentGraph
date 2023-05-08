@@ -119,7 +119,7 @@ auto_scale_lr = dict(enable=False)
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=20,
+    max_epochs=10,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')

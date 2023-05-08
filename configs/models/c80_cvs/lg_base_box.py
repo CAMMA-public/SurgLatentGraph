@@ -76,8 +76,8 @@ test_evaluator = [
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=200,
-    val_interval=10)
+    max_epochs=100,
+    val_interval=5)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
@@ -88,9 +88,9 @@ param_scheduler = [
     dict(
         type='MultiStepLR',
         begin=0,
-        end=200,
+        end=100,
         by_epoch=True,
-        milestones=[80, 110],
+        milestones=[40, 75],
         gamma=0.1)
 ]
 
