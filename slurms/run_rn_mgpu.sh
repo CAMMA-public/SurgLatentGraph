@@ -1,5 +1,5 @@
 base_cfg_dir=configs/models
-dataset = $1
+dataset=$1
 
 # RUN MT (WITH/WITHOUT RECON IN PARALLEL)
 
