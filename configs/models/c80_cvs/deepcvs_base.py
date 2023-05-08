@@ -164,5 +164,5 @@ test_cfg = dict(type='TestLoop')
 # hooks
 custom_hooks = [dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/ds_average_precision'),
+    checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
 )

@@ -109,7 +109,7 @@ val_evaluator = [
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_cvs_coco.json'),
         use_pred_boxes_recon=True,
-        metric=['bbox'],
+        metric=[],
     )
 ]
 
@@ -120,12 +120,18 @@ test_evaluator = [
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_cvs_coco.json'),
-        metric=['bbox'],
+        metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/c80_preds/test'
     ),
 ]
+
+# train loop
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=20,
+    val_interval=1)
 
 # optimizer
 del _base_.param_scheduler
@@ -139,5 +145,5 @@ auto_scale_lr = dict(enable=False)
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/ds_average_precision'),
+    checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
 )

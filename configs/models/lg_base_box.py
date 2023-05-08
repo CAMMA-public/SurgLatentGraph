@@ -1,1 +1,0 @@
-c80_cvs/lg_base_box.py
