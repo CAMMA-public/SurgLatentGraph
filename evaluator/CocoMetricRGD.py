@@ -138,12 +138,12 @@ class CocoMetricRGD(CocoMetric):
 
                 # log
                 for i in range(len(ds_prec)):
-                    logger_info.append(f'ds_prec_C{i + 1}: {ds_prec[i]:.4f}')
-                    logger_info.append(f'ds_rec_C{i + 1}: {ds_rec[i]:.4f}')
-                    logger_info.append(f'ds_f1_C{i + 1}: {ds_f1[i]:.4f}')
-                    eval_results['ds_precision_C{i + 1}'] = ds_prec[i]
-                    eval_results['ds_recall_C{i + 1}'] = ds_rec[i]
-                    eval_results['ds_f1_C{i + 1}'] = ds_f1[i]
+                    logger_info.append(f'ds_prec_C{i+1}: {ds_prec[i]:.4f}')
+                    logger_info.append(f'ds_rec_C{i+1}: {ds_rec[i]:.4f}')
+                    logger_info.append(f'ds_f1_C{i+1}: {ds_f1[i]:.4f}')
+                    eval_results[f'ds_precision_C{i+1}'] = ds_prec[i]
+                    eval_results[f'ds_recall_C{i+1}'] = ds_rec[i]
+                    eval_results[f'ds_f1_C{i+1}'] = ds_f1[i]
 
                 ds_prec = np.mean(ds_prec)
                 ds_rec = np.mean(ds_rec)
