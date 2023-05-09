@@ -40,8 +40,8 @@ lg_model.ds_head=dict(
     loss_weight=1.0,
     prediction_mode='mlmc',
     num_predictor_layers=2,
-    weight=[[0.40815294, 2.41808192, 7.33207119], [0.36943623, 3.71313519, 41.91341991],
-        [0.35056847,  9.23414402, 25.51251647]],
+    weight=[[0.39535045, 2.66699388, 10.45537841], [0.36193684, 4.50138067, 66.96596244],
+        [0.35056847, 9.23414402, 25.51251647]],
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',

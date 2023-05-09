@@ -46,12 +46,12 @@ dc_model = dict(
         dict(
             type='CrossEntropyLoss',
             use_sigmoid=False,
-            class_weight=[0.40815294, 2.41808192, 7.33207119],
+            class_weight=[0.39535045,  2.66699388, 10.45537841],
         ),
         dict(
             type='CrossEntropyLoss',
             use_sigmoid=False,
-            class_weight=[0.36943623, 3.71313519, 41.91341991],
+            class_weight=[0.36193684,  4.50138067, 66.96596244],
         ),
         dict(
             type='CrossEntropyLoss',
