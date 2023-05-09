@@ -39,7 +39,7 @@ lg_model.ds_head=dict(
     loss='bce',
     loss_weight=1.0,
     prediction_mode='mlmc',
-    num_predictor_layers=2,
+    num_predictor_layers=3,
     weight=[[0.39596469, 2.65165376, 10.26702997], [0.36227286, 4.46445498, 63.86440678],
         [0.34740918, 11.88643533, 26.72340426]],
 )
