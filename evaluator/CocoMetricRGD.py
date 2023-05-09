@@ -145,9 +145,9 @@ class CocoMetricRGD(CocoMetric):
                     eval_results[f'ds_recall_C{i+1}'] = ds_rec[i]
                     eval_results[f'ds_f1_C{i+1}'] = ds_f1[i]
 
-                ds_prec = np.mean(ds_prec)
-                ds_rec = np.mean(ds_rec)
-                ds_f1 = np.mean(ds_f1)
+                ds_prec = sum(ds_prec) / len(ds_prec)
+                ds_rec = sum(ds_rec) / len(ds_rec)
+                ds_f1 = sum(ds_f1) / len(ds_f1)
 
                 logger_info.append(f'ds_precision: {ds_prec:.4f}')
                 logger_info.append(f'ds_recall: {ds_rec:.4f}')
