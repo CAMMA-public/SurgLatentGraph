@@ -36,7 +36,8 @@ class LGDetector(BaseDetector):
             trainable_backbone: bool, use_pred_boxes_recon_loss: bool = False,
             reconstruction_head: ConfigType = None, reconstruction_loss: ConfigType = None,
             reconstruction_img_stats: ConfigType = None, graph_head: ConfigType = None,
-            ds_head: ConfigType = None, roi_extractor: ConfigType = None, **kwargs):
+            ds_head: ConfigType = None, roi_extractor: ConfigType = None,
+            frozen_stages: Union[List, int] = 1, **kwargs):
         super().__init__(**kwargs)
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
@@ -45,20 +46,26 @@ class LGDetector(BaseDetector):
         # copy backbone (or entire detector for DETR-style models)
         if trainable_backbone:
             if self.roi_extractor is not None:
+                bb_cfg = detector.backbone
+                bb_cfg.frozen_stages = frozen_stages
+                bb = MODELS.build(bb_cfg)
                 if self.detector.with_neck:
+                    neck_cfg = detector.neck
+                    neck = MODELS.build(neck_cfg)
                     self.trainable_backbone = torch.nn.Sequential(OrderedDict([
-                            ('backbone', copy.deepcopy(self.detector.backbone)),
-                            ('neck', copy.deepcopy(self.detector.neck))
+                            ('backbone', bb),
+                            ('neck', neck),
                         ])
                     )
                 else:
                     self.trainable_backbone = torch.nn.Sequential(OrderedDict([
-                            ('backbone', copy.deepcopy(self.detector.backbone)),
+                            ('backbone', bb),
                             ('neck', torch.nn.Identity()),
                         ])
                     )
             else:
-                self.trainable_backbone = copy.deepcopy(self.detector)
+                detector.backbone.frozen_stages = frozen_stages
+                self.trainable_backbone = MODELS.build(detector)
 
         else:
             self.trainable_backbone = None
