@@ -132,11 +132,23 @@ class CocoMetricRGD(CocoMetric):
                 torch_rec = Recall(task='multiclass', average='macro', num_classes=3)
                 torch_f1 = F1Score(task='multiclass', average='macro', num_classes=3)
 
-                ds_prec = np.mean([torch_prec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
-                ds_rec = np.mean([torch_rec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
-                ds_f1 = np.mean([torch_f1(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])])
+                ds_prec = [torch_prec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
+                ds_rec = [torch_rec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
+                ds_f1 = [torch_f1(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
 
                 # log
+                for i in range(len(ds_prec)):
+                    logger_info.append(f'ds_prec_C{i + 1}: {ds_prec[i]:.4f}')
+                    logger_info.append(f'ds_rec_C{i + 1}: {ds_rec[i]:.4f}')
+                    logger_info.append(f'ds_f1_C{i + 1}: {ds_f1[i]:.4f}')
+                    eval_results['ds_precision_C{i + 1}'] = ds_prec[i]
+                    eval_results['ds_recall_C{i + 1}'] = ds_rec[i]
+                    eval_results['ds_f1_C{i + 1}'] = ds_f1[i]
+
+                ds_prec = np.mean(ds_prec)
+                ds_rec = np.mean(ds_rec)
+                ds_f1 = np.mean(ds_f1)
+
                 logger_info.append(f'ds_precision: {ds_prec:.4f}')
                 logger_info.append(f'ds_recall: {ds_rec:.4f}')
                 logger_info.append(f'ds_f1: {ds_f1:.4f}')
