@@ -130,7 +130,7 @@ test_evaluator = [
 # train loop
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=10,
+    max_epochs=20,
     val_interval=1)
 
 # optimizer
