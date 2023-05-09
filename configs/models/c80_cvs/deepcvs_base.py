@@ -46,17 +46,17 @@ dc_model = dict(
         dict(
             type='CrossEntropyLoss',
             use_sigmoid=False,
-            class_weight=[0.39535045,  2.66699388, 10.45537841],
+            class_weight=[0.39596469, 2.65165376, 10.26702997],
         ),
         dict(
             type='CrossEntropyLoss',
             use_sigmoid=False,
-            class_weight=[0.36193684,  4.50138067, 66.96596244],
+            class_weight=[0.36227286, 4.46445498, 63.86440678],
         ),
         dict(
             type='CrossEntropyLoss',
             use_sigmoid=False,
-            class_weight=[0.35056847,  9.23414402, 25.51251647],
+            class_weight=[0.34740918, 11.88643533, 26.72340426],
         ),
     ],
     use_pred_boxes_recon_loss=True,
