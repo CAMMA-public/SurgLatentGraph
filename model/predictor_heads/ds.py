@@ -112,11 +112,11 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(ds_preds.device)
         if self.loss_consensus == 'mode':
-            ds_gt = ds_gt.float().round().long()
+            ds_gt = ds_gt.float().round()
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
-            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt.long()[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)

@@ -39,6 +39,7 @@ class LGDetector(BaseDetector):
             ds_head: ConfigType = None, roi_extractor: ConfigType = None,
             frozen_stages: Union[List, int] = 1, **kwargs):
         super().__init__(**kwargs)
+        trainable_detector = copy.deepcopy(detector)
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
@@ -64,8 +65,8 @@ class LGDetector(BaseDetector):
                         ])
                     )
             else:
-                detector.backbone.frozen_stages = frozen_stages
-                self.trainable_backbone = MODELS.build(detector)
+                trainable_detector.backbone.frozen_stages = frozen_stages
+                self.trainable_backbone = MODELS.build(trainable_detector)
 
         else:
             self.trainable_backbone = None
