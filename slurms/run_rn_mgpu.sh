@@ -1,7 +1,7 @@
 base_cfg_dir=configs/models
 dataset=$1
 
-# RUN MT (WITH/WITHOUT RECON IN PARALLEL)
+# RUN SIMPLE RESNET (WITH/WITHOUT RECON IN PARALLEL)
 
 # train
 export CUDA_VISIBLE_DEVICES=0 && python $MMDETECTION/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py &
