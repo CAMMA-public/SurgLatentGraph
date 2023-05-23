@@ -33,48 +33,42 @@ class LGDetector(BaseDetector):
     """
 
     def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            trainable_backbone: bool, use_pred_boxes_recon_loss: bool = False,
-            reconstruction_head: ConfigType = None, reconstruction_loss: ConfigType = None,
-            reconstruction_img_stats: ConfigType = None, graph_head: ConfigType = None,
-            ds_head: ConfigType = None, roi_extractor: ConfigType = None,
-            frozen_stages: Union[List, int] = 1, **kwargs):
+            use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
+            reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
+            graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
+            trainable_detector_cfg: OptConfigType = None, trainable_backbone_cfg: OptConfigType = None,
+            trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
-        trainable_detector = copy.deepcopy(detector)
+
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
 
-        # copy backbone (or entire detector for DETR-style models)
-        if trainable_backbone:
-            if self.roi_extractor is not None:
-                bb_cfg = detector.backbone
-                bb_cfg.frozen_stages = frozen_stages
-                bb = MODELS.build(bb_cfg)
-                if self.detector.with_neck:
-                    neck_cfg = detector.neck
-                    neck = MODELS.build(neck_cfg)
-                    self.trainable_backbone = torch.nn.Sequential(OrderedDict([
-                            ('backbone', bb),
-                            ('neck', neck),
-                        ])
-                    )
-                else:
-                    self.trainable_backbone = torch.nn.Sequential(OrderedDict([
-                            ('backbone', bb),
-                            ('neck', torch.nn.Identity()),
-                        ])
-                    )
-            else:
-                trainable_detector.backbone.frozen_stages = frozen_stages
-                self.trainable_backbone = MODELS.build(trainable_detector)
+        # if trainable detector cfg is defined, that is used for trainable backbone
+        if trainable_detector_cfg is not None:
+            self.trainable_backbone = MODELS.build(trainable_detector_cfg)
+        elif trainable_backbone_cfg is not None:
+            bb = MODELS.build(trainable_backbone_cfg)
+            if trainable_neck_cfg is not None:
+                neck = MODELS.build(trainable_neck_cfg)
+                self.trainable_backbone = torch.nn.Sequential(OrderedDict([
+                        ('backbone', bb),
+                        ('neck', neck),
+                    ])
+                )
 
+            else:
+                self.trainable_backbone = torch.nn.Sequential(OrderedDict([
+                        ('backbone', bb),
+                        ('neck', torch.nn.Identity()),
+                    ])
+                )
         else:
             self.trainable_backbone = None
 
-
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_feat_size = self.roi_extractor.out_channels if roi_extractor is not None else 256 # HACK get this value from cfg
+            reconstruction_head.obj_feat_size = 256 # HACK get this value from cfg
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None

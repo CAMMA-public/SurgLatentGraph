@@ -37,7 +37,11 @@ class CopyDetectorBackbone(Hook):
             else:
                 try:
                     runner.model.trainable_backbone.backbone.load_state_dict(runner.model.detector.backbone.state_dict())
-                    runner.model.trainable_backbone.neck.load_state_dict(runner.model.detector.neck.state_dict())
+                    try:
+                        runner.model.trainable_backbone.neck.load_state_dict(runner.model.detector.neck.state_dict())
+                    except RuntimeError as re:
+                        print("SKIPPING LOADING OF NECK WEIGHTS")
+
                     print()
                     print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
                     print()

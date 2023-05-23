@@ -17,7 +17,9 @@ recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat
 
 # model
 lg_model = _base_.lg_model
-lg_model.trainable_backbone=True
+lg_model.trainable_backbone_cfg=copy.deepcopy(lg_model.detector.backbone)
+if 'neck' in lg_model.detector:
+    lg_model.trainable_neck_cfg=copy.deepcopy(lg_model.detector.neck)
 lg_model.use_pred_boxes_recon_loss=True
 
 # TODO(adit98) remove if not helping

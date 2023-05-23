@@ -23,6 +23,12 @@ model.detector = detector
 model.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.roi_extractor.roi_layer.output_size = 1
 model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
+
+# trainable bb, neck
+model.trainable_backbone_cfg=copy.deepcopy(detector.backbone)
+if 'neck' in detector:
+    model.trainable_neck_cfg=copy.deepcopy(detector.neck)
+
 del _base_.lg_model
 
 # modify load_from

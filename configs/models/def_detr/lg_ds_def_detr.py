@@ -25,6 +25,10 @@ del detector.data_preprocessor
 
 # extract lg config, set detector
 model = copy.deepcopy(_base_.lg_model)
+
+# trainable detector
+model.trainable_detector_cfg = copy.deepcopy(detector)
+
 model.data_preprocessor = dp
 model.detector = detector
 model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
