@@ -33,16 +33,19 @@ class LGDetector(BaseDetector):
     """
 
     def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
-            reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
-            graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
-            trainable_detector_cfg: OptConfigType = None, trainable_backbone_cfg: OptConfigType = None,
+            perturb_factor: float = 0.125, use_pred_boxes_recon_loss: bool = False,
+            reconstruction_head: ConfigType = None, reconstruction_loss: ConfigType = None,
+            reconstruction_img_stats: ConfigType = None, graph_head: ConfigType = None,
+            ds_head: ConfigType = None, roi_extractor: ConfigType = None,
+            trainable_detector_cfg: OptConfigType = None,
+            trainable_backbone_cfg: OptConfigType = None,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
+        self.perturb_factor = perturb_factor
 
         # if trainable detector cfg is defined, that is used for trainable backbone
         if trainable_detector_cfg is not None:
@@ -94,7 +97,6 @@ class LGDetector(BaseDetector):
             self.detector.training = False
             results = self.detector.predict(batch_inputs, batch_data_samples)
             detached_results = self.detach_results(results)
-            self.detector.training = True
 
         # get bb and fpn features TODO(adit98) see if we can prevent running bb twice
         feats = self.extract_feat(batch_inputs, detached_results)
@@ -174,6 +176,12 @@ class LGDetector(BaseDetector):
 
     def extract_feat(self, batch_inputs: Tensor, results: SampleList) -> BaseDataElement:
         feats = BaseDataElement()
+        boxes = [r.pred_instances.bboxes for r in results]
+        classes = [r.pred_instances.labels for r in results]
+
+        # apply box perturbation
+        if self.training:
+            boxes = self.box_perturbation(boxes, results[0].img_shape)
 
         # run bbox feat extractor and add instance feats to feats
         if self.roi_extractor is not None:
@@ -191,7 +199,6 @@ class LGDetector(BaseDetector):
             feats.neck_feats = neck_feats
 
             # rescale bboxes, convert to rois
-            boxes = [r.pred_instances.bboxes for r in results]
             boxes_per_img = [len(b) for b in boxes]
             scale_factor = results[0].scale_factor
             rescaled_boxes = scale_boxes(torch.cat(boxes), scale_factor).split(boxes_per_img)
@@ -218,8 +225,6 @@ class LGDetector(BaseDetector):
                         self.detector.get_queries(batch_inputs, results)
 
         # compute semantic feat
-        classes = [r.pred_instances.labels for r in results]
-        boxes = [r.pred_instances.bboxes for r in results]
         c = pad_sequence(classes, batch_first=True)
         b = pad_sequence(boxes, batch_first=True)
         b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
@@ -228,6 +233,29 @@ class LGDetector(BaseDetector):
         feats.semantic_feats = s
 
         return feats
+
+    def box_perturbation(self, boxes: List[Tensor], image_shape: Tuple):
+        boxes_per_img = [len(b) for b in boxes]
+        perturb_factor = min(self.perturb_factor, 1)
+        xmin, ymin, xmax, ymax = torch.cat(boxes).unbind(1)
+
+        # compute x and y perturbation ranges
+        h = xmax - xmin
+        w = ymax - ymin
+
+        # generate random numbers drawn from (-h, h), (-w, w), multiply by perturb factor
+        perturb = perturb_factor * (torch.rand(4).to(boxes[0]) * torch.stack([h, w], dim=1).repeat(1, 2) - \
+                torch.stack([h, w], dim=1).repeat(1, 2))
+
+        perturbed_boxes = torch.cat(boxes) + perturb
+
+        # ensure boxes are valid (clamp from 0 to img shape)
+        perturbed_boxes = torch.maximum(torch.zeros_like(perturbed_boxes), perturbed_boxes)
+        stacked_img_shapes = Tensor(image_shape).flip(0).unsqueeze(0).repeat(perturbed_boxes.shape[0],
+                2).to(perturbed_boxes)
+        perturbed_boxes = torch.minimum(stacked_img_shapes, perturbed_boxes)
+
+        return perturbed_boxes.split(boxes_per_img)
 
     def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
         raise NotImplementedError

@@ -17,6 +17,7 @@ _base_.model.trainable_neck_cfg = dict(
 
 # modify model
 _base_.model.trainable_backbone_cfg = trainable_backbone_cfg
+_base_.model.trainable_backbone_cfg.frozen_stages=_base_.trainable_backbone_frozen_stages
 _base_.model.trainable_neck_cfg = trainable_neck_cfg
 
 custom_hooks = [dict(type="FreezeDetectorHook")]#, dict(type='CopyDetectorBackbone')]

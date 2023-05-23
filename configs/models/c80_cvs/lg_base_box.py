@@ -24,7 +24,6 @@ num_classes = len(_base_.metainfo.classes)
 
 lg_model=dict(
     type='LGDetector',
-    trainable_backbone=False,
     num_classes=num_classes,
     semantic_feat_size=semantic_feat_size,
     graph_head=dict(

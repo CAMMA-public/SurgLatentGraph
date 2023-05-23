@@ -28,17 +28,25 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         loss_weight: multiplier for ds loss
     """
     def __init__(self, num_classes: int, gnn_cfg: ConfigType,
-            img_feat_key: str, img_feat_size: int, graph_feat_input_dim: int,
-            graph_feat_projected_dim: int, loss: str, loss_weight: float,
-            prediction_mode='ml', loss_consensus: str = 'mode', weight: List = None,
-            num_predictor_layers: int = 2, init_cfg: OptMultiConfig = None) -> None:
+            img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
+            input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
+            loss: str, loss_weight: float, prediction_mode='ml', loss_consensus: str = 'mode',
+            weight: List = None, num_predictor_layers: int = 2, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
-        # project node/edge feats in input graph
-        self.graph_node_feat_projector = torch.nn.Linear(graph_feat_input_dim,
-                graph_feat_projected_dim)
-        self.graph_edge_feat_projector = torch.nn.Linear(graph_feat_input_dim,
-                graph_feat_projected_dim)
+        # set viz and sem dims for projecting node/edge feats in input graph
+        self.input_sem_feat_size = input_sem_feat_size
+        self.input_viz_feat_size = input_viz_feat_size
+        self.final_sem_feat_size = final_sem_feat_size
+        self.final_viz_feat_size = final_viz_feat_size
+
+        self.node_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
+        self.edge_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
+
+        self.node_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
+        self.edge_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
+
+        graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
 
         # construct gnn
         gnn_cfg.input_dim_node = graph_feat_projected_dim
@@ -78,8 +86,25 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
         # downproject graph feats
-        graph.nodes.feats = self.graph_node_feat_projector(graph.nodes.feats)
-        graph.edges.feats = self.graph_edge_feat_projector(graph.edges.feats)
+        node_feats = []
+        edge_feats = []
+        if self.final_viz_feat_size > 0:
+            node_viz_feats = self.node_viz_feat_projector(graph.nodes.feats[..., :self.input_viz_feat_size])
+            edge_viz_feats = self.edge_viz_feat_projector(graph.edges.feats[..., :self.input_viz_feat_size])
+            node_feats.append(node_viz_feats)
+            edge_feats.append(edge_viz_feats)
+
+        if self.final_sem_feat_size > 0:
+            node_sem_feats = self.node_sem_feat_projector(graph.nodes.feats[..., self.input_viz_feat_size:])
+            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.feats[..., self.input_viz_feat_size:])
+            node_feats.append(node_sem_feats)
+            edge_feats.append(edge_sem_feats)
+
+        if len(node_feats) == 0 or len(edge_feats) == 0:
+            raise ValueError("Sum of final_viz_feat_size and final_sem_feat_size must be > 0")
+
+        graph.nodes.feats = torch.cat(node_feats, -1)
+        graph.edges.feats = torch.cat(edge_feats, -1)
         dgl_g = self.gnn(graph)
 
         # get node features and pool to get graph feats

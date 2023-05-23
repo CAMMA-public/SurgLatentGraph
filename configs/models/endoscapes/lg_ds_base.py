@@ -32,8 +32,10 @@ lg_model.ds_head=dict(
     ),
     img_feat_key='bb',
     img_feat_size=2048,
-    graph_feat_input_dim=_base_.viz_feat_size+_base_.semantic_feat_size,
-    graph_feat_projected_dim=ds_input_feat_size,
+    input_sem_feat_size=_base_.semantic_feat_size,
+    input_viz_feat_size=_base_.viz_feat_size,
+    final_sem_feat_size=64,
+    final_viz_feat_size=64,
     loss_consensus='mode',
     loss='bce',
     loss_weight=1.0,
@@ -73,6 +75,7 @@ lg_model.reconstruction_loss=dict(
     #deep_loss_backbone='resnet50',
     #load_backbone_weights='weights/converted_moco.torch',
 )
+trainable_backbone_frozen_stages = 1
 
 # dataset
 train_dataloader = dict(

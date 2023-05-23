@@ -28,6 +28,7 @@ model = copy.deepcopy(_base_.lg_model)
 
 # trainable detector
 model.trainable_detector_cfg = copy.deepcopy(detector)
+model.trainable_detector_cfg.backbone.frozen_stages=_base_.trainable_backbone_frozen_stages
 
 model.data_preprocessor = dp
 model.detector = detector
