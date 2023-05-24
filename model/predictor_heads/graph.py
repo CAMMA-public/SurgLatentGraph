@@ -159,7 +159,6 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges.edge_flats = batch_edge_flats
         edges.boxes = edges.boxes[edge_indices]
         edges.feats = edges.feats[edge_indices]
-        edges.presence_logits = edges.presence_logits[edge_indices]
 
         return edges
 
