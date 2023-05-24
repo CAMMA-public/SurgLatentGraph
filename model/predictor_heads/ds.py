@@ -122,7 +122,8 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             1).squeeze(-1).squeeze(-1))
 
         # combine two types of feats
-        final_feats = img_feats + graph_feats
+        #final_feats = img_feats + graph_feats
+        final_feats = graph_feats
         if isinstance(self.ds_predictor, torch.nn.ModuleList):
             ds_feats = self.ds_predictor_head(final_feats)
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)

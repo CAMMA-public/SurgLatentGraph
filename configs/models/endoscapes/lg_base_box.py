@@ -40,6 +40,10 @@ lg_model=dict(
             norm='graph',
             skip_connect=True,
         ),
+        presence_loss_cfg=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+        ),
         num_edge_classes=3,
     ),
 )

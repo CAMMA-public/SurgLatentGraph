@@ -5,7 +5,7 @@ from mmengine.model import BaseModule
 from mmengine.structures import BaseDataElement
 from mmdet.models.roi_heads.roi_extractors import BaseRoIExtractor
 from mmdet.structures import SampleList
-from mmdet.structures.bbox import bbox2roi
+from mmdet.structures.bbox import bbox2roi, bbox_overlaps
 from mmdet.structures.bbox.transforms import bbox2roi, scale_boxes
 from typing import List, Tuple, Union
 import torch
@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
 from torchvision.transforms import functional as TF, InterpolationMode
+from torchvision.ops.boxes import box_area
 import dgl
 from .modules.utils import box_union
 from .modules.layers import build_mlp
@@ -30,7 +31,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         gnn_cfg (ConfigType): gnn cfg
     """
     def __init__(self, edges_per_node: int, viz_feat_size: int, semantic_feat_size: int,
-            roi_extractor: BaseRoIExtractor, num_edge_classes: int,
+            roi_extractor: BaseRoIExtractor, num_edge_classes: int, presence_loss_cfg: ConfigType,
             num_roi_feat_maps: int = 4, gnn_cfg: ConfigType = None,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
@@ -158,6 +159,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges.edge_flats = batch_edge_flats
         edges.boxes = edges.boxes[edge_indices]
         edges.feats = edges.feats[edge_indices]
+        edges.presence_logits = edges.presence_logits[edge_indices]
 
         return edges
 
@@ -242,27 +244,185 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         return graph
 
     def _build_gt_graph(self, result: SampleList) -> BaseDataElement:
-        raise NotImplementedError
+        num_boxes = len(result)
+
+        bounding_boxes = result.bbox.tensor
+        centroids = (bounding_boxes[:, :2] + bounding_boxes[:, 2:]) / 2
+
+        distance_x = centroids[:, 0, None] - centroids[:, 0]
+        distance_y = centroids[:, 1, None] - centroids[:, 1]
+
+        relationships = []
+
+        # FIRST COMPUTE INSIDE-OUTSIDE MASK
+
+        # compute areas of all boxes and create meshgrid
+        areas = box_area(bounding_boxes)
+        areas_x, areas_y = torch.meshgrid(areas, areas)
+
+        # compute intersection
+        intersection = box_intersection(bounding_boxes, bounding_boxes)
+
+        # inside-outside is when intersection is close to the area of the smaller box
+        inside_outside_matrix = intersection / torch.minumum(torch.stack(areas_x, areas_y), dim=0)
+        inside_outside_mask = (inside_outside_matrix >= 0.8)
+
+        # COMPUTE LEFT-RIGHT, ABOVE-BELOW, INSIDE-OUTSIDE MASKS
+        left_right_mask = ((angle_matrix > -45) & (angle_matrix <= 45)) | \
+                ((angle_matrix > 135) | (angle_matrix <= -135))
+        above_below_mask = ((angle_matrix > 45) & (angle_matrix <= 135))
+
+        # left right and above below are only when inside outside is False
+        left_right_mask = left_right_mask.int() * (1 - inside_outside_mask) # 1 for left-right
+        above_below_mask = above_below_mask.int() * (1 - inside_outside_mask) * 2 # 2 for above-below
+        inside_outside_mask = inside_outside_mask.int() * 3 # 3 for inside-outside
+
+        relationships.extend(torch.nonzero(left_right_mask, as_tuple=False).tolist())
+        relationships.extend(torch.nonzero(above_below_mask, as_tuple=False).tolist())
+        relationships.extend(inside_outside_mask)
+
+        # SELECT E EDGES PER NODE BASED ON gIoU
+        iou_matrix.fill_diagonal_(all_box_ious.min().item() - 1) # first artificially set diagonal to min - 1
+        num_edges = min(self.num_edges, iou_matrix.shape[0] - 1)
+        selected_edges = torch.topk(iou_matrix, num_edges, dim=1).indices
+
+        # COMPUTE EDGE FLATS (PAIRS OF OBJECT IDS CORRESPONDING TO EACH EDGE)
+        edge_flats = []
+        for e in selected_edges.unbind(1):
+            # edge flats is just arange, each column of selected edges
+            edge_flats.append(torch.stack([torch.arange(len(e)).to(e.device), e], dim=1).long())
+
+        edge_flats = torch.cat(edge_flats)
+
+        # COMPUTE EDGE BOXES AND SELECT USING EDGE FLATS
+        edge_boxes = self.box_union(boxes, boxes)
+        selected_edge_boxes = edge_boxes[edge_flats[:, 0], edge_flats[:, 1]]
+
+        # SELECT RELATIONSHIPS USING EDGE FLATS
+        selected_relations = relationships[edge_flats[:, 0], edge_flats[:, 1]]
+
+        # add edge flats, boxes, and relationships to gt_graph structure
+        gt_edges = BaseDataElement()
+        gt_edges.edge_flats = edge_flats
+        gt_edges.edge_boxes = selected_edge_boxes
+        gt_edges.edge_relations = selected_relations
+
+        return gt_edges
+
+    def box_union(self, boxes1, boxes2):
+        # boxes1, boxes2: Tensors of shape (N1, 4) and (N2, 4) representing bounding boxes in (x1, y1, x2, y2) format
+        N1 = boxes1.shape[0]
+        N2 = boxes2.shape[0]
+
+        # Expand dimensions to perform broadcasting
+        boxes1 = boxes1.unsqueeze(1)  # (N1, 1, 4)
+        boxes2 = boxes2.unsqueeze(0)  # (1, N2, 4)
+
+        # Compute the coordinates of the union bounding boxes
+        union_x1 = torch.min(boxes1[:, :, 0], boxes2[:, :, 0])  # (N1, N2)
+        union_y1 = torch.min(boxes1[:, :, 1], boxes2[:, :, 1])  # (N1, N2)
+        union_x2 = torch.max(boxes1[:, :, 2], boxes2[:, :, 2])  # (N1, N2)
+        union_y2 = torch.max(boxes1[:, :, 3], boxes2[:, :, 3])  # (N1, N2)
+
+        return torch.stack([union_x1, union_y1, union_x2, union_y2], -1)
+
+    def box_intersection(self, boxes1, boxes2):
+        # boxes1, boxes2: Tensors of shape (B, N1, 4) and (B, N2, 4) representing bounding boxes in (x1, y1, x2, y2) format
+        B, N1, _ = boxes1.shape
+        B, N2, _ = boxes2.shape
+
+        # Expand dimensions to perform broadcasting
+        boxes1 = boxes1.unsqueeze(2)  # (B, N1, 1, 4)
+        boxes2 = boxes2.unsqueeze(1)  # (B, 1, N2, 4)
+
+        # Compute the coordinates of the intersection bounding boxes
+        intersection_x1 = torch.max(boxes1[:, :, :, 0], boxes2[:, :, :, 0])  # (B, N1, N2)
+        intersection_y1 = torch.max(boxes1[:, :, :, 1], boxes2[:, :, :, 1])  # (B, N1, N2)
+        intersection_x2 = torch.min(boxes1[:, :, :, 2], boxes2[:, :, :, 2])  # (B, N1, N2)
+        intersection_y2 = torch.min(boxes1[:, :, :, 3], boxes2[:, :, :, 3])  # (B, N1, N2)
+
+        # Compute the areas of the intersection bounding boxes
+        intersection_width = torch.clamp(intersection_x2 - intersection_x1 + 1, min=0)  # (B, N1, N2)
+        intersection_height = torch.clamp(intersection_y2 - intersection_y1 + 1, min=0)  # (B, N1, N2)
+        intersection_area = intersection_width * intersection_height  # (B, N1, N2)
+
+        return intersection_area
 
     def loss_and_predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[SampleList, dict]:
+        # init loss dict
+        losses = {}
+
+        # build edges for GT
+        gt_edges = self._build_gt_edges(results)
+
+        # build edges and compute presence probabilities
         edges = self._build_edges(results, feats)
 
-        # TODO build edges for GT
-        gt_edges = self._build_gt_graph(results)
+        # compute edge presence loss
+        edge_presence_loss = self.edge_presence_loss(edges, gt_edges)
 
-        losses = None
-        # TODO compute edge presence loss
+        # select edges, construct graph, apply gnn, and predict edge classes
+        edges = self._select_edges(edges, nodes_per_img)
 
-        # TODO compute edge classifier loss
+        # construct graph out of edges and result
+        graph = self._construct_graph(feats, edges, nodes_per_img)
 
-        edges = self._select_edges(edges)
-        result = self._add_edges_to_result(result, edges)
-        result = self.gnn(result)
+        # apply gnn
+        if self.gnn is not None:
+            dgl_g = self.gnn(graph)
 
-        return losses, result
+            # update graph
+            graph = self._update_graph(graph, dgl_g)
+
+        # predict edge classes
+        graph = self._predict_edge_classes(graph, results[0].batch_input_shape)
+
+        # compute edge classifier loss
+        #edge_classifier_loss = self.edge_classifier_loss(graph.edges, gt_edges)
+
+        # update node viz feats (leave semantic feats the same!)
+        feats.instance_feats = graph.nodes.feats[..., :self.viz_feat_size]
+
+        # update losses
+        losses.update(edge_presence_loss)
+        #losses.update(edge_classifier_loss)
+
+        return losses, feats, graph
 
     def edge_presence_loss(self, edges, gt_edges):
-        raise NotImplementedError
+        # first match edge boxes to gt edge boxes
+        pred_matched_inds, pred_unmatched_inds, _ = self.match_boxes(edges.edge_boxes, gt_edges.edge_boxes)
+
+        # assign labels (1 if matched, 0 if unmatched)
+        training_inds = torch.cat([pred_matched_inds, pred_unmatched_inds])
+        breakpoint()
+        flat_edge_relations = edges.presence_logits.view(-1, edges.presence_logits.shape[-1])[training_inds]
+        edge_presence_gt = torch.cat([torch.ones_like(pred_matched_inds), torch.zeros_like(pred_unmatched_inds)])
+
+        presence_loss = self.presence_loss(flat_edge_relations, edge_presence_gt)
+
+        return {'loss_edge_presence': presence_loss}
 
     def edge_classifier_loss(self, edges, gt_edges):
         raise NotImplementedError
+
+    def match_boxes(predicted_boxes, gt_boxes, iou_threshold, iou_lower_bound=0.0):
+        # predicted_boxes: Tensor of shape (B, N, 4) representing predicted bounding boxes in (x1, y1, x2, y2) format
+        # gt_boxes: Tensor of shape (B, M, 4) representing ground truth bounding boxes in (x1, y1, x2, y2) format
+        # iou_threshold: IoU threshold for matching
+        # iou_lower_bound: Lower bound on IoU for returning unmatched boxes
+
+        B, N, _ = predicted_boxes.shape
+        _, M, _ = gt_boxes.shape
+
+        overlaps = bbox_overlaps(predicted_boxes.view(-1, 4), gt_boxes.view(-1, 4)).view(B, N, M)  # Compute IoU between predicted and ground truth boxes
+        max_overlaps, argmax_overlaps = overlaps.max(dim=2)  # Find the maximum IoU and its corresponding index along the M dimension
+
+        pred_matched_indices = torch.nonzero(max_overlaps >= iou_threshold, as_tuple=False).squeeze()  # Get the indices of matched boxes
+        pred_unmatched_indices = torch.nonzero(max_overlaps < iou_lower_bound, as_tuple=False).squeeze()  # Get the indices of unmatched boxes
+
+        gt_matched_indices = argmax_overlaps.view(-1)[matched_indices]
+
+        gt_matched_indices = argmax_overlaps[matched_indices]
+
+        return pred_matched_indices, pred_unmatched_indices, gt_matched_indices
