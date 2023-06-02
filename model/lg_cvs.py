@@ -11,7 +11,7 @@ from torchvision.transforms import InterpolationMode
 from torch.nn.utils.rnn import pad_sequence
 
 from mmdet.registry import MODELS
-from mmengine.structures import BaseDataElement
+from mmengine.structures import BaseDataElement, InstanceData
 from mmdet.structures import SampleList, OptSampleList
 from mmdet.structures.bbox import bbox2roi, roi2bbox, scale_boxes
 from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
@@ -33,7 +33,7 @@ class LGDetector(BaseDetector):
     """
 
     def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            perturb_factor: float = 0.125, use_pred_boxes_recon_loss: bool = False,
+            perturb_factor: float = 0.0, use_pred_boxes_recon_loss: bool = False,
             reconstruction_head: ConfigType = None, reconstruction_loss: ConfigType = None,
             reconstruction_img_stats: ConfigType = None, graph_head: ConfigType = None,
             ds_head: ConfigType = None, roi_extractor: ConfigType = None,
@@ -83,7 +83,7 @@ class LGDetector(BaseDetector):
         graph_head.roi_extractor = self.roi_extractor
         self.graph_head = MODELS.build(graph_head) if graph_head is not None else None
         self.ds_head = MODELS.build(ds_head) if ds_head is not None else None
-        self.semantic_feat_projector = torch.nn.Linear(num_classes + 4, semantic_feat_size)
+        self.semantic_feat_projector = torch.nn.Linear(num_classes + 5, semantic_feat_size) # input feat size is classes+box coords+score
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
@@ -99,13 +99,18 @@ class LGDetector(BaseDetector):
             detached_results = self.detach_results(results)
             self.detector.training = True
 
-        # get bb and fpn features TODO(adit98) see if we can prevent running bb twice
+        # get bb and fpn features
         feats = self.extract_feat(batch_inputs, detached_results)
 
         # run graph head
         if self.graph_head is not None:
-            # TODO(adit98) train graph
-            feats, graph = self.graph_head.predict(detached_results, feats)
+            if self.detector.training:
+                # train graph (only when detector is training)
+                graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                        detached_results, feats)
+                losses.update(graph_losses)
+            else:
+                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -137,14 +142,29 @@ class LGDetector(BaseDetector):
         results = self.detector.predict(batch_inputs, batch_data_samples)
         detached_results = copy.deepcopy(self.detach_results(results))
 
-        # get bb and fpn features TODO(adit98) see if we can prevent running bb twice
+        # get bb and fpn features
         feats = self.extract_feat(batch_inputs, detached_results)
 
         # run graph head
         if self.graph_head is not None:
-            feats, graph = self.graph_head.predict(detached_results, feats)
+            feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
 
-            # TODO(adit98) add graph to result
+            # add graph to result
+            for ind, r in enumerate(results):
+                # GT
+                r.gt_edges = InstanceData()
+                r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
+                r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
+                r.gt_edges.relations = gt_edges.edge_relations[ind]
+
+                # PRED
+                r.pred_edges = InstanceData()
+
+                # select correct batch
+                batch_inds = graph.edges.edge_flats[:, 0] == ind
+                r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
+                r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
+                r.pred_edges.relations = graph.edges.class_logits[batch_inds]
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -179,9 +199,10 @@ class LGDetector(BaseDetector):
         feats = BaseDataElement()
         boxes = [r.pred_instances.bboxes for r in results]
         classes = [r.pred_instances.labels for r in results]
+        scores = [r.pred_instances.scores for r in results]
 
         # apply box perturbation
-        if self.training:
+        if self.training and self.perturb_factor > 0:
             boxes = self.box_perturbation(boxes, results[0].img_shape)
 
         # run bbox feat extractor and add instance feats to feats
@@ -228,9 +249,10 @@ class LGDetector(BaseDetector):
         # compute semantic feat
         c = pad_sequence(classes, batch_first=True)
         b = pad_sequence(boxes, batch_first=True)
+        s = pad_sequence(scores, batch_first=True)
         b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
         c_one_hot = F.one_hot(c, num_classes=self.num_classes)
-        s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot], -1))
+        s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1))
         feats.semantic_feats = s
 
         return feats

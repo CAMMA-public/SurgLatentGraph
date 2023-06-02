@@ -17,6 +17,7 @@ recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat
 
 # model
 lg_model = _base_.lg_model
+lg_model.perturb_factor=0.125
 lg_model.use_pred_boxes_recon_loss=True
 lg_model.ds_head=dict(
     type='DSHead',

@@ -44,6 +44,11 @@ lg_model=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
         ),
+        presence_loss_weight=0.5,
+        classifier_loss_cfg=dict(
+            type='CrossEntropyLoss',
+        ),
+        classifier_loss_weight=0.5,
         num_edge_classes=3,
     ),
 )
@@ -72,8 +77,22 @@ test_evaluator = [
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test'
+        outfile_prefix='./results/endoscapes_preds/test',
+        save_graphs=True,
     ),
+]
+
+# learning rate
+param_scheduler = [
+    dict(
+        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
+    dict(
+        type='MultiStepLR',
+        begin=0,
+        end=20,
+        by_epoch=True,
+        milestones=[8, 16],
+        gamma=0.1)
 ]
 
 # Running settings

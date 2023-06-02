@@ -1,6 +1,7 @@
 from mmdet.registry import METRICS
 from mmdet.evaluation.metrics import CocoMetric
 from mmdet.structures.bbox import scale_boxes
+from mmengine.structures import BaseDataElement
 from mmengine.logging import MMLogger
 from typing import Dict, Sequence
 from torchmetrics.functional import multiscale_structural_similarity_index_measure as ms_ssim, structural_similarity_index_measure as ssim
@@ -9,22 +10,27 @@ from torch import Tensor
 import torchvision.transforms.functional as TF
 from torchmetrics import AveragePrecision as AP, Precision, Recall, F1Score
 import os
+import io
 import cv2
 import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
 
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
-    def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[], **kwargs):
+    def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[], save_graphs=False, **kwargs):
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
         self.data_root = data_root
         self.data_prefix = data_prefix
         self.use_pred_boxes_recon = use_pred_boxes_recon
         self.additional_metrics = additional_metrics
+        self.save_graphs = save_graphs
 
     def process(self, data_batch: Dict, data_samples: Sequence[dict]) -> None:
         if len(self.metrics) > 0:
             super().process(data_batch, data_samples)
+
         else:
             for data_sample in data_samples:
                 result = dict()
@@ -48,6 +54,15 @@ class CocoMetricRGD(CocoMetric):
         for p, g, data_sample in zip(preds, gts, data_samples):
             if 'reconstruction' in data_sample:
                 p['reconstruction'] = data_sample['reconstruction']
+
+            if 'gt_edges' in data_sample:
+                g['gt_edges'] = data_sample['gt_edges']
+
+                # add det gt also
+                g['gt_instances'] = data_sample['gt_instances']
+
+            if 'pred_edges' in data_sample:
+                p['pred_edges'] = data_sample['pred_edges']
 
             if 'pred_ds' in data_sample:
                 p['ds'] = data_sample['pred_ds']
@@ -214,15 +229,180 @@ class CocoMetricRGD(CocoMetric):
                 gt_outname = os.path.join(outfile_prefix, 'gt_ds.txt')
                 np.savetxt(gt_outname, gt_ds)
 
+        if gts is not None and 'pred_edges' in results[0] and self.save_graphs:
+            img_ids = []
+            for idx, result in enumerate(results):
+                img_ids.append(result['img_id'])
+
+            gt_graphs, pred_graphs = self.graphs_to_networkx(results, gts)
+
+            # make dirs to save
+            if not os.path.exists(os.path.join(outfile_prefix, 'graphs')):
+                os.makedirs(os.path.join(outfile_prefix, 'graphs', 'gt'))
+                os.makedirs(os.path.join(outfile_prefix, 'graphs', 'pred'))
+
+            # Save each ground truth graph image to a file
+            for img_id, graph_buffer in zip(img_ids, gt_graphs):
+                with open(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.png'), 'wb') as f:
+                    f.write(graph_buffer.getvalue())
+
+            # Save each predicted graph image to a file
+            for img_id, graph_buffer in zip(img_ids, pred_graphs):
+                with open(os.path.join(outfile_prefix, 'graphs', 'pred', f'{img_id}.png'), 'wb') as f:
+                    f.write(graph_buffer.getvalue())
+
+            result_files['graph'] = os.path.join(outfile_prefix, 'graphs')
+
         return result_files
+
+    def graphs_to_networkx(self, results: Sequence[dict], gts: Sequence[dict]):
+        # Define colors
+        colors = [
+            (0, 0, 0),             # 0: Default color
+            (1, 1, 0.39),          # 1: Yellow
+            (0.4, 0.698, 1),       # 2: Light Blue
+            (1, 0, 0),             # 3: Red
+            (0, 0.4, 0.2),         # 4: Dark Green
+            (0.2, 1, 0.4),         # 5: Light Green
+            (1, 0.592, 0.208),     # 6: Orange
+            (1, 1, 1),             # 7: White
+        ]
+
+        sem_id_to_color = {
+            1: (0.33, 0.24, 0.42),  # LEFT-RIGHT
+            2: (0.02, 0.77, 0.70),  # UP-DOWN
+            3: (0.61, 0.55, 0.49),  # INSIDE-OUTSIDE
+        }
+
+        # Define object and semantic labels
+        obj_id_to_label = {
+            1: 'cystic_plate',
+            2: 'calot_triangle',
+            3: 'cystic_artery',
+            4: 'cystic_duct',
+            5: 'gallbladder',
+            6: 'tool',
+        }
+        obj_id_to_label_short = {
+            1: 'CP',
+            2: 'CT',
+            3: 'CA',
+            4: 'CD',
+            5: 'GB',
+            6: 'T'
+        }
+        sem_id_to_label = {
+            1: 'LR',  # LEFT-RIGHT
+            2: 'UD',  # UP-DOWN
+            3: 'IO',  # INSIDE-OUTSIDE
+        }
+
+        gt_graph_images = []
+        pred_graph_images = []
+
+        # Iterate over each item in the SampleList
+        for pred_item, gt_item in zip(results, gts):
+            # Create an empty NetworkX graph for ground truth
+            gt_graph = nx.Graph()
+
+            # Get ground truth instances
+            gt_instances = gt_item['gt_instances']
+            labels, boxes = gt_instances['labels'], gt_instances['bboxes']
+
+            # Add nodes to the ground truth graph for each ground truth instance
+            for i, l in enumerate(labels):
+                label = obj_id_to_label_short[int(l.item()) + 1]
+                gt_graph.add_node(i, label=label, color=colors[int(l.item()) + 1])
+
+            # Add edges to the ground truth graph for ground truth edges
+            gt_edges = gt_item['gt_edges']
+
+            for edge, rel in zip(gt_edges['edge_flats'], gt_edges['relations']):
+                u, v = edge
+                gt_graph.add_edge(int(u.item()), int(v.item()), color=sem_id_to_color[int(rel.item())],
+                        relation=sem_id_to_label[int(rel.item())])
+
+            # Visualize the ground truth graph
+            gt_pos = nx.spring_layout(gt_graph, seed=42)
+            gt_node_colors = [data['color'] for _, data in gt_graph.nodes(data=True)]
+            gt_edge_colors = [data['color'] for _, _, data in gt_graph.edges(data=True)]
+            gt_labels = {node: data['label'] for node, data in gt_graph.nodes(data=True)}
+            edge_labels = nx.get_edge_attributes(gt_graph, 'relation')
+            edge_colors = [data['color'] for _, _, data in gt_graph.edges(data=True)]
+
+            plt.figure(figsize=(10, 10))
+            nx.draw_networkx_nodes(gt_graph, gt_pos, node_color=gt_node_colors, node_size=500, alpha=0.8)
+            nx.draw_networkx_edges(gt_graph, gt_pos, edge_color=gt_edge_colors, width=2, alpha=0.5)
+            nx.draw_networkx_edge_labels(gt_graph, gt_pos, edge_labels=edge_labels, font_size=10, font_color='black')
+            nx.draw_networkx_labels(gt_graph, gt_pos, gt_labels, font_size=12, font_color='black', font_weight='bold')
+            plt.axis('off')
+
+            # Save the ground truth graph image to a file-like object
+            gt_img_buffer = io.BytesIO()
+            plt.savefig(gt_img_buffer, format='png')
+            gt_img_buffer.seek(0)
+
+            # Clear the figure to free up memory
+            plt.clf()
+            plt.close()
+
+            gt_graph_images.append(gt_img_buffer)
+
+            # Create an empty NetworkX graph for predicted instances
+            pred_graph = nx.Graph()
+
+            # Get pred instances (add 1 to labels to account for bg)
+            pred_labels, pred_boxes = pred_item['labels'] + 1, pred_item['bboxes']
+
+            # Add nodes to the predicted graph for each predicted instance
+            for i, l in enumerate(pred_labels):
+                label = obj_id_to_label_short[int(l.item())]
+                pred_graph.add_node(i, label=label, color=colors[int(l.item())])
+
+            # Add edges to the predicted graph for predicted edges
+            pred_edges = pred_item['pred_edges']
+
+            for edge, rel in zip(pred_edges['edge_flats'], pred_edges['relations']):
+                u, v = edge
+                r = rel[1:].argmax(0).int().item() + 1
+                pred_graph.add_edge(int(u.item()), int(v.item()), color=sem_id_to_color[r],
+                        relation=sem_id_to_label[r])
+
+            # Visualize the ground truth graph
+            pred_pos = nx.spring_layout(pred_graph, seed=42)
+            pred_node_colors = [data['color'] for _, data in pred_graph.nodes(data=True)]
+            pred_edge_colors = [data['color'] for _, _, data in pred_graph.edges(data=True)]
+            pred_labels = {node: data['label'] for node, data in pred_graph.nodes(data=True)}
+            edge_labels = nx.get_edge_attributes(pred_graph, 'relation')
+            edge_colors = [data['color'] for _, _, data in pred_graph.edges(data=True)]
+
+            plt.figure(figsize=(10, 10))
+            nx.draw_networkx_nodes(pred_graph, pred_pos, node_color=pred_node_colors, node_size=500, alpha=0.8)
+            nx.draw_networkx_edges(pred_graph, pred_pos, edge_color=pred_edge_colors, width=2, alpha=0.5)
+            nx.draw_networkx_edge_labels(pred_graph, pred_pos, edge_labels=edge_labels, font_size=10, font_color='black')
+            nx.draw_networkx_labels(pred_graph, pred_pos, pred_labels, font_size=12, font_color='black', font_weight='bold')
+            plt.axis('off')
+
+            # Save the predicted graph image to a file-like object
+            pred_img_buffer = io.BytesIO()
+            plt.savefig(pred_img_buffer, format='png')
+            pred_img_buffer.seek(0)
+
+            # Clear the figure to free up memory
+            plt.clf()
+            plt.close()
+
+            pred_graph_images.append(pred_img_buffer)
+
+        return gt_graph_images, pred_graph_images
 
 class SSIM_RoI:
     def __init__(self, data_range, size_average, channel):
         self.running_vals = []
 
     def __call__(self, pred_imgs, gt_imgs, gt_boxes):
-        all_pred_patches, all_gt_patches, fixed_boxes = self.crop_boxes(pred_imgs, gt_imgs,
-                gt_boxes)
+        all_pred_patches, all_gt_patches, fixed_boxes = self.crop_boxes(pred_imgs,
+                gt_imgs, gt_boxes)
 
         # compute ssim b/w each pred patch and gt patch
         ssim_vals = []
