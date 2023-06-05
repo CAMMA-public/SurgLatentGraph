@@ -30,8 +30,9 @@ class DSHead(BaseModule, metaclass=ABCMeta):
     def __init__(self, num_classes: int, gnn_cfg: ConfigType,
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
-            loss: str, loss_weight: float, prediction_mode='ml', loss_consensus: str = 'mode',
-            weight: List = None, num_predictor_layers: int = 2, init_cfg: OptMultiConfig = None) -> None:
+            loss: str, loss_weight: float, use_img_feats=True, prediction_mode='ml',
+            loss_consensus: str = 'mode', weight: List = None, num_predictor_layers: int = 2,
+            init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # set viz and sem dims for projecting node/edge feats in input graph
@@ -122,8 +123,11 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             1).squeeze(-1).squeeze(-1))
 
         # combine two types of feats
-        #final_feats = img_feats + graph_feats
-        final_feats = graph_feats
+        if self.use_img_feats:
+            final_feats = img_feats + graph_feats
+        else:
+            final_feats = graph_feats
+
         if isinstance(self.ds_predictor, torch.nn.ModuleList):
             ds_feats = self.ds_predictor_head(final_feats)
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)

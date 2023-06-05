@@ -57,10 +57,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
         # convert edge flats to batch edge flats
         edge_offsets = torch.cumsum(Tensor([0] + graph.nodes.nodes_per_img[:-1]), 0).to(graph.edges.edge_flats.device)
         batch_edge_flats = graph.edges.edge_flats[:, 1:] + edge_offsets[graph.edges.edge_flats[:, 0]].view(-1, 1).int()
-        try:
-            g = dgl.graph(batch_edge_flats.unbind(1), num_nodes=sum(graph.nodes.nodes_per_img))
-        except:
-            breakpoint()
+        g = dgl.graph(batch_edge_flats.unbind(1), num_nodes=sum(graph.nodes.nodes_per_img))
 
         # add attributes to graph
         for k, v in graph.nodes.items():
@@ -68,8 +65,11 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
             g.ndata[k] = torch.cat([v_i[:n] for n, v_i in zip(graph.nodes.nodes_per_img, v)])
 
         for k, v in graph.edges.items():
-            skip_keys = ['edges_per_img', 'batch_index', 'edge_flats', 'presence_logits']
+            skip_keys = ['edges_per_img', 'batch_index', 'edge_flats', 'presence_logits', 'boxesA', 'boxesB']
             if k in skip_keys: continue
+            if isinstance(v, tuple):
+                v = torch.cat(v)
+
             g.edata[k] = v.view(-1, v.shape[-1])
 
         # add in batch info

@@ -18,6 +18,7 @@ from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from mmdet.models.detectors.base import BaseDetector
 from .predictor_heads.reconstruction import ReconstructionHead
 from .predictor_heads.modules.loss import ReconstructionLoss
+from .predictor_heads.modules.layers import build_mlp
 from .predictor_heads.graph import GraphHead
 from .predictor_heads.ds import DSHead
 
@@ -33,10 +34,10 @@ class LGDetector(BaseDetector):
     """
 
     def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            perturb_factor: float = 0.0, use_pred_boxes_recon_loss: bool = False,
-            reconstruction_head: ConfigType = None, reconstruction_loss: ConfigType = None,
-            reconstruction_img_stats: ConfigType = None, graph_head: ConfigType = None,
-            ds_head: ConfigType = None, roi_extractor: ConfigType = None,
+            semantic_feat_projector_layers: int = 3, perturb_factor: float = 0.0,
+            use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
+            reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
+            graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
             trainable_detector_cfg: OptConfigType = None,
             trainable_backbone_cfg: OptConfigType = None,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
@@ -83,7 +84,11 @@ class LGDetector(BaseDetector):
         graph_head.roi_extractor = self.roi_extractor
         self.graph_head = MODELS.build(graph_head) if graph_head is not None else None
         self.ds_head = MODELS.build(ds_head) if ds_head is not None else None
-        self.semantic_feat_projector = torch.nn.Linear(num_classes + 5, semantic_feat_size) # input feat size is classes+box coords+score
+
+        # build semantic feat projector (input feat size is classes+box coords+score)
+        dim_list = [num_classes + 5] + [512] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+        self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
@@ -94,10 +99,11 @@ class LGDetector(BaseDetector):
 
         # now run detector predict fn, we will pass the output of that to reconstructor
         with torch.no_grad():
+            detector_is_training = self.detector.training
             self.detector.training = False
             results = self.detector.predict(batch_inputs, batch_data_samples)
             detached_results = self.detach_results(results)
-            self.detector.training = True
+            self.detector.training = detector_is_training
 
         # get bb and fpn features
         feats = self.extract_feat(batch_inputs, detached_results)
@@ -105,12 +111,16 @@ class LGDetector(BaseDetector):
         # run graph head
         if self.graph_head is not None:
             if self.detector.training:
-                # train graph (only when detector is training)
+                # train graph with gt boxes (only when detector is training)
                 graph_losses, feats, graph = self.graph_head.loss_and_predict(
                         detached_results, feats)
                 losses.update(graph_losses)
             else:
-                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                # train graph with pred boxes
+                graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                        detached_results, feats)
+                losses.update(graph_losses)
+                #feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -132,7 +142,8 @@ class LGDetector(BaseDetector):
             try:
                 ds_losses = self.ds_head.loss(graph, feats, batch_data_samples)
                 losses.update(ds_losses)
-            except AttributeError:
+            except AttributeError as e:
+                print(e)
                 raise NotImplementedError("Must have graph head in order to do downstream prediction")
 
         return losses
@@ -252,8 +263,8 @@ class LGDetector(BaseDetector):
         s = pad_sequence(scores, batch_first=True)
         b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
         c_one_hot = F.one_hot(c, num_classes=self.num_classes)
-        s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1))
-        feats.semantic_feats = s
+        s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1).flatten(end_dim=1))
+        feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
 
         return feats
 

@@ -7,9 +7,6 @@ _base_ = ['lg_base_box.py']
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
 
-# feat sizes
-ds_input_feat_size = 128 # downproject each node and edge feature to this size for ds pred
-
 # recon params
 bottleneck_feat_size = 64
 layout_noise_dim = 32
@@ -27,7 +24,7 @@ lg_model.ds_head=dict(
         num_layers=3,
         arch='tripleconv',
         add_self_loops=False,
-        use_reverse_edges=False,
+        use_reverse_edges=True,
         norm='graph',
         skip_connect=True,
     ),
@@ -35,8 +32,9 @@ lg_model.ds_head=dict(
     img_feat_size=2048,
     input_sem_feat_size=_base_.semantic_feat_size,
     input_viz_feat_size=_base_.viz_feat_size,
-    final_sem_feat_size=64,
-    final_viz_feat_size=64,
+    final_sem_feat_size=256,
+    final_viz_feat_size=0,
+    use_img_feats=False, # TODO(adit98) remove this
     loss_consensus='mode',
     loss='bce',
     loss_weight=1.0,
@@ -132,7 +130,7 @@ test_evaluator = [
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.00001),
+    optimizer=dict(type='AdamW', lr=0.0003),
     #clip_grad=dict(max_norm=0.1, norm_type=2),
 )
 auto_scale_lr = dict(enable=False)

@@ -193,7 +193,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
 
         # build edges for GT
-        gt_edges = self._build_gt_edges(results)
+        gt_edges = self._build_gt_edges(results, use_pred_instances=False)
 
         # build edges
         edges, _ = self._build_edges(results, nodes_per_img, feats)
@@ -255,9 +255,12 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         return graph
 
-    def _build_gt_edges(self, results: SampleList) -> BaseDataElement:
+    def _build_gt_edges(self, results: SampleList, use_pred_instances: bool) -> BaseDataElement:
         boxes_per_img = [len(r.gt_instances.bboxes) for r in results]
-        bounding_boxes = pad_sequence([r.gt_instances.bboxes for r in results], batch_first=True)
+        if use_pred_instances:
+            bounding_boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
+        else:
+            bounding_boxes = pad_sequence([r.gt_instances.bboxes for r in results], batch_first=True)
 
         # compute centroids and distances for general use
         centroids = (bounding_boxes[:, :, :2] + bounding_boxes[:, :, 2:]) / 2
@@ -397,12 +400,13 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         return intersection_area
 
-    def loss_and_predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[SampleList, dict]:
+    def loss_and_predict(self, results: SampleList, feats: BaseDataElement,
+            use_pred_instances: bool = False) -> Tuple[SampleList, dict]:
         # init loss dict
         losses = {}
 
         # build edges for GT
-        gt_edges = self._build_gt_edges(results)
+        gt_edges = self._build_gt_edges(results, use_pred_instances)
 
         # build edges and compute presence probabilities
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
