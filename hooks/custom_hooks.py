@@ -9,7 +9,20 @@ class FreezeDetectorHook(Hook):
             p.requires_grad = False
         for m in model.detector.modules():
             m.eval()
+
         model.detector.eval()
+
+        # also freeze graph head if it exists
+        try:
+            for p in model.graph_head.parameters():
+                p.requires_grad = False
+            for m in model.graph_head.modules():
+                m.eval()
+
+            model.graph_head.eval()
+
+        except AttributeError as e:
+            print(e)
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):

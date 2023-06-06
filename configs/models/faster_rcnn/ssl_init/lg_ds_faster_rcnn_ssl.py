@@ -1,7 +1,7 @@
 import copy
 
 # modify base for different detectors
-_base_ = ['../lg_ds_faster_rcnn_no_recon.py']
+_base_ = ['../lg_ds_faster_rcnn.py']
 
 # modify model
 

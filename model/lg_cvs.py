@@ -116,11 +116,12 @@ class LGDetector(BaseDetector):
                         detached_results, feats)
                 losses.update(graph_losses)
             else:
-                # train graph with pred boxes
-                graph_losses, feats, graph = self.graph_head.loss_and_predict(
-                        detached_results, feats)
-                losses.update(graph_losses)
-                #feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+
+                ## train graph with pred boxes
+                #graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                #        detached_results, feats, use_pred_instances=True)
+                #losses.update(graph_losses)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
