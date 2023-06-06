@@ -14,9 +14,9 @@ recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat
 
 # model
 lg_model = _base_.lg_model
-lg_model.perturb_factor=0.125
-lg_model.use_pred_boxes_recon_loss=True
-lg_model.ds_head=dict(
+lg_model.perturb_factor = 0.125
+lg_model.use_pred_boxes_recon_loss = True
+lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
     gnn_cfg=dict(
@@ -24,7 +24,7 @@ lg_model.ds_head=dict(
         num_layers=3,
         arch='tripleconv',
         add_self_loops=False,
-        use_reverse_edges=True,
+        use_reverse_edges=False,
         norm='graph',
         skip_connect=True,
     ),
@@ -33,8 +33,8 @@ lg_model.ds_head=dict(
     input_sem_feat_size=_base_.semantic_feat_size,
     input_viz_feat_size=_base_.viz_feat_size,
     final_sem_feat_size=256,
-    final_viz_feat_size=0,
-    use_img_feats=False, # TODO(adit98) remove this
+    final_viz_feat_size=256,
+    use_img_feats=True,
     loss_consensus='mode',
     loss='bce',
     loss_weight=1.0,
@@ -66,7 +66,7 @@ lg_model.reconstruction_loss=dict(
     deep_loss_weight=0.6,
     perceptual_weight=1.0,
     box_loss_weight=0.75,
-    recon_loss_weight=1.0,
+    recon_loss_weight=0.25,
     use_content=True,
     use_style=False,
     use_ssim=False,
@@ -130,8 +130,13 @@ test_evaluator = [
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.0003),
-    #clip_grad=dict(max_norm=0.1, norm_type=2),
+    optimizer=dict(type='AdamW', lr=0.00001),
+    clip_grad=dict(max_norm=10, norm_type=2),
+    paramwise_cfg=dict(
+        custom_keys={
+            'semantic_feat_projector': dict(lr_mult=10),
+        }
+    ),
 )
 auto_scale_lr = dict(enable=False)
 

@@ -34,8 +34,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
             roi_extractor: BaseRoIExtractor, num_edge_classes: int,
             presence_loss_cfg: ConfigType, presence_loss_weight: float,
             classifier_loss_cfg: ConfigType, classifier_loss_weight: float,
-            num_roi_feat_maps: int = 4, gnn_cfg: ConfigType = None,
-            init_cfg: OptMultiConfig = None) -> None:
+            semantic_feat_projector_layers: int = 3, num_roi_feat_maps: int = 4,
+            gnn_cfg: ConfigType = None, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # attributes for building graph from detections
@@ -70,8 +70,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         self.num_edge_classes = num_edge_classes
         dim_list = [viz_feat_size, viz_feat_size, self.num_edge_classes + 1] # predict no edge or which class
         self.edge_predictor = build_mlp(dim_list)
-        self.edge_semantic_feat_projector = torch.nn.Linear(self.num_edge_classes + 5,
-                semantic_feat_size)
+        dim_list = [self.num_edge_classes + 5] + [512] * \
+                (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+        self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
 
         # make query projector if roi_extractor is None
         if self.roi_extractor is None:
@@ -107,11 +108,15 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # get boxes, rescale
         scale_factor = results[0].scale_factor
         boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
+        boxes_per_img = [len(r.pred_instances.bboxes) for r in results]
         rescaled_boxes = scale_boxes(boxes, scale_factor)
 
         # compute all box_unions
-        edge_boxes = self.box_union(rescaled_boxes, rescaled_boxes).view(boxes.shape[0], -1, 4)
-        edge_rois = bbox2roi(edge_boxes)
+        edge_boxes = self.box_union(rescaled_boxes, rescaled_boxes)
+
+        # select valid edge boxes
+        valid_edge_boxes = [e[:b, :b].flatten(end_dim=1) for e, b in zip(edge_boxes, boxes_per_img)]
+        edge_rois = bbox2roi(valid_edge_boxes)
 
         # compute edge feats
         if self.roi_extractor is not None:
@@ -128,11 +133,16 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # collate all edge information
         edges = BaseDataElement()
-        edges.boxes = edge_boxes
-        edges.boxesA = rescaled_boxes.repeat_interleave(rescaled_boxes.shape[1], dim=1)
-        edges.boxesB = rescaled_boxes.repeat(1, rescaled_boxes.shape[1], 1)
-        edges.presence_logits = edge_presence_masked
+        edges.boxes = torch.cat(valid_edge_boxes)
+        edges.boxesA = torch.cat([b[:num_b].repeat_interleave(num_b, dim=0) for num_b, b in zip(
+                boxes_per_img, rescaled_boxes)])
+        edges.boxesB = torch.cat([b[:num_b].repeat(num_b, 1) for num_b, b in zip(
+                boxes_per_img, rescaled_boxes)])
+        edges.edges_per_img = [num_b * num_b for num_b in boxes_per_img]
         edges.feats = edge_viz_feats
+
+        # store presence logits
+        edges.presence_logits = edge_presence_masked
 
         return edges, edge_presence_logits
 
@@ -152,42 +162,43 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         presence_logits = edges.presence_logits # B x N x N
 
         # pick top E edges per node, or N - 1 if num nodes is too small
-        edge_flats = self._edge_flats_from_adj_mat(presence_logits, nodes_per_img)
+        edge_flats, edge_indices = self._edge_flats_from_adj_mat(presence_logits, nodes_per_img)
         edges_per_img = Tensor([len(ef) for ef in edge_flats]).to(presence_logits.device).int()
 
-        # get indices of selected edges and index edge boxes, feats, and class logits
-        index_mat = torch.arange(presence_logits.flatten().shape[0]).view_as(presence_logits)
-        batch_index = torch.arange(len(edges_per_img)).to(edges_per_img.device).repeat_interleave(edges_per_img).view(-1, 1)
-        batch_edge_flats = torch.cat([batch_index, torch.cat(edge_flats)], dim=1)
-        edge_indices = index_mat[batch_edge_flats.unbind(1)]
-
         edges.edges_per_img = edges_per_img
-        edges.batch_index = batch_index # stores the batch_id of each edge
-        edges.edge_flats = batch_edge_flats
-        edges.boxes = edges.boxes.view(-1, 4)[edge_indices]
-        edges.boxesA = edges.boxesA.view(-1, 4)[edge_indices]
-        edges.boxesB = edges.boxesB.view(-1, 4)[edge_indices]
+        edges.batch_index = torch.arange(len(edges_per_img)).to(edges_per_img.device).repeat_interleave(
+                edges_per_img).view(-1, 1) # stores the batch_id of each edge
+        edges.edge_flats = torch.cat([edges.batch_index, torch.cat(edge_flats)], dim=1)
+        edges.boxes = edges.boxes[edge_indices]
+        edges.boxesA = edges.boxesA[edge_indices]
+        edges.boxesB = edges.boxesB[edge_indices]
         edges.feats = edges.feats[edge_indices]
 
         return edges
 
     def _edge_flats_from_adj_mat(self, presence_logits, nodes_per_img):
         edge_flats = []
+        edge_indices = []
+        edge_index_offset = 0
         num_edges = torch.minimum(torch.ones(len(presence_logits)) * self.edges_per_node,
                 Tensor(nodes_per_img) - 1).int()
 
         for pl, ne, nn in zip(presence_logits, num_edges, nodes_per_img):
             if nn == 0:
                 edge_flats.append(torch.zeros(0, 2).to(pl.device).int())
+                edge_indices.append(torch.zeros(0).to(pl.device))
                 continue
 
             row_indices = torch.arange(nn).to(pl.device).view(-1, 1).repeat(1, ne.item())
             topk_indices = torch.topk(pl, k=ne.item(), dim=1).indices
             edge_flat = torch.stack([row_indices, topk_indices[:nn]], dim=-1).long().view(-1, 2)
             edge_flat = edge_flat[self.drop_duplicates(edge_flat.sort(dim=1).values).long()]
+            edge_indices.append(torch.arange(nn * nn).to(pl.device).view(nn, nn)[edge_flat[:, 0], edge_flat[:, 1]] + \
+                    edge_index_offset)
+            edge_index_offset += nn * nn
             edge_flats.append(edge_flat)
 
-        return edge_flats
+        return edge_flats, torch.cat(edge_indices).long()
 
     def predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[BaseDataElement]:
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
@@ -251,7 +262,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # update edge data (skip connection to orig edge feats)
         graph.edges.boxes = dgl_g.edata['boxes'].split(graph.edges.edges_per_img.tolist())
-        graph.edges.feats += dgl_g.edata['feats']
+        graph.edges.boxesA = dgl_g.edata['boxesA'].split(graph.edges.edges_per_img.tolist())
+        graph.edges.boxesB = dgl_g.edata['boxesB'].split(graph.edges.edges_per_img.tolist())
+        graph.edges.feats = dgl_g.edata['orig_feats'] + dgl_g.edata['feats']
 
         return graph
 
@@ -445,7 +458,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def edge_presence_loss(self, presence_logits, edges, gt_edges):
         # first match edge boxes to gt edge boxes
-        pred_matched_inds, pred_unmatched_inds, _ = self.match_boxes(edges.boxesA, edges.boxesB,
+        bA = edges.boxesA.split(edges.edges_per_img)
+        bB = edges.boxesB.split(edges.edges_per_img)
+        pred_matched_inds, pred_unmatched_inds, _ = self.match_boxes(bA, bB,
                 gt_edges.boxesA, gt_edges.boxesB, num=32, iou_threshold=0.5, iou_lower_bound=0.2)
 
         # assign labels (1 if matched, 0 if unmatched)
@@ -464,15 +479,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def edge_classifier_loss(self, edges, gt_edges):
         # first match edge boxes to gt edge boxes
-        pred_matched_inds, _, gt_matched_inds = self.match_boxes(
-                edges.boxesA.split(edges.edges_per_img.tolist()),
-                edges.boxesB.split(edges.edges_per_img.tolist()),
-                gt_edges.boxesA,
-                gt_edges.boxesB,
-                num=8,
-                pos_fraction=0.875,
-                iou_lower_bound=0.2,
-        )
+        pred_matched_inds, _, gt_matched_inds = self.match_boxes(edges.boxesA,
+                edges.boxesB, gt_edges.boxesA, gt_edges.boxesB, num=8,
+                pos_fraction=0.875, iou_lower_bound=0.2)
 
         # assign labels (1 if matched, 0 if unmatched)
         flat_edge_classes = torch.cat([cl[t.view(-1)] for cl, t in zip(edges.class_logits.split(

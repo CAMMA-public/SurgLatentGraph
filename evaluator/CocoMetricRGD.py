@@ -172,14 +172,19 @@ class CocoMetricRGD(CocoMetric):
                 eval_results['ds_f1'] = ds_f1
 
             else:
-                torch_ap = AP(task='multilabel', num_labels=3)
+                torch_ap = AP(task='multilabel', num_labels=3, average='none')
                 ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                 ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
                 ds_ap = torch_ap(ds_preds, ds_gt)
 
-                # log
-                logger_info.append(f'ds_average_precision: {ds_ap:.4f}')
-                eval_results['ds_average_precision'] = ds_ap
+                # log overall
+                logger_info.append(f'ds_average_precision: {torch.nanmean(ds_ap):.4f}')
+                eval_results['ds_average_precision'] = torch.nanmean(ds_ap)
+
+                # log component-wise
+                for ind, i in enumerate(ds_ap):
+                    logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
+                    eval_results['ds_average_precision_C{}'.format(ind+1)] = i
 
         logger.info(' '.join(logger_info))
         return eval_results

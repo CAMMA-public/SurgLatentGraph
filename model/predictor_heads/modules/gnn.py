@@ -49,6 +49,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 dgl_g.edata['feats'], torch.stack(dgl_g.edges(), 1), dgl_g)
 
         dgl_g.ndata['feats'] = node_feats
+        dgl_g.edata['orig_feats'] = dgl_g.edata['feats']
         dgl_g.edata['feats'] = edge_feats
 
         return dgl_g
@@ -65,7 +66,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
             g.ndata[k] = torch.cat([v_i[:n] for n, v_i in zip(graph.nodes.nodes_per_img, v)])
 
         for k, v in graph.edges.items():
-            skip_keys = ['edges_per_img', 'batch_index', 'edge_flats', 'presence_logits', 'boxesA', 'boxesB']
+            skip_keys = ['edges_per_img', 'batch_index', 'edge_flats', 'presence_logits']
             if k in skip_keys: continue
             if isinstance(v, tuple):
                 v = torch.cat(v)

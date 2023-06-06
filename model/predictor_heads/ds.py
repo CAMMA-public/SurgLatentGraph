@@ -55,6 +55,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.gnn = MODELS.build(gnn_cfg)
 
         # img feat params
+        self.use_img_feats = use_img_feats
         self.img_feat_key = img_feat_key
         self.img_feat_projector = torch.nn.Linear(img_feat_size, graph_feat_projected_dim)
 
@@ -96,8 +97,8 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             edge_feats.append(edge_viz_feats)
 
         if self.final_sem_feat_size > 0:
-            node_sem_feats = self.node_sem_feat_projector(graph.nodes.feats[..., self.input_viz_feat_size:])
-            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.feats[..., self.input_viz_feat_size:])
+            node_sem_feats = self.node_sem_feat_projector(graph.nodes.feats[..., -self.input_sem_feat_size:])
+            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.feats[..., -self.input_sem_feat_size:])
             node_feats.append(node_sem_feats)
             edge_feats.append(edge_sem_feats)
 
@@ -117,13 +118,12 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         graph_feats = torch.zeros(npi_tensor.shape[0], node_feats.shape[-1]).to(node_feats.device)
         scatter_mean(node_feats, node_to_img, dim=0, out=graph_feats)
 
-        # get img feats
-        img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
-        img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
-            1).squeeze(-1).squeeze(-1))
-
         # combine two types of feats
         if self.use_img_feats:
+            # get img feats
+            img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
+            img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
+                1).squeeze(-1).squeeze(-1))
             final_feats = img_feats + graph_feats
         else:
             final_feats = graph_feats
@@ -151,6 +151,6 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
 
-        loss = {'ds_loss': ds_loss * self.loss_weight}
+        loss = {'ds_loss': ds_loss.nan_to_num(0) * self.loss_weight}
 
         return loss
