@@ -66,7 +66,7 @@ lg_model.reconstruction_loss=dict(
     deep_loss_weight=0.6,
     perceptual_weight=1.0,
     box_loss_weight=0.75,
-    recon_loss_weight=0.25,
+    recon_loss_weight=0.15,
     use_content=True,
     use_style=False,
     use_ssim=False,
@@ -135,6 +135,7 @@ optim_wrapper = dict(
     paramwise_cfg=dict(
         custom_keys={
             'semantic_feat_projector': dict(lr_mult=10),
+            'reconstruction_head': dict(lr_mult=10),
         }
     ),
 )

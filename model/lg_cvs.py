@@ -72,7 +72,7 @@ class LGDetector(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_feat_size = 256 # HACK get this value from cfg
+            reconstruction_head.obj_viz_feat_size = graph_head.viz_feat_size
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None

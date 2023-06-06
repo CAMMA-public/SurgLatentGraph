@@ -23,19 +23,19 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         img_aspect_ratio (tuple[int]): aspect ratio of reconstructed image
     """
     def __init__(self, decoder_cfg: ConfigType, aspect_ratio: Union[Tuple, List],
-            obj_feat_size: int, bottleneck_feat_size: int, num_classes: int,
+            obj_viz_feat_size: int, bottleneck_feat_size: int, num_classes: int,
             use_seg_recon: bool = False, num_nodes: int = 8,
             use_pred_boxes_whiteout: bool = False, layout_noise_dim: int = 32,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
-        self.obj_feat_size = obj_feat_size
+        self.obj_viz_feat_size = obj_viz_feat_size
         self.num_classes = num_classes
         self.num_nodes = num_nodes
         self.use_seg_recon = use_seg_recon
         self.img_decoder = MODELS.build(decoder_cfg)
         num_upsampling_stages = len(decoder_cfg.dims) - 1
         self.reconstruction_size = (Tensor(aspect_ratio) * (2 ** num_upsampling_stages)).int()
-        self.bottleneck = torch.nn.Linear(obj_feat_size, bottleneck_feat_size)
+        self.bottleneck = torch.nn.Linear(obj_viz_feat_size, bottleneck_feat_size)
         self.img_conv = torch.nn.Sequential(
             torch.nn.Conv2d(4 + num_classes, layout_noise_dim, kernel_size=1, stride=1, padding=0),
             torch.nn.BatchNorm2d(layout_noise_dim),
@@ -133,8 +133,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
     def _construct_reconstruction_input(self, images, node_features, layouts,
             gt_layouts):
 
-        f = self.bottleneck(node_features[..., :self.obj_feat_size])
-        node_features = torch.cat([f, node_features[..., self.obj_feat_size:]], -1)
+        f = self.bottleneck(node_features[..., :self.obj_viz_feat_size])
+        node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
 
         # convert one-hot layout over proposals to class-wise segmentation mask "layout"
         _, _, one_hot_layout = layouts
