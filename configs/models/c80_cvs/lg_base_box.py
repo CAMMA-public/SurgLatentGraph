@@ -16,7 +16,7 @@ custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMet
 
 # feat sizes
 viz_feat_size = 256
-semantic_feat_size = 64
+semantic_feat_size = 256
 
 # num nodes in graph
 num_nodes = 16
@@ -40,6 +40,15 @@ lg_model=dict(
             norm='graph',
             skip_connect=True,
         ),
+        presence_loss_cfg=dict(
+            type='CrossEntropyLoss',
+            use_sigmoid=True,
+        ),
+        presence_loss_weight=0.4,
+        classifier_loss_cfg=dict(
+            type='CrossEntropyLoss',
+        ),
+        classifier_loss_weight=0.25,
         num_edge_classes=3,
     ),
 )
@@ -68,7 +77,8 @@ test_evaluator = [
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test'
+        outfile_prefix='./results/c80_preds/test',
+        save_graphs=True,
     ),
 ]
 
@@ -89,7 +99,7 @@ param_scheduler = [
         begin=0,
         end=20,
         by_epoch=True,
-        milestones=[8, 11],
+        milestones=[8, 16],
         gamma=0.1)
 ]
 
