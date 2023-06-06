@@ -15,11 +15,5 @@ _base_.model.trainable_neck_cfg = dict(
     in_channels=[256, 512, 1024, 2048],
     out_channels=256,
 )
-#_base_.model.trainable_neck_cfg = copy.deepcopy(_base_.model.detector.neck)
 
 custom_hooks = [dict(type="FreezeDetectorHook")]#, dict(type='CopyDetectorBackbone')]
-
-# optimizer
-optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.00001),
-)

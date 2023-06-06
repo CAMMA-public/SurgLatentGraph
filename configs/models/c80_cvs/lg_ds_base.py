@@ -7,9 +7,6 @@ _base_ = ['lg_base_box.py']
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
 
-# feat sizes
-ds_input_feat_size = 128 # downproject each node and edge feature to this size for ds pred
-
 # recon params
 bottleneck_feat_size = 64
 layout_noise_dim = 32
@@ -17,9 +14,9 @@ recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat
 
 # model
 lg_model = _base_.lg_model
-lg_model.use_pred_boxes_recon_loss=True
-
-lg_model.ds_head=dict(
+lg_model.perturb_factor = 0.125
+lg_model.use_pred_boxes_recon_loss = True
+lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
     gnn_cfg=dict(
@@ -33,8 +30,11 @@ lg_model.ds_head=dict(
     ),
     img_feat_key='bb',
     img_feat_size=2048,
-    graph_feat_input_dim=_base_.viz_feat_size+_base_.semantic_feat_size,
-    graph_feat_projected_dim=ds_input_feat_size,
+    input_sem_feat_size=_base_.semantic_feat_size,
+    input_viz_feat_size=_base_.viz_feat_size,
+    final_sem_feat_size=256,
+    final_viz_feat_size=256,
+    use_img_feats=True,
     loss_consensus='mode',
     loss='bce',
     loss_weight=1.0,
@@ -68,7 +68,7 @@ lg_model.reconstruction_loss=dict(
     deep_loss_weight=0.6,
     perceptual_weight=1.0,
     box_loss_weight=0.75,
-    recon_loss_weight=1.0,
+    recon_loss_weight=0.15,
     use_content=True,
     use_style=False,
     use_ssim=False,
@@ -128,18 +128,18 @@ test_evaluator = [
     ),
 ]
 
-# train loop
-train_cfg = dict(
-    type='EpochBasedTrainLoop',
-    max_epochs=20,
-    val_interval=1)
-
 # optimizer
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
     optimizer=dict(type='AdamW', lr=0.00001),
-    #clip_grad=dict(max_norm=0.1, norm_type=2),
+    clip_grad=dict(max_norm=10, norm_type=2),
+    paramwise_cfg=dict(
+        custom_keys={
+            'semantic_feat_projector': dict(lr_mult=10),
+            'reconstruction_head': dict(lr_mult=10),
+        }
+    ),
 )
 auto_scale_lr = dict(enable=False)
 
@@ -149,5 +149,5 @@ default_hooks = dict(
     checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
 )
 
-# weight loading
+# loading
 load_from = 'weights/c80/lg_base_no_recon.pth'
