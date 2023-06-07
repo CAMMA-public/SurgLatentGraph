@@ -60,7 +60,7 @@ class DeepCVS(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_feat_size = self.decoder_backbone.feat_dim
+            reconstruction_head.obj_viz_feat_size = self.decoder_backbone.feat_dim
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None
