@@ -59,6 +59,6 @@ test_evaluator = [
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/endoscapes_preds/test'
+        outfile_prefix='./results/endoscapes_preds/test/r50'
     ),
 ]
