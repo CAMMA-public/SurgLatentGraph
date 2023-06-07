@@ -16,6 +16,7 @@ from mmdet.structures import SampleList, OptSampleList
 from mmdet.structures.bbox import bbox2roi, roi2bbox, scale_boxes
 from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from mmdet.models.detectors.base import BaseDetector
+from mmengine.model.base_module import Sequential
 from .predictor_heads.reconstruction import ReconstructionHead
 from .predictor_heads.modules.loss import ReconstructionLoss
 from .predictor_heads.modules.layers import build_mlp
@@ -55,14 +56,14 @@ class LGDetector(BaseDetector):
             bb = MODELS.build(trainable_backbone_cfg)
             if trainable_neck_cfg is not None:
                 neck = MODELS.build(trainable_neck_cfg)
-                self.trainable_backbone = torch.nn.Sequential(OrderedDict([
+                self.trainable_backbone = Sequential(OrderedDict([
                         ('backbone', bb),
                         ('neck', neck),
                     ])
                 )
 
             else:
-                self.trainable_backbone = torch.nn.Sequential(OrderedDict([
+                self.trainable_backbone = Sequential(OrderedDict([
                         ('backbone', bb),
                         ('neck', torch.nn.Identity()),
                     ])
