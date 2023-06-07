@@ -72,7 +72,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         self.edge_predictor = build_mlp(dim_list)
         dim_list = [self.num_edge_classes + 5] + [512] * \
                 (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-        self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+        self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='none')
 
         # make query projector if roi_extractor is None
         if self.roi_extractor is None:
@@ -124,8 +124,14 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                     if feats.neck_feats is not None else feats.bb_feats[:self.num_roi_feat_maps]
             edge_viz_feats = self.roi_extractor(roi_input_feats, edge_rois).squeeze(-1).squeeze(-1)
         else:
-            edge_viz_feats = self.edge_query_projector((feats.instance_feats.view(1, -1, 256) + \
-                    feats.instance_feats.view(-1, 1, 256))[torch.where(edges_to_keep)])
+            # define edges to keep
+            edges_per_img = torch.tensor([b*b for b in boxes_per_img])
+            edge_offsets = torch.cat([torch.zeros(1), torch.cumsum(edges_per_img, 0)[:-1]]).repeat_interleave(edges_per_img)
+            edges_to_keep = (torch.cat([torch.arange(e) for e in edges_per_img]) + edge_offsets).to(boxes.device)
+
+            # densely add object queries to get edge feats, select edges with edges_to_keep
+            edge_viz_feats = self.edge_query_projector((feats.instance_feats.unsqueeze(1) + \
+                    feats.instance_feats.unsqueeze(2)).flatten(end_dim=-2))[edges_to_keep.long()]
 
         # predict edge presence
         node_feats = torch.cat([feats.instance_feats, feats.semantic_feats], dim=-1)

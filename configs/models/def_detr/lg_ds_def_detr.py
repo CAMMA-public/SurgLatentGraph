@@ -36,7 +36,8 @@ model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.lg_model
 
 # modify load_from
-load_from = _base_.load_from.replace('base', 'def_detr')
+#load_from = _base_.load_from.replace('base', 'def_detr')
+load_from = None
 
 # modify optim
 optim_wrapper = dict(
@@ -48,3 +49,7 @@ optim_wrapper = dict(
         }
     )
 )
+
+train_dataloader = dict(batch_size=16)
+val_dataloader = dict(batch_size=16)
+test_dataloader = dict(batch_size=16)
