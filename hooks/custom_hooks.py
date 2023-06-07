@@ -3,6 +3,9 @@ from mmengine.hooks import Hook
 
 @HOOKS.register_module()
 class FreezeDetectorHook(Hook):
+    def __init__(self, freeze_graph_head=False):
+        self.freeze_graph_head = freeze_graph_head
+
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
         for p in model.detector.parameters():
@@ -13,16 +16,17 @@ class FreezeDetectorHook(Hook):
         model.detector.eval()
 
         # also freeze graph head if it exists
-        try:
-            for p in model.graph_head.parameters():
-                p.requires_grad = False
-            for m in model.graph_head.modules():
-                m.eval()
+        if self.freeze_graph_head:
+            try:
+                for p in model.graph_head.parameters():
+                    p.requires_grad = False
+                for m in model.graph_head.modules():
+                    m.eval()
 
-            model.graph_head.eval()
+                model.graph_head.eval()
 
-        except AttributeError as e:
-            print(e)
+            except AttributeError as e:
+                print(e)
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):
