@@ -15,15 +15,15 @@ class FreezeDetectorHook(Hook):
 
         model.detector.eval()
 
-        # also freeze graph head if it exists
+        # also freeze graph head (but not edge_sem_feat_projector) if it exists
         if self.freeze_graph_head:
             try:
-                for p in model.graph_head.parameters():
-                    p.requires_grad = False
-                for m in model.graph_head.modules():
-                    m.eval()
-
-                model.graph_head.eval()
+                for name, p in model.graph_head.named_parameters():
+                    if not 'edge_semantic_feat_projector' in name:
+                        p.requires_grad = False
+                for name, m in model.graph_head.named_modules():
+                    if not 'edge_semantic_feat_projector' in name:
+                        m.eval()
 
             except AttributeError as e:
                 print(e)
