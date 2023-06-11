@@ -10,51 +10,6 @@ from typing import Tuple, Dict
 
 @MODELS.register_module()
 class DeformableDETRWithQueries(DeformableDETR):
-    #def predict(self,
-    #        batch_inputs: Tensor,
-    #        batch_data_samples: SampleList,
-    #        rescale: bool = True) -> SampleList:
-    #    """Predict detections and return object queries
-    #    """
-    #    img_feats = self.extract_feat(batch_inputs)
-    #    head_inputs_dict = self.forward_transformer(img_feats, batch_data_samples)
-
-    #    results_list = self.bbox_head.predict(
-    #        **head_inputs_dict,
-    #        rescale=rescale,
-    #        batch_data_samples=batch_data_samples)
-
-    #    # add obj queries to results
-    #    queries = head_inputs_dict['hidden_states'][-1]
-    #    for r, q in zip(results_list, queries):
-    #        r.queries = q[r.selected_inds]
-
-    #    batch_data_samples = self.add_pred_to_datasample(
-    #        batch_data_samples, results_list)
-
-    #    return batch_data_samples
-
-    #def forward_transformer(self,
-    #        img_feats: Tuple[Tensor],
-    #        batch_data_samples: OptSampleList = None,
-    #        return_decoder_inputs: bool = False) -> Dict:
-    #    encoder_inputs_dict, decoder_inputs_dict = self.pre_transformer(
-    #            img_feats, batch_data_samples)
-
-    #    encoder_outputs_dict = self.forward_encoder(**encoder_inputs_dict)
-
-    #    tmp_dec_in, head_inputs_dict = self.pre_decoder(**encoder_outputs_dict)
-    #    decoder_inputs_dict.update(tmp_dec_in)
-
-    #    decoder_outputs_dict = self.forward_decoder(**decoder_inputs_dict)
-    #    head_inputs_dict.update(decoder_outputs_dict)
-    #    breakpoint()
-
-    #    if return_decoder_inputs:
-    #        # modify to return decoder inputs
-    #        return head_inputs_dict, decoder_inputs_dict
-
-    #    return head_inputs_dict
     def extract_feat(self, batch_inputs: Tensor, return_all: bool = False) -> Tuple[Tuple[Tensor]]:
         bb_feats = self.backbone(batch_inputs)
         if self.with_neck:
