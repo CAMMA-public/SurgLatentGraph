@@ -121,3 +121,7 @@ log_config = dict( # config to register logger hook
 default_hooks = dict(
     checkpoint=dict(save_best='endoscapes/bbox_mAP'),
 )
+
+# visualizer
+visualization = _base_.default_hooks.visualization
+visualization.update(dict(draw=True, show=False, score_thr=0.2))

@@ -15,6 +15,8 @@ import cv2
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
+from matplotlib import rc
 
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
@@ -26,6 +28,21 @@ class CocoMetricRGD(CocoMetric):
         self.use_pred_boxes_recon = use_pred_boxes_recon
         self.additional_metrics = additional_metrics
         self.save_graphs = save_graphs
+
+        # fonts
+        try:
+            font_dirs = ['/usr/share/fonts']
+            font_files = font_manager.findSystemFonts(fontpaths=font_dirs)
+            fe = [font_manager.FontEntry(
+                fname=x,
+                name=x.split('/')[-1]) for x in font_files]
+            font_manager.fontManager.ttflist += fe # or append is fine
+            plt.rcParams['font.family'] = 'calibri.ttf' # = 'your custom ttf font name'
+            plt.rcParams['text.usetex'] = False
+            plt.rcParams['mathtext.fontset'] = 'cm'
+        except:
+            print("FAILED TO SET VIZ FONT TO CALIBRI")
+            pass
 
     def process(self, data_batch: Dict, data_samples: Sequence[dict]) -> None:
         if len(self.metrics) > 0:
@@ -239,28 +256,18 @@ class CocoMetricRGD(CocoMetric):
             for idx, result in enumerate(results):
                 img_ids.append(result['img_id'])
 
-            gt_graphs, pred_graphs = self.graphs_to_networkx(results, gts)
-
             # make dirs to save
             if not os.path.exists(os.path.join(outfile_prefix, 'graphs')):
                 os.makedirs(os.path.join(outfile_prefix, 'graphs', 'gt'))
                 os.makedirs(os.path.join(outfile_prefix, 'graphs', 'pred'))
 
-            # Save each ground truth graph image to a file
-            for img_id, graph_buffer in zip(img_ids, gt_graphs):
-                with open(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.png'), 'wb') as f:
-                    f.write(graph_buffer.getvalue())
-
-            # Save each predicted graph image to a file
-            for img_id, graph_buffer in zip(img_ids, pred_graphs):
-                with open(os.path.join(outfile_prefix, 'graphs', 'pred', f'{img_id}.png'), 'wb') as f:
-                    f.write(graph_buffer.getvalue())
+            self.graphs_to_networkx(results, gts, img_ids, outfile_prefix)
 
             result_files['graph'] = os.path.join(outfile_prefix, 'graphs')
 
         return result_files
 
-    def graphs_to_networkx(self, results: Sequence[dict], gts: Sequence[dict]):
+    def graphs_to_networkx(self, results: Sequence[dict], gts: Sequence[dict], img_ids: Sequence[int], outfile_prefix: str):
         # Define colors
         colors = [
             (0, 0, 0),             # 0: Default color
@@ -302,11 +309,8 @@ class CocoMetricRGD(CocoMetric):
             3: 'IO',  # INSIDE-OUTSIDE
         }
 
-        gt_graph_images = []
-        pred_graph_images = []
-
         # Iterate over each item in the SampleList
-        for pred_item, gt_item in zip(results, gts):
+        for pred_item, gt_item, img_id in zip(results, gts, img_ids):
             # Create an empty NetworkX graph for ground truth
             gt_graph = nx.Graph()
 
@@ -315,9 +319,20 @@ class CocoMetricRGD(CocoMetric):
             labels, boxes = gt_instances['labels'], gt_instances['bboxes']
 
             # Add nodes to the ground truth graph for each ground truth instance
-            for i, l in enumerate(labels):
+            for i, (b, l) in enumerate(zip(boxes, labels)):
                 label = obj_id_to_label_short[int(l.item()) + 1]
-                gt_graph.add_node(i, label=label, color=colors[int(l.item()) + 1])
+
+                # compute center and make sure y is from bottom left, not top right
+                center = [int((b[0] + b[2]) / 2), int((b[1] + b[3]) / 2)]
+                center[1] = gt_item['height'] - center[1]
+
+                # normalize
+                center[0] /= gt_item['width']
+                center[1] /= gt_item['height']
+
+                # add to graph
+                gt_graph.add_node(i, label=label, color=colors[int(l.item()) + 1],
+                        pos=center)
 
             # Add edges to the ground truth graph for ground truth edges
             gt_edges = gt_item['gt_edges']
@@ -328,7 +343,8 @@ class CocoMetricRGD(CocoMetric):
                         relation=sem_id_to_label[int(rel.item())])
 
             # Visualize the ground truth graph
-            gt_pos = nx.spring_layout(gt_graph, seed=42)
+            #gt_pos = nx.spring_layout(gt_graph, seed=42)
+            gt_pos = nx.get_node_attributes(gt_graph, 'pos')
             gt_node_colors = [data['color'] for _, data in gt_graph.nodes(data=True)]
             gt_edge_colors = [data['color'] for _, _, data in gt_graph.edges(data=True)]
             gt_labels = {node: data['label'] for node, data in gt_graph.nodes(data=True)}
@@ -336,22 +352,24 @@ class CocoMetricRGD(CocoMetric):
             edge_colors = [data['color'] for _, _, data in gt_graph.edges(data=True)]
 
             plt.figure(figsize=(10, 10))
-            nx.draw_networkx_nodes(gt_graph, gt_pos, node_color=gt_node_colors, node_size=500, alpha=0.8)
-            nx.draw_networkx_edges(gt_graph, gt_pos, edge_color=gt_edge_colors, width=2, alpha=0.5)
-            nx.draw_networkx_edge_labels(gt_graph, gt_pos, edge_labels=edge_labels, font_size=10, font_color='black')
-            nx.draw_networkx_labels(gt_graph, gt_pos, gt_labels, font_size=12, font_color='black', font_weight='bold')
+            nx.draw_networkx_nodes(gt_graph, gt_pos, node_color=gt_node_colors,
+                    node_size=5000, alpha=1.0)
+            nx.draw_networkx_edges(gt_graph, gt_pos, edge_color=gt_edge_colors,
+                    width=10, alpha=0.8)
+
+            nx.draw_networkx_labels(gt_graph, gt_pos, gt_labels, font_size=44,
+                    font_color='black', font_family='calibri.ttf')
+            #nx.draw_networkx_edge_labels(gt_graph, gt_pos, edge_labels=edge_labels,
+            #        font_size=32, font_color='black', font_family='calibri.ttf')
+
             plt.axis('off')
 
-            # Save the ground truth graph image to a file-like object
-            gt_img_buffer = io.BytesIO()
-            plt.savefig(gt_img_buffer, format='png')
-            gt_img_buffer.seek(0)
+            # Save the ground truth graph image
+            plt.savefig(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.pdf'), format='pdf')
 
             # Clear the figure to free up memory
             plt.clf()
             plt.close()
-
-            gt_graph_images.append(gt_img_buffer)
 
             # Create an empty NetworkX graph for predicted instances
             pred_graph = nx.Graph()
@@ -360,9 +378,19 @@ class CocoMetricRGD(CocoMetric):
             pred_labels, pred_boxes = pred_item['labels'] + 1, pred_item['bboxes']
 
             # Add nodes to the predicted graph for each predicted instance
-            for i, l in enumerate(pred_labels):
+            for i, (b, l) in enumerate(zip(pred_boxes, pred_labels)):
                 label = obj_id_to_label_short[int(l.item())]
-                pred_graph.add_node(i, label=label, color=colors[int(l.item())])
+
+                # compute center and make sure y is from bottom left, not top right
+                center = [int((b[0] + b[2]) / 2), int((b[1] + b[3]) / 2)]
+                center[1] = gt_item['height'] - center[1]
+
+                # normalize
+                center[0] /= gt_item['width']
+                center[1] /= gt_item['height']
+
+                pred_graph.add_node(i, label=label, color=colors[int(l.item())],
+                        pos=center)
 
             # Add edges to the predicted graph for predicted edges
             pred_edges = pred_item['pred_edges']
@@ -374,7 +402,8 @@ class CocoMetricRGD(CocoMetric):
                         relation=sem_id_to_label[r])
 
             # Visualize the ground truth graph
-            pred_pos = nx.spring_layout(pred_graph, seed=42)
+            #pred_pos = nx.spring_layout(pred_graph, seed=42)
+            pred_pos = nx.get_node_attributes(pred_graph, 'pos')
             pred_node_colors = [data['color'] for _, data in pred_graph.nodes(data=True)]
             pred_edge_colors = [data['color'] for _, _, data in pred_graph.edges(data=True)]
             pred_labels = {node: data['label'] for node, data in pred_graph.nodes(data=True)}
@@ -382,24 +411,22 @@ class CocoMetricRGD(CocoMetric):
             edge_colors = [data['color'] for _, _, data in pred_graph.edges(data=True)]
 
             plt.figure(figsize=(10, 10))
-            nx.draw_networkx_nodes(pred_graph, pred_pos, node_color=pred_node_colors, node_size=500, alpha=0.8)
-            nx.draw_networkx_edges(pred_graph, pred_pos, edge_color=pred_edge_colors, width=2, alpha=0.5)
-            nx.draw_networkx_edge_labels(pred_graph, pred_pos, edge_labels=edge_labels, font_size=10, font_color='black')
-            nx.draw_networkx_labels(pred_graph, pred_pos, pred_labels, font_size=12, font_color='black', font_weight='bold')
+            nx.draw_networkx_nodes(pred_graph, pred_pos, node_color=pred_node_colors,
+                    node_size=5000, alpha=1.0)
+            nx.draw_networkx_edges(pred_graph, pred_pos, edge_color=pred_edge_colors,
+                    width=10, alpha=0.8)
+            nx.draw_networkx_labels(pred_graph, pred_pos, pred_labels, font_size=44,
+                    font_color='black', font_family='calibri.ttf')
+            #nx.draw_networkx_edge_labels(pred_graph, pred_pos, edge_labels=edge_labels,
+            #        font_size=32, font_color='black', font_family='calibri.ttf')
             plt.axis('off')
 
-            # Save the predicted graph image to a file-like object
-            pred_img_buffer = io.BytesIO()
-            plt.savefig(pred_img_buffer, format='png')
-            pred_img_buffer.seek(0)
+            # Save the pred graph
+            plt.savefig(os.path.join(outfile_prefix, 'graphs', 'pred', f'{img_id}.pdf'), format='pdf')
 
             # Clear the figure to free up memory
             plt.clf()
             plt.close()
-
-            pred_graph_images.append(pred_img_buffer)
-
-        return gt_graph_images, pred_graph_images
 
 class SSIM_RoI:
     def __init__(self, data_range, size_average, channel):

@@ -26,7 +26,8 @@ test_evaluator = [
         metric=['bbox', 'segm'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/lg_cvs'
+        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+        save_graphs=True,
     ),
 ]
 

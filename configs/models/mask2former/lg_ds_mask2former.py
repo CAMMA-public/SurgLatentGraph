@@ -66,3 +66,7 @@ optim_wrapper = dict(
     ),
     clip_grad=dict(max_norm=0.01, norm_type=2),
 )
+
+train_dataloader = dict(batch_size=16)
+val_dataloader = dict(batch_size=16)
+test_dataloader = dict(batch_size=16)
