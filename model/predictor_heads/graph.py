@@ -34,8 +34,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
             roi_extractor: BaseRoIExtractor, num_edge_classes: int,
             presence_loss_cfg: ConfigType, presence_loss_weight: float,
             classifier_loss_cfg: ConfigType, classifier_loss_weight: float,
-            semantic_feat_projector_layers: int = 3, num_roi_feat_maps: int = 4,
-            gnn_cfg: ConfigType = None, init_cfg: OptMultiConfig = None) -> None:
+            gt_use_pred_detections: bool = False, semantic_feat_projector_layers: int = 3,
+            num_roi_feat_maps: int = 4, gnn_cfg: ConfigType = None,
+            init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # attributes for building graph from detections
@@ -210,7 +211,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
 
         # build edges for GT
-        gt_edges = self._build_gt_edges(results, use_pred_instances=False)
+        gt_edges = self._build_gt_edges(results)
 
         # build edges
         edges, _ = self._build_edges(results, nodes_per_img, feats)
@@ -274,9 +275,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         return graph
 
-    def _build_gt_edges(self, results: SampleList, use_pred_instances: bool) -> BaseDataElement:
+    def _build_gt_edges(self, results: SampleList) -> BaseDataElement:
         boxes_per_img = [len(r.gt_instances.bboxes) for r in results]
-        if use_pred_instances:
+        if self.gt_use_pred_detections:
             bounding_boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
         else:
             bounding_boxes = pad_sequence([r.gt_instances.bboxes for r in results], batch_first=True)
@@ -419,13 +420,12 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         return intersection_area
 
-    def loss_and_predict(self, results: SampleList, feats: BaseDataElement,
-            use_pred_instances: bool = False) -> Tuple[SampleList, dict]:
+    def loss_and_predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[SampleList, dict]:
         # init loss dict
         losses = {}
 
         # build edges for GT
-        gt_edges = self._build_gt_edges(results, use_pred_instances)
+        gt_edges = self._build_gt_edges(results)
 
         # build edges and compute presence probabilities
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
