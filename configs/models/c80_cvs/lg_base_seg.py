@@ -26,7 +26,8 @@ test_evaluator = [
         metric=['bbox', 'segm'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test'
+        outfile_prefix='./results/c80_preds/test',
+        save_graphs=True,
     ),
 ]
 

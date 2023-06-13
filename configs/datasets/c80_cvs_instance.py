@@ -5,7 +5,7 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Modify dataset related settings
 
-data_root='data/mmdet_datasets/cholec80_cvs'
+data_root='data/mmdet_datasets/cholec80'
 metainfo = {
     'classes': ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper',
         'connective_tissue', 'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein',
@@ -90,8 +90,8 @@ train_dataloader = dict(
         type='CocoDatasetWithDS',
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='train/annotation_coco.json',
-        data_prefix=dict(img='train/'),
+        ann_file='train_cvs/annotation_coco.json',
+        data_prefix=dict(img='train_cvs/'),
         pipeline=train_pipeline))
 
 val_dataloader = dict(
@@ -100,8 +100,8 @@ val_dataloader = dict(
         type='CocoDatasetWithDS',
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='val/annotation_coco.json',
-        data_prefix=dict(img='val/'),
+        ann_file='val_cvs/annotation_coco.json',
+        data_prefix=dict(img='val_cvs/'),
         pipeline=eval_pipeline))
 
 test_dataloader = dict(
@@ -110,11 +110,11 @@ test_dataloader = dict(
         type='CocoDatasetWithDS',
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='test/annotation_coco.json',
-        data_prefix=dict(img='test/'),
+        ann_file='test_cvs/annotation_coco.json',
+        data_prefix=dict(img='test_cvs/'),
         pipeline=eval_pipeline))
 
 # metric
-val_evaluator = dict(ann_file=os.path.join(data_root, 'val/annotation_coco.json'), format_only=False,)
-test_evaluator = dict(ann_file=os.path.join(data_root, 'test/annotation_coco.json'), format_only=False,)
+val_evaluator = dict(ann_file=os.path.join(data_root, 'val_cvs/annotation_coco.json'), format_only=False,)
+test_evaluator = dict(ann_file=os.path.join(data_root, 'test_cvs/annotation_coco.json'), format_only=False,)
 evaluation = dict(metric=['bbox', 'segm'])

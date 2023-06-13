@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/c80_instance.py',
+    '../datasets/c80_cvs_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -121,3 +121,7 @@ log_config = dict( # config to register logger hook
 default_hooks = dict(
     checkpoint=dict(save_best='c80/bbox_mAP'),
 )
+
+# visualizer
+visualization = _base_.default_hooks.visualization
+visualization.update(dict(draw=True, show=False, score_thr=0.2))
