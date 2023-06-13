@@ -22,6 +22,7 @@ from .predictor_heads.modules.loss import ReconstructionLoss
 from .predictor_heads.modules.layers import build_mlp
 from .predictor_heads.graph import GraphHead
 from .predictor_heads.ds import DSHead
+from .roi_extractors.sg_single_level_roi_extractor import SgSingleRoIExtractor
 
 @MODELS.register_module()
 class LGDetector(BaseDetector):
@@ -241,9 +242,16 @@ class LGDetector(BaseDetector):
 
             # extract roi feats
             roi_input_feats = feats.neck_feats if feats.neck_feats is not None else feats.bb_feats
-            roi_feats = self.roi_extractor(
-                roi_input_feats[:self.roi_extractor.num_inputs], rois
-            )
+            if isinstance(self.roi_extractor, SgSingleRoIExtractor) and 'masks' in results[0].pred_instances:
+                masks = torch.cat([r.pred_instances.masks for r in results])
+                roi_feats = self.roi_extractor(
+                    roi_input_feats[:self.roi_extractor.num_inputs], rois, masks=masks,
+                )
+
+            else:
+                roi_feats = self.roi_extractor(
+                    roi_input_feats[:self.roi_extractor.num_inputs], rois
+                )
 
             # pool feats and split into list
             # TODO(adit98) experiment with multiplying by instance mask before mean/sum
