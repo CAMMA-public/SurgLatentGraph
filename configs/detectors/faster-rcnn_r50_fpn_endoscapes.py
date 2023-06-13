@@ -3,15 +3,15 @@ import wandb
 
 _base_ = [
     os.path.expandvars('$MMDETECTION/configs/_base_/models/faster-rcnn_r50_fpn.py'),
-    '../datasets/endoscapes_detection.py',
-    os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'), os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
+    '../datasets/endoscapes_instance.py',
+    os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
+    os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py'),
 ]
 
 # We also need to change the num_classes in head to match the dataset's annotation
 model = dict(
     roi_head=dict(
         bbox_head=dict(num_classes=6),
-        mask_head=dict(num_classes=6),
     ),
     test_cfg=dict(
         rcnn=dict(
