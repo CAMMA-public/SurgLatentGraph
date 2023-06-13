@@ -13,10 +13,11 @@ layout_noise_dim = 32
 recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat_size
 
 # model
+gt_graph_use_pred_detections = True
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
-lg_model.graph_head.gt_use_pred_detections = True
+lg_model.graph_head.gt_use_pred_detections = gt_graph_use_pred_detections
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
@@ -109,7 +110,7 @@ val_evaluator = [
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_cvs_coco.json'),
         use_pred_boxes_recon=True,
-        metric=['bbox'],
+        metric=[],
     )
 ]
 
@@ -120,11 +121,12 @@ test_evaluator = [
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_cvs_coco.json'),
-        metric=['bbox'],
+        metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
-        save_graphs=True,
+        save_graphs=False,
+        gt_graph_use_pred_instances=gt_graph_use_pred_detections,
     ),
 ]
 

@@ -50,6 +50,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                 final_nonlinearity=False)
         self.edge_mlp_obj = build_mlp(dim_list, batch_norm='batch',
                 final_nonlinearity=False)
+        self.gt_use_pred_detections = gt_use_pred_detections
 
         # presence loss
         self.presence_loss = MODELS.build(presence_loss_cfg)

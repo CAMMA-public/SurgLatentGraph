@@ -20,7 +20,8 @@ from matplotlib import rc
 
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
-    def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[], save_graphs=False, **kwargs):
+    def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[],
+            gt_graph_use_pred_instances=False, save_graphs=False, **kwargs):
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
         self.data_root = data_root
@@ -28,6 +29,7 @@ class CocoMetricRGD(CocoMetric):
         self.use_pred_boxes_recon = use_pred_boxes_recon
         self.additional_metrics = additional_metrics
         self.save_graphs = save_graphs
+        self.gt_graph_use_pred_instances = gt_graph_use_pred_instances
 
         # fonts
         try:
@@ -52,6 +54,8 @@ class CocoMetricRGD(CocoMetric):
             for data_sample in data_samples:
                 result = dict()
                 result['img_id'] = data_sample['img_id']
+                result['bboxes'] = data_sample['pred_instances']['bboxes']
+                result['labels'] = data_sample['pred_instances']['labels']
 
                 # parse gt
                 gt = dict()
@@ -315,8 +319,11 @@ class CocoMetricRGD(CocoMetric):
             gt_graph = nx.Graph()
 
             # Get ground truth instances
-            gt_instances = gt_item['gt_instances']
-            labels, boxes = gt_instances['labels'], gt_instances['bboxes']
+            if self.gt_graph_use_pred_instances:
+                labels, boxes = pred_item['labels'], pred_item['bboxes']
+            else:
+                gt_instances = gt_item['gt_instances']
+                labels, boxes = gt_instances['labels'], gt_instances['bboxes']
 
             # Add nodes to the ground truth graph for each ground truth instance
             for i, (b, l) in enumerate(zip(boxes, labels)):
@@ -343,7 +350,6 @@ class CocoMetricRGD(CocoMetric):
                         relation=sem_id_to_label[int(rel.item())])
 
             # Visualize the ground truth graph
-            #gt_pos = nx.spring_layout(gt_graph, seed=42)
             gt_pos = nx.get_node_attributes(gt_graph, 'pos')
             gt_node_colors = [data['color'] for _, data in gt_graph.nodes(data=True)]
             gt_edge_colors = [data['color'] for _, _, data in gt_graph.edges(data=True)]
@@ -365,7 +371,10 @@ class CocoMetricRGD(CocoMetric):
             plt.axis('off')
 
             # Save the ground truth graph image
-            plt.savefig(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.pdf'), format='pdf')
+            plt.savefig(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.pdf'),
+                    format='pdf', transparent=True)
+            #plt.savefig(os.path.join(outfile_prefix, 'graphs', 'gt', f'{img_id}.png'),
+            #        format='png', transparent=True)
 
             # Clear the figure to free up memory
             plt.clf()
@@ -402,7 +411,6 @@ class CocoMetricRGD(CocoMetric):
                         relation=sem_id_to_label[r])
 
             # Visualize the ground truth graph
-            #pred_pos = nx.spring_layout(pred_graph, seed=42)
             pred_pos = nx.get_node_attributes(pred_graph, 'pos')
             pred_node_colors = [data['color'] for _, data in pred_graph.nodes(data=True)]
             pred_edge_colors = [data['color'] for _, _, data in pred_graph.edges(data=True)]
