@@ -193,19 +193,43 @@ class CocoMetricRGD(CocoMetric):
                 eval_results['ds_f1'] = ds_f1
 
             else:
-                torch_ap = AP(task='multilabel', num_labels=3, average='none')
-                ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
-                ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
-                ds_ap = torch_ap(ds_preds, ds_gt)
+                if self.prefix == 'endoscapes':
+                    torch_ap = AP(task='multilabel', num_labels=3, average='none')
+                    ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
+                    ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
+                    ds_ap = torch_ap(ds_preds, ds_gt)
 
-                # log overall
-                logger_info.append(f'ds_average_precision: {torch.nanmean(ds_ap):.4f}')
-                eval_results['ds_average_precision'] = torch.nanmean(ds_ap)
+                    # log overall
+                    logger_info.append(f'ds_average_precision: {torch.nanmean(ds_ap):.4f}')
+                    eval_results['ds_average_precision'] = torch.nanmean(ds_ap)
 
-                # log component-wise
-                for ind, i in enumerate(ds_ap):
-                    logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
-                    eval_results['ds_average_precision_C{}'.format(ind+1)] = i
+                    # log component-wise
+                    for ind, i in enumerate(ds_ap):
+                        logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
+                        eval_results['ds_average_precision_C{}'.format(ind+1)] = i
+
+                else:
+                    # get preds and gt
+                    ds_preds = torch.stack([p['ds'] for p in preds]).argmax(-1)
+                    ds_gt = torch.stack([Tensor(g['ds']) for g in gts]).long()
+
+                    # define
+                    torch_prec = Precision(task='multiclass', average='macro', num_classes=7)
+                    torch_rec = Recall(task='multiclass', average='macro', num_classes=7)
+                    torch_f1 = F1Score(task='multiclass', average='macro', num_classes=7)
+
+                    # compute
+                    ds_prec = torch_prec(ds_preds, ds_gt)
+                    ds_rec = torch_rec(ds_preds, ds_gt)
+                    ds_f1 = torch_f1(ds_preds, ds_gt)
+
+                    # log
+                    logger_info.append(f'ds_precision: {ds_prec:.4f}')
+                    logger_info.append(f'ds_recall: {ds_rec:.4f}')
+                    logger_info.append(f'ds_f1: {ds_f1:.4f}')
+                    eval_results['ds_precision'] = ds_prec
+                    eval_results['ds_recall'] = ds_rec
+                    eval_results['ds_f1'] = ds_f1
 
         logger.info(' '.join(logger_info))
         return eval_results
@@ -273,44 +297,64 @@ class CocoMetricRGD(CocoMetric):
 
     def graphs_to_networkx(self, results: Sequence[dict], gts: Sequence[dict], img_ids: Sequence[int], outfile_prefix: str):
         # Define colors
-        colors = [
-            (0, 0, 0),             # 0: Default color
-            (1, 1, 0.39),          # 1: Yellow
-            (0.4, 0.698, 1),       # 2: Light Blue
-            (1, 0, 0),             # 3: Red
-            (0, 0.4, 0.2),         # 4: Dark Green
-            (0.2, 1, 0.4),         # 5: Light Green
-            (1, 0.592, 0.208),     # 6: Orange
-            (1, 1, 1),             # 7: White
-        ]
+        if self.prefix == 'endoscapes':
+            colors = [
+                (0, 0, 0),             # 0: Default color
+                (0.753, 0.753, 0.753), # 1: Silver
+                (0.541, 0.169, 0.886), # 2: Violet
+                (0.502, 0.502, 0),     # 3: Olive
+                (1, 1, 0.39),          # 4: Yellow
+                (1, 0.592, 0.208),     # 5: Orange
+                (0.4, 0.698, 1),       # 6: Light Blue
+                (1, 0, 0),             # 7: Red
+                (0, 0.4, 0.2),         # 8: Dark Green
+                (1, 0.592, 0.208),     # 9: Orange
+                (0.2, 1, 0.4),         # 10: Light Green
+                (0.169, 0.216, 0.89),  # 11: Blue
+                (1, 1, 1),             # 12: White
+            ]
+
+            # Define object and semantic labels
+            obj_id_to_label = {
+                1: 'abdominal_wall',
+                2: 'liver',
+                3: 'gastrointestinal_wall',
+                4: 'fat',
+                5: 'grasper',
+                6: 'connective_tissue',
+                7: 'blood',
+                8: 'cystic_duct',
+                9: 'hook',
+                10: 'gallbladder',
+                11: 'hepatic_vein',
+                12: 'liver_ligament',
+            }
+            obj_id_to_label_short = {
+                1: 'AW',
+                2: 'L',
+                3: 'GI',
+                4: 'F',
+                5: 'Gr',
+                6: 'CT',
+                7: 'CD',
+                8: 'H',
+                9: 'GB',
+                10: 'HV',
+                11: 'LL',
+            }
+        else:
+            pass
+
+        sem_id_to_label = {
+            1: 'LR',  # LEFT-RIGHT
+            2: 'UD',  # UP-DOWN
+            3: 'IO',  # INSIDE-OUTSIDE
+        }
 
         sem_id_to_color = {
             1: (0.33, 0.24, 0.42),  # LEFT-RIGHT
             2: (0.02, 0.77, 0.70),  # UP-DOWN
             3: (0.61, 0.55, 0.49),  # INSIDE-OUTSIDE
-        }
-
-        # Define object and semantic labels
-        obj_id_to_label = {
-            1: 'cystic_plate',
-            2: 'calot_triangle',
-            3: 'cystic_artery',
-            4: 'cystic_duct',
-            5: 'gallbladder',
-            6: 'tool',
-        }
-        obj_id_to_label_short = {
-            1: 'CP',
-            2: 'CT',
-            3: 'CA',
-            4: 'CD',
-            5: 'GB',
-            6: 'T'
-        }
-        sem_id_to_label = {
-            1: 'LR',  # LEFT-RIGHT
-            2: 'UD',  # UP-DOWN
-            3: 'IO',  # INSIDE-OUTSIDE
         }
 
         # Iterate over each item in the SampleList

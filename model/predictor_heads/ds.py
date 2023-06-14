@@ -31,7 +31,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
             loss: Union[List, ConfigType], use_img_feats=True, loss_consensus: str = 'mode',
-            weight: List = None, num_predictor_layers: int = 2,
+            weight: List = None, num_predictor_layers: int = 2, loss_weight: float = 1.0,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
@@ -59,7 +59,6 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.img_feat_key = img_feat_key
         self.img_feat_projector = torch.nn.Linear(img_feat_size, graph_feat_projected_dim)
 
-
         # predictor, loss params
         if isinstance(loss, list):
             # losses
@@ -80,6 +79,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
             self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
+        self.loss_weight = loss_weight
         self.loss_consensus = loss_consensus
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
@@ -138,11 +138,13 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(ds_preds.device)
         if self.loss_consensus == 'mode':
-            ds_gt = ds_gt.float().round()
+            ds_gt = ds_gt.float().round().long()
+        else:
+            ds_gt = ds_gt.long()
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
-            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt.long()[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
