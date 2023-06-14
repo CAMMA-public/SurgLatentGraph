@@ -18,7 +18,7 @@ lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
 lg_model.ds_head = dict(
     type='DSHead',
-    num_classes=3,
+    num_classes=7,
     gnn_cfg=dict(
         type='GNNHead',
         num_layers=3,
@@ -35,24 +35,12 @@ lg_model.ds_head = dict(
     final_sem_feat_size=256,
     final_viz_feat_size=256,
     use_img_feats=True,
-    loss_consensus='mode',
-    loss = [
-        dict(
-            type='CrossEntropyLoss',
-            use_sigmoid=False,
-            class_weight=[0.39596469, 2.65165376, 10.26702997],
-        ),
-        dict(
-            type='CrossEntropyLoss',
-            use_sigmoid=False,
-            class_weight=[0.36227286, 4.46445498, 63.86440678],
-        ),
-        dict(
-            type='CrossEntropyLoss',
-            use_sigmoid=False,
-            class_weight=[0.34740918, 11.88643533, 26.72340426],
-        ),
-    ],
+    loss_consensus='none',
+    loss=dict(
+        type='CrossEntropyLoss',
+        use_sigmoid=False,
+        class_weight=[1.61803561, 0.18816378, 1, 0.24091337, 1.85450955, 0.98427673, 2.12283346]
+    )
     loss_weight=1.0,
     num_predictor_layers=3,
 )
@@ -96,21 +84,21 @@ train_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='train_cvs/annotation_cvs_coco.json',
+        ann_file='train_phase/annotation_phase_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='val_cvs/annotation_cvs_coco.json',
+        ann_file='val_phase/annotation_phase_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='test_cvs/annotation_cvs_coco.json',
+        ann_file='test_phase/annotation_phase_coco.json',
     ),
 )
 
@@ -121,7 +109,7 @@ val_evaluator = [
         prefix='c80',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
     )
@@ -133,11 +121,11 @@ test_evaluator = [
         prefix='c80',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_preds/test_cvs'
+        outfile_prefix='./results/c80_preds/test'
     ),
 ]
 

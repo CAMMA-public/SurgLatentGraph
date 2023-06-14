@@ -23,4 +23,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_all_mgpu.sh cascade_rcnn c80
+./slurms/run_all_mgpu.sh cascade_rcnn c80_cvs

@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/c80_cvs_instance.py',
+    '../datasets/c80_phase_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -60,7 +60,7 @@ val_evaluator = [
         prefix='c80',
         data_root=data_root,
         data_prefix=val_data_prefix,
-        ann_file=os.path.join(data_root, 'val_cvs/annotation_coco.json'),
+        ann_file=os.path.join(data_root, 'val_phase/annotation_coco.json'),
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
@@ -73,7 +73,7 @@ test_evaluator = [
         prefix='c80',
         data_root=data_root,
         data_prefix=test_data_prefix,
-        ann_file=os.path.join(data_root, 'test_cvs/annotation_coco.json'),
+        ann_file=os.path.join(data_root, 'test_phase/annotation_coco.json'),
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,

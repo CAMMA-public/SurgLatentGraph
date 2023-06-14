@@ -5,9 +5,9 @@
 #SBATCH --gres=gpu:2
 #SBATCH --time=20:00:00
 #SBATCH -p gpu_p13
-#SBATCH -J latentgraph_cascade_mask_rcnn
-#SBATCH --error latentgraph_cascade_mask_rcnn_error.log
-#SBATCH --output latentgraph_cascade_mask_rcnn.log
+#SBATCH -J latentgraph_mask_rcnn
+#SBATCH --error latentgraph_mask_rcnn_error.log
+#SBATCH --output latentgraph_mask_rcnn.log
 #SBATCH -A lbw@v100
 #SBATCH -C v100-32g
 
@@ -23,4 +23,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_all_mgpu.sh cascade_mask_rcnn c80
+./slurms/run_all_mgpu.sh mask_rcnn c80_cvs

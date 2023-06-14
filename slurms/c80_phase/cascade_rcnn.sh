@@ -5,9 +5,9 @@
 #SBATCH --gres=gpu:2
 #SBATCH --time=20:00:00
 #SBATCH -p gpu_p13
-#SBATCH -J latentgraph_def_detr
-#SBATCH --error latentgraph_def_detr_error.log
-#SBATCH --output latentgraph_def_detr.log
+#SBATCH -J latentgraph_cascade_rcnn
+#SBATCH --error latentgraph_cascade_rcnn_error.log
+#SBATCH --output latentgraph_cascade_rcnn.log
 #SBATCH -A lbw@v100
 #SBATCH -C v100-32g
 
@@ -23,4 +23,4 @@ cd $WORK/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms/run_all_mgpu.sh def_detr c80
+./slurms/run_all_mgpu.sh cascade_rcnn c80_phase
