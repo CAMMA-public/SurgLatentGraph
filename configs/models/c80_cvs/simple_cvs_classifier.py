@@ -85,7 +85,7 @@ test_dataloader = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_cvs_coco.json'),
@@ -97,14 +97,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_cvs_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_preds/test'
+        outfile_prefix='./results/c80_cvs_preds/test'
     ),
 ]
 
@@ -126,5 +126,5 @@ test_cfg = dict(type='TestLoop')
 
 # hooks
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
+    checkpoint=dict(save_best='c80_cvs/ds_f1', rule='greater'),
 )

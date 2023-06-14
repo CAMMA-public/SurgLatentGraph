@@ -57,7 +57,7 @@ lg_model=dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_cvs',
         data_root=data_root,
         data_prefix=val_data_prefix,
         ann_file=os.path.join(data_root, 'val_cvs/annotation_coco.json'),
@@ -70,14 +70,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_cvs',
         data_root=data_root,
         data_prefix=test_data_prefix,
         ann_file=os.path.join(data_root, 'test_cvs/annotation_coco.json'),
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test',
+        outfile_prefix='./results/c80_cvs_preds/test',
         save_graphs=True,
     ),
 ]
@@ -119,7 +119,7 @@ log_config = dict( # config to register logger hook
 )
 
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/bbox_mAP'),
+    checkpoint=dict(save_best='c80_cvs/bbox_mAP'),
 )
 
 # visualizer

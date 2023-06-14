@@ -106,7 +106,7 @@ test_dataloader = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
@@ -118,14 +118,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_preds/test'
+        outfile_prefix='./results/c80_phase_preds/test'
     ),
 ]
 
@@ -147,8 +147,8 @@ auto_scale_lr = dict(enable=False)
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/ds_f1', rule='greater'),
+    checkpoint=dict(save_best='c80_phase/ds_f1', rule='greater'),
 )
 
 # loading
-load_from = 'weights/c80/lg_base_no_recon.pth'
+load_from = 'weights/c80_phase/lg_base_no_recon.pth'

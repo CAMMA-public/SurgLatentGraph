@@ -57,7 +57,7 @@ lg_model=dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_phase',
         data_root=data_root,
         data_prefix=val_data_prefix,
         ann_file=os.path.join(data_root, 'val_phase/annotation_coco.json'),
@@ -70,7 +70,7 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80',
+        prefix='c80_phase',
         data_root=data_root,
         data_prefix=test_data_prefix,
         ann_file=os.path.join(data_root, 'test_phase/annotation_coco.json'),
@@ -119,7 +119,7 @@ log_config = dict( # config to register logger hook
 )
 
 default_hooks = dict(
-    checkpoint=dict(save_best='c80/bbox_mAP'),
+    checkpoint=dict(save_best='c80_phase/bbox_mAP'),
 )
 
 # visualizer
