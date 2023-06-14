@@ -18,7 +18,6 @@ rand_aug_surg = [
         [dict(type='Rotate', level=8)],
         [dict(type='TranslateX', level=8)],
         [dict(type='TranslateY', level=8)],
-        [dict(type='Rotate', level=8)],
         [dict(type='AutoContrast', level=8)],
         [dict(type='Equalize', level=8)],
         [dict(type='Contrast', level=8)],
