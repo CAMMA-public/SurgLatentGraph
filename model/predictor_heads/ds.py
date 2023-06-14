@@ -10,7 +10,7 @@ import torch
 from torch import Tensor
 from torch_scatter import scatter_mean
 import torch.nn.functional as F
-from typing import List
+from typing import List, Union
 
 @MODELS.register_module()
 class DSHead(BaseModule, metaclass=ABCMeta):
@@ -30,8 +30,8 @@ class DSHead(BaseModule, metaclass=ABCMeta):
     def __init__(self, num_classes: int, gnn_cfg: ConfigType,
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
-            loss: str, loss_weight: float, use_img_feats=True, prediction_mode='ml',
-            loss_consensus: str = 'mode', weight: List = None, num_predictor_layers: int = 2,
+            loss: Union[List, ConfigType], use_img_feats=True, loss_consensus: str = 'mode',
+            weight: List = None, num_predictor_layers: int = 2,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
@@ -59,32 +59,28 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.img_feat_key = img_feat_key
         self.img_feat_projector = torch.nn.Linear(img_feat_size, graph_feat_projected_dim)
 
-        # predictor params
-        self.prediction_mode = prediction_mode
-        if self.prediction_mode == 'ml':
-            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
-            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
-        elif self.prediction_mode == 'mlmc':
+
+        # predictor, loss params
+        if isinstance(loss, list):
+            # losses
+            self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
+
+            # predictors
             dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node, 3)) # TODO(adit98) set this as a param
-
-        # loss params
-        self.loss_consensus = loss_consensus
-        if loss == 'bce':
-            if self.prediction_mode == 'mlmc':
-                self.loss_fn = torch.nn.ModuleList([torch.nn.CrossEntropyLoss(weight=Tensor(weight[i])) \
-                        for i in range(3)])
-
-            else:
-                self.loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=Tensor(weight))
+                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node, num_classes))
 
         else:
-            raise NotImplementedError
+            # loss
+            self.loss_fn = MODELS.build(loss)
 
-        self.loss_weight = loss_weight
+            # predictor
+            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
+            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
+
+        self.loss_consensus = loss_consensus
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
         # downproject graph feats
@@ -151,6 +147,6 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
 
-        loss = {'ds_loss': ds_loss.nan_to_num(0) * self.loss_weight}
+        loss = {'ds_loss': ds_loss * self.loss_weight}
 
         return loss

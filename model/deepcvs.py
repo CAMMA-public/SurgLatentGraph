@@ -29,7 +29,7 @@ class DeepCVS(BaseDetector):
             num_classes: int,
             detector_num_classes: int,
             decoder_backbone: ConfigType,
-            loss: ConfigType,
+            loss: Union[ConfigType, List],
             num_nodes: int,
             layout_only: bool = False,
             use_pred_boxes_recon_loss: bool = False,
