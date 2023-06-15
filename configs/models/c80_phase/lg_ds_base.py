@@ -12,10 +12,14 @@ bottleneck_feat_size = 64
 layout_noise_dim = 32
 recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat_size
 
+# save graphs or no
+save_graphs = False
+
 # model
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
+lg_model.graph_head.compute_gt_eval = False
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=7,
@@ -40,8 +44,7 @@ lg_model.ds_head = dict(
         type='CrossEntropyLoss',
         use_sigmoid=False,
         class_weight=[1.61803561, 0.18816378, 1, 0.24091337, 1.85450955, 0.98427673, 2.12283346]
-    )
-    loss_weight=1.0,
+    ),
     num_predictor_layers=3,
 )
 lg_model.reconstruction_head = dict(
@@ -125,7 +128,8 @@ test_evaluator = [
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_phase_preds/test'
+        outfile_prefix='./results/c80_phase_preds/test',
+        save_graphs=save_graphs,
     ),
 ]
 
@@ -152,3 +156,4 @@ default_hooks = dict(
 
 # loading
 load_from = 'weights/c80_phase/lg_base_no_recon.pth'
+_base_.default_hooks.visualization.update(dict(draw=False))

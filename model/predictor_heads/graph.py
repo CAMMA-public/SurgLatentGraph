@@ -35,7 +35,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
             presence_loss_cfg: ConfigType, presence_loss_weight: float,
             classifier_loss_cfg: ConfigType, classifier_loss_weight: float,
             gt_use_pred_detections: bool = False, semantic_feat_projector_layers: int = 3,
-            num_roi_feat_maps: int = 4, gnn_cfg: ConfigType = None,
+            num_roi_feat_maps: int = 4, gnn_cfg: ConfigType = None, compute_gt_eval: bool = False,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
@@ -51,6 +51,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         self.edge_mlp_obj = build_mlp(dim_list, batch_norm='batch',
                 final_nonlinearity=False)
         self.gt_use_pred_detections = gt_use_pred_detections
+        self.compute_gt_eval = compute_gt_eval
 
         # presence loss
         self.presence_loss = MODELS.build(presence_loss_cfg)
@@ -211,8 +212,11 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
     def predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[BaseDataElement]:
         nodes_per_img = [len(r.pred_instances.bboxes) for r in results]
 
-        # build edges for GT
-        gt_edges = self._build_gt_edges(results)
+        if self.compute_gt_eval:
+            # build edges for GT
+            gt_edges = self._build_gt_edges(results)
+        else:
+            gt_edges = None
 
         # build edges
         edges, _ = self._build_edges(results, nodes_per_img, feats)

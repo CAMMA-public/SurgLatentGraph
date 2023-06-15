@@ -163,22 +163,23 @@ class LGDetector(BaseDetector):
         if self.graph_head is not None:
             feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
 
-            # add graph to result
-            for ind, r in enumerate(results):
-                # GT
-                r.gt_edges = InstanceData()
-                r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
-                r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
-                r.gt_edges.relations = gt_edges.edge_relations[ind]
+            if gt_edges is not None:
+                # add graph to result
+                for ind, r in enumerate(results):
+                    # GT
+                    r.gt_edges = InstanceData()
+                    r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
+                    r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
+                    r.gt_edges.relations = gt_edges.edge_relations[ind]
 
-                # PRED
-                r.pred_edges = InstanceData()
+                    # PRED
+                    r.pred_edges = InstanceData()
 
-                # select correct batch
-                batch_inds = graph.edges.edge_flats[:, 0] == ind
-                r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
-                r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
-                r.pred_edges.relations = graph.edges.class_logits[batch_inds]
+                    # select correct batch
+                    batch_inds = graph.edges.edge_flats[:, 0] == ind
+                    r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
+                    r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
+                    r.pred_edges.relations = graph.edges.class_logits[batch_inds]
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
