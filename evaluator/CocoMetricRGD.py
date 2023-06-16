@@ -210,8 +210,8 @@ class CocoMetricRGD(CocoMetric):
 
                 else:
                     # get preds and gt
-                    ds_preds = torch.stack([p['ds'] for p in preds]).argmax(-1)
-                    ds_gt = torch.stack([Tensor(g['ds']) for g in gts]).long()
+                    ds_preds = torch.stack([p['ds'] for p in preds]).argmax(-1).view(-1)
+                    ds_gt = torch.stack([Tensor(g['ds'].astype(float)).view(-1) for g in gts]).long().view(-1)
 
                     # define
                     torch_prec = Precision(task='multiclass', average='macro', num_classes=7)
