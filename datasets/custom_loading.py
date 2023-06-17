@@ -1,6 +1,7 @@
 from mmdet.datasets.transforms import LoadAnnotations
 from mmdet.datasets import CocoDataset
 from mmdet.registry import TRANSFORMS, DATASETS
+from mmtrack.datasets import BaseVideoDataset, LoadTrackAnnotations
 from typing import List, Union
 import numpy as np
 
@@ -20,6 +21,9 @@ class LoadAnnotationsWithDS(LoadAnnotations):
         self._load_ds(results)
         return results
 
+@TRANSFORMS.register_module()
+class SeqLoadAnnotationsWithDS(SeqLoadAnnotations):
+
 @DATASETS.register_module()
 class CocoDatasetWithDS(CocoDataset):
     def parse_data_info(self, raw_data_info: dict) -> Union[dict, List[dict]]:
@@ -27,5 +31,19 @@ class CocoDatasetWithDS(CocoDataset):
 
         # get ds labels
         data_info['ds'] = raw_data_info['raw_img_info']['ds']
+
+        return data_info
+
+@DATASETS.register_module()
+class VideoDatasetWithDS(BaseVideoDataset):
+    def parse_data_info(self, raw_data_info: dict) -> Union[dict, List[dict]]:
+        data_info = super().parse_data_info(raw_data_info)
+
+        # get ds labels
+        breakpoint()
+        if 'ds' in raw_data_info['raw_img_info']:
+            data_info['ds'] = raw_data_info['raw_img_info']['ds']
+
+        data_info['is_det_keyframe'] = raw_data_info['raw_img_info']['is_det_keyframe']
 
         return data_info
