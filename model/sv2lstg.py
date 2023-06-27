@@ -10,7 +10,7 @@ from mmengine.structures import BaseDataElement
 from mmdet.registry import MODELS
 
 @MODELS.register_module()
-class SV2STG(BaseDetector):
+class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType):
         self.lg_detector = lg_detector
         self.ds_head = MODELS.build(ds_head)
