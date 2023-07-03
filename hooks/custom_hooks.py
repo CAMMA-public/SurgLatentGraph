@@ -29,6 +29,17 @@ class FreezeDetectorHook(Hook):
                 print(e)
 
 @HOOKS.register_module()
+class FreezeLGDetector(Hook):
+    def before_train_iter(self, runner, **kwargs):
+        model = runner.model
+        for p in model.lg_detector.parameters():
+            p.requires_grad = False
+        for m in model.lg_detector.modules():
+            m.eval()
+
+        model.lg_detector.eval()
+
+@HOOKS.register_module()
 class CopyDetectorBackbone(Hook):
     def before_train(self, runner) -> None:
         # copy weights for backbone, neck if it exists

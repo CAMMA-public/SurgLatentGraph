@@ -2,17 +2,9 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/c80_phase_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
-
-data_root = _base_.data_root
-val_data_prefix = _base_.val_dataloader.dataset.data_prefix.img
-test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
-
-orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
 
 # feat sizes
 viz_feat_size = 256
@@ -20,11 +12,9 @@ semantic_feat_size = 256
 
 # num nodes in graph
 num_nodes = 16
-num_classes = len(_base_.metainfo.classes)
 
 lg_model=dict(
     type='LGDetector',
-    num_classes=num_classes,
     semantic_feat_size=semantic_feat_size,
     graph_head=dict(
         type='GraphHead',
@@ -52,35 +42,6 @@ lg_model=dict(
         num_edge_classes=3,
     ),
 )
-
-# metric
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=data_root,
-        data_prefix=val_data_prefix,
-        ann_file=os.path.join(data_root, 'val_phase/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-    )
-]
-
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=data_root,
-        data_prefix=test_data_prefix,
-        ann_file=os.path.join(data_root, 'test_phase/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test',
-        save_graphs=True,
-    ),
-]
 
 # Running settings
 train_cfg = dict(
