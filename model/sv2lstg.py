@@ -48,12 +48,19 @@ class SV2LSTG(BaseDetector):
         feats, graphs, clip_results = self.extract_feat(batch_inputs, batch_data_samples)
 
         # build spatiotemporal graph for each item in batch
-        st_graphs = self.build_st_graph(feats, graphs, clip_results)
+        st_graphs, st_feats = self.build_st_graph(feats, graphs, clip_results)
+
+        # run ds head
         breakpoint()
 
     def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
         # extract frame-wise graphs by running lg detector on all images and reshape values
         feats, graphs, clip_results = self.extract_feat(batch_inputs, batch_data_samples)
+
+        # build spatiotemporal graph for each item in batch
+        st_graphs, st_feats = self.build_st_graph(feats, graphs, clip_results)
+
+        # run ds head
         breakpoint()
 
     def reshape_as_clip(self, feats: BaseDataElement, graphs: BaseDataElement, results: SampleList, B: int, N: int) -> Tuple[BaseDataElement]:
@@ -97,14 +104,19 @@ class SV2LSTG(BaseDetector):
         node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) for cr in clip_results],
                 batch_first=True).transpose(1, 2)
         spat_graph = self._build_spatial_edges(node_boxes)
-        breakpoint()
 
-        raise NotImplementedError
+        # add viz and spat edges to st_graph, being mindful of indexing, and extract edge features
+        st_graph, st_feats = self._featurize_st_graph(spat_graph, viz_graph, graphs, feats)
 
-    def _postprocess_st_graph(self):
+        return st_graph, st_feats
+
+    def _featurize_st_graph(self, spat_graph: Tensor, viz_graph: Tensor, graphs: BaseDataElement, feats: BaseDataElement):
+        B, M, _ = spat_graph.shape
+
         # create meshgrid to store node indices corresponding to each edge
-        edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(node_boxes.device)
+        edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(spat_graph.device)
 
+        breakpoint()
         # calculate offsets to add to the meshgrid computed indices based on the number of nodes in each graph in each clip
         batch_nodes_per_img = torch.stack([torch.tensor(npi) for g, npi in zip(graphs,
             nodes_per_img)]).to(node_boxes.device)
@@ -161,37 +173,6 @@ class SV2LSTG(BaseDetector):
             # TODO(adit98) add embedding representing temporal edge window
             extra_edge_viz_feats = g['node_feats'][extra_edge_flats].mean(1)
 
-            if self.use_seg_grounding:
-                if self.use_temporal_edges_only:
-                    raise NotImplementedError
-
-                # Seg Grounding: expand each node feat to mask size, concatenate all 4 components and
-                # pass through projector
-
-                # get mask pairs and smooth
-                extra_edge_masks = g['masks'][extra_edge_flats]
-                extra_edge_masks = F.adaptive_avg_pool2d(self.edge_gaussian(
-                    extra_edge_masks), output_size=14)
-
-                # binarize and multiply with class
-                extra_edge_classes = g['labels'][extra_edge_flats][:, 1:].argmax(-1) + 1
-                extra_edge_masks = (extra_edge_masks.sigmoid() >= 0.5).int() * extra_edge_classes.unsqueeze(-1).unsqueeze(-1)
-
-                # get feats of incident nodes and pad to mask size
-
-                # padding params
-                _, _, h, _ = extra_edge_masks.shape
-                offset = 1 - (h % 2) # offset is 1 if h is even, since we need uneven padding
-
-                # reshape and pad viz feats
-                pad_dims = (h//2 - 1, h//2  - 1 + offset, h//2 - 1, h//2 - 1 + offset)
-                extra_edge_viz_feats = F.pad(extra_edge_viz_feats.unsqueeze(-1).unsqueeze(-1),
-                        pad_dims, mode='replicate')
-
-                # pass edge viz feats, masks through refiner to get seg grounded edge viz feats
-                extra_edge_viz_feats = self.temporal_edge_feat_refiner(
-                        torch.cat([extra_edge_masks, extra_edge_viz_feats], dim=1)).squeeze(-1).squeeze(-1)
-
             if self.use_temporal_edges_only:
                 g['edge_feats'] = extra_edge_viz_feats
             else:
@@ -216,7 +197,7 @@ class SV2LSTG(BaseDetector):
                     g['edge_masks'] = torch.cat([g['edge_masks'], extra_edge_masks])
 
         # return updated graphs
-        return graphs
+        return graphs, feats
 
     def _build_visual_edges(self, feats: BaseDataElement):
         # store components of shape
