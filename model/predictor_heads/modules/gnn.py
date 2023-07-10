@@ -56,26 +56,65 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
 
     def _create_dgl_graph(self, graph: BaseDataElement) -> dgl.DGLGraph:
         # convert edge flats to batch edge flats
-        edge_offsets = torch.cumsum(Tensor([0] + graph.nodes.nodes_per_img[:-1]), 0).to(graph.edges.edge_flats.device)
-        batch_edge_flats = graph.edges.edge_flats[:, 1:] + edge_offsets[graph.edges.edge_flats[:, 0]].view(-1, 1).int()
-        g = dgl.graph(batch_edge_flats.unbind(1), num_nodes=sum(graph.nodes.nodes_per_img))
+        if isinstance(graph.nodes.nodes_per_img[0], Tensor):
+            device = graph.edges.edge_flats[0].device
 
-        # add attributes to graph
-        for k, v in graph.nodes.items():
-            if k == 'nodes_per_img': continue
-            g.ndata[k] = torch.cat([v_i[:n] for n, v_i in zip(graph.nodes.nodes_per_img, v)])
+            # need to compute edge offsets by first adding offset for each img in clip then
+            # each clip in batch
+            per_clip_edge_offsets = [torch.cat([torch.cumsum(Tensor([0] + npi[:-1].tolist()).to(
+                device), 0), torch.zeros(1).to(device)]) for npi in graph.nodes.nodes_per_img]
+            per_clip_edge_flats = [torch.cat([ef[:, 0:1], ef[:, 1:] + pcef[ef[:, 0]].view(-1, 1).int()],
+                dim=1) for pcef, ef in zip(per_clip_edge_offsets, graph.edges.edge_flats)]
 
-        for k, v in graph.edges.items():
-            skip_keys = ['edges_per_img', 'batch_index', 'edge_flats', 'presence_logits']
-            if k in skip_keys: continue
-            if isinstance(v, tuple):
-                v = torch.cat(v)
+            # add batch id to each edge flat (so we have batch_id, img_id, edge_x, edge_y)
+            batch_edge_flats = torch.cat([torch.cat([torch.ones_like(pcef[:, 0:1]) * ind,
+                pcef], dim=1) for ind, pcef in enumerate(per_clip_edge_flats)])
 
-            g.edata[k] = v.view(-1, v.shape[-1])
+            # compute offsets per batch and add to batch_edge_flats
+            nodes_per_clip = [sum(x) for x in graph.nodes.nodes_per_img]
+            batch_edge_offsets = torch.cumsum(Tensor([0] + nodes_per_clip[:-1]), 0).to(device)
+            batch_edge_flats[:, -2:] += batch_edge_offsets[batch_edge_flats[:, 0]].view(-1, 1).int()
 
-        # add in batch info
-        g.set_batch_num_nodes(Tensor(graph.nodes.nodes_per_img))
-        g.set_batch_num_edges(graph.edges.edges_per_img)
+            # create dgl graph
+            g = dgl.graph(batch_edge_flats[:, -2:].unbind(1), num_nodes=sum(nodes_per_clip))
+
+            # add attributes to graph
+
+            # for each img in each clip, remove padded nodes and concatenate all features for batch of clips
+            g.ndata['feats'] = torch.cat([torch.cat([f[:n] for f, n in zip(cf,
+                npi_i.int())]) for cf, npi_i in zip(graph.nodes.feats,
+                    graph.nodes.nodes_per_img)])
+
+            for k, v in graph.edges.items():
+                skip_keys = ['edges_per_img', 'edges_per_clip', 'batch_index', 'edge_flats', 'presence_logits']
+                if k in skip_keys: continue
+                if isinstance(v, tuple) or isinstance(v, list):
+                    v = torch.cat(v)
+
+                g.edata[k] = v.view(-1, v.shape[-1])
+
+        else:
+            edge_offsets = torch.cumsum(Tensor([0] + graph.nodes.nodes_per_img[:-1]), 0).to(graph.edges.edge_flats.device)
+            batch_edge_flats = graph.edges.edge_flats[:, 1:] + edge_offsets[graph.edges.edge_flats[:, 0]].view(-1, 1).int()
+            g = dgl.graph(batch_edge_flats.unbind(1), num_nodes=sum(graph.nodes.nodes_per_img))
+
+            # add attributes to graph
+            for k, v in graph.nodes.items():
+                skip_keys = ['nodes_per_img']
+                if k in skip_keys: continue
+                g.ndata[k] = torch.cat([v_i[:n] for n, v_i in zip(graph.nodes.nodes_per_img, v)])
+
+            for k, v in graph.edges.items():
+                skip_keys = ['edges_per_img', 'edges_per_clip', 'batch_index', 'edge_flats', 'presence_logits']
+                if k in skip_keys: continue
+                if isinstance(v, tuple):
+                    v = torch.cat(v)
+
+                g.edata[k] = v.view(-1, v.shape[-1])
+
+            # add in batch info
+            g.set_batch_num_nodes(Tensor(graph.nodes.nodes_per_img))
+            g.set_batch_num_edges(graph.edges.edges_per_img)
 
         # add self loops
         g = g.remove_self_loop()

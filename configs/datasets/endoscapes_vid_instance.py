@@ -4,17 +4,17 @@ _base_ = [os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.p
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
 
 dataset_type = 'VideoDatasetWithDS'
-data_root = 'data/mmdet_datasets/cholec80/'
+data_root='data/mmdet_datasets/endoscapes_mmdet'
 metainfo = {
-    'classes': ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper',
-        'connective_tissue', 'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein',
-        'liver_ligament'),
+    'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
+        'gallbladder', 'tool'),
+    'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
 }
-num_temp_frames = 5
+num_temp_frames = 2
 
-train_data_prefix = 'train_phase'
-val_data_prefix = 'val_phase'
-test_data_prefix = 'test_phase'
+train_data_prefix = 'train'
+val_data_prefix = 'val'
+test_data_prefix = 'test'
 
 train_pipeline = [
     dict(
@@ -35,7 +35,7 @@ train_pipeline = [
     ),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
     ),
 ]
 
@@ -44,32 +44,32 @@ eval_pipeline = [
         type='UniformRefFrameSampleWithPad',
         num_ref_imgs=num_temp_frames-1,
         frame_range=[1-num_temp_frames, 0],
-        filter_key_img=False,
+        filter_key_img=True,
     ),
     dict(
         type='TransformBroadcaster',
         transforms=[
             dict(type='LoadImageFromFile', backend_args=None),
             dict(type='Resize', scale=(399, 224), keep_ratio=True),
-            dict(type='LoadTrackAnnotations', with_mask=True),
+            dict(type='LoadTrackAnnotationsWithDS', with_mask=True),
         ]),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
     ),
 ]
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=4,
-    num_workers=0,
-    #persistent_workers=True,
+    batch_size=8,
+    num_workers=4,
+    persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
     batch_sampler=dict(type='TrackAspectRatioBatchSampler'),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='train_phase/annotation_coco_vid.json',
+        ann_file='train/annotation_coco_vid.json',
         data_prefix=dict(img_path=train_data_prefix),
         pipeline=train_pipeline,
         filter_cfg=dict(filter_empty_gt=False),
@@ -78,29 +78,37 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
+    batch_size=8,
+    num_workers=4,
+    persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
     dataset=dict(
         _delete_=True,
         type=dataset_type,
         data_root=data_root,
-        ann_file='val_phase/annotation_coco_vid.json',
+        ann_file='val/annotation_coco_vid.json',
         data_prefix=dict(img_path=val_data_prefix),
-        test_mode=True,
+        test_mode=False,
         pipeline=eval_pipeline,
+        filter_cfg=dict(filter_empty_gt=False),
         metainfo=metainfo,
     )
 )
 
 test_dataloader=dict(
+    batch_size=8,
+    num_workers=4,
+    persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
     dataset=dict(
         _delete_=True,
         type=dataset_type,
         data_root=data_root,
-        ann_file='test_phase/annotation_coco_vid.json',
+        ann_file='test/annotation_coco_vid.json',
         data_prefix=dict(img_path=test_data_prefix),
-        test_mode=True,
+        test_mode=False,
         pipeline=eval_pipeline,
+        filter_cfg=dict(filter_empty_gt=False),
         metainfo=metainfo,
     )
 )

@@ -21,7 +21,8 @@ from matplotlib import rc
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
     def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[],
-            gt_graph_use_pred_instances=False, save_graphs=False, **kwargs):
+            gt_graph_use_pred_instances=False, save_graphs=False, clip_eval=False,
+            predict_per_frame=False, **kwargs):
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
         self.data_root = data_root
@@ -30,6 +31,8 @@ class CocoMetricRGD(CocoMetric):
         self.additional_metrics = additional_metrics
         self.save_graphs = save_graphs
         self.gt_graph_use_pred_instances = gt_graph_use_pred_instances
+        self.clip_eval = clip_eval # whether results and gts are clips
+        self.predict_per_frame = predict_per_frame # whether we want to keep predictions for each frame
 
         # fonts
         try:
@@ -88,6 +91,10 @@ class CocoMetricRGD(CocoMetric):
             if 'pred_ds' in data_sample:
                 p['ds'] = data_sample['pred_ds']
                 g['ds'] = data_sample['ds']
+
+            if 'is_ds_keyframe' in data_sample:
+                p['is_ds_keyframe'] = data_sample['is_ds_keyframe']
+                g['is_ds_keyframe'] = data_sample['is_ds_keyframe']
 
         self.results[-1 * len(data_samples):] = zip(gts, preds)
 

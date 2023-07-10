@@ -18,7 +18,7 @@ lg_model.use_pred_boxes_recon_loss = True
 lg_model.graph_head.compute_gt_eval = save_graphs
 lg_model.ds_head = dict(
     type='DSHead',
-    num_classes=7,
+    num_classes=3,
     gnn_cfg=dict(
         type='GNNHead',
         num_layers=3,
@@ -35,12 +35,13 @@ lg_model.ds_head = dict(
     final_sem_feat_size=256,
     final_viz_feat_size=256,
     use_img_feats=True,
-    loss_consensus='none',
+    loss_consensus='mode',
     loss=dict(
         type='CrossEntropyLoss',
-        use_sigmoid=False,
-        class_weight=[1.61803561, 0.18816378, 1, 0.24091337, 1.85450955, 0.98427673, 2.12283346]
+        use_sigmoid=True,
+        class_weight=[3.19852941, 4.46153846, 2.79518072],
     ),
+    loss_weight=1.0,
     num_predictor_layers=3,
 )
 lg_model.reconstruction_head = dict(
@@ -95,9 +96,9 @@ auto_scale_lr = dict(enable=False)
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='c80_phase/ds_f1', rule='greater'),
+    checkpoint=dict(save_best='endoscapes/ds_average_precision', rule='greater'),
 )
 
 # loading
-load_from = 'weights/c80_phase/lg_base_no_recon.pth'
+load_from = 'weights/endoscapes/lg_base_no_recon.pth'
 _base_.default_hooks.visualization.update(dict(draw=False))

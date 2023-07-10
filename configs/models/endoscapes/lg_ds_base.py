@@ -38,10 +38,13 @@ lg_model.ds_head = dict(
     final_viz_feat_size=256,
     use_img_feats=True,
     loss_consensus='mode',
-    loss='bce',
+    loss=dict(
+        type='CrossEntropyLoss',
+        use_sigmoid=True,
+        class_weight=[3.19852941, 4.46153846, 2.79518072],
+    ),
     loss_weight=1.0,
     num_predictor_layers=3,
-    weight=[3.19852941, 4.46153846, 2.79518072],
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',

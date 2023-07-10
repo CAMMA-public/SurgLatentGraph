@@ -30,12 +30,25 @@ class FreezeDetectorHook(Hook):
 
 @HOOKS.register_module()
 class FreezeLGDetector(Hook):
+    def __init__(self, finetune_backbone=False):
+        self.finetune_backbone = finetune_backbone
+
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
-        for p in model.lg_detector.parameters():
-            p.requires_grad = False
-        for m in model.lg_detector.modules():
-            m.eval()
+        if self.finetune_backbone:
+            # only freeze detector in lg detector
+            for p in model.lg_detector.detector.parameters():
+                p.requires_grad = False
+            for m in model.lg_detector.detector.modules():
+                m.eval()
+
+            model.lg_detector.detector.eval()
+
+        else:
+            for p in model.lg_detector.parameters():
+                p.requires_grad = False
+            for m in model.lg_detector.modules():
+                m.eval()
 
         model.lg_detector.eval()
 

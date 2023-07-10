@@ -1,15 +1,15 @@
-from mmdet.datasets.transforms import LoadAnnotations
 from mmdet.datasets import CocoDataset
 from mmdet.registry import TRANSFORMS, DATASETS, DATA_SAMPLERS
 from mmdet.datasets import BaseVideoDataset
-from mmdet.datasets.transforms import LoadTrackAnnotations
 from mmdet.datasets.samplers import TrackImgSampler
-from mmcv.transforms import BaseTransform
+from mmdet.datasets.transforms import LoadAnnotations, UniformRefFrameSample, LoadTrackAnnotations
 from mmengine.dataset import ClassBalancedDataset, ConcatDataset
 from mmengine.dist import get_dist_info, sync_random_seed
-from typing import List, Union, Sized, Optional
+from typing import List, Union, Sized, Optional, Any
 import numpy as np
 import math
+import random
+from collections import defaultdict
 
 @TRANSFORMS.register_module()
 class LoadAnnotationsWithDS(LoadAnnotations):
@@ -55,12 +55,6 @@ class CocoDatasetWithDS(CocoDataset):
 
 @DATASETS.register_module()
 class VideoDatasetWithDS(BaseVideoDataset):
-    # TODO(adit98) figure out how to load from annot file
-    METAINFO = {
-        'classes':
-        ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper', 'connective_tissue',
-        'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein', 'liver_ligament')
-    }
     def parse_data_info(self, raw_data_info: dict) -> Union[dict, List[dict]]:
         data_info = super().parse_data_info(raw_data_info)
 
@@ -82,6 +76,66 @@ class VideoDatasetWithDS(BaseVideoDataset):
         keyframe_ids = [x['frame_id'] for x in data_info if x['is_ds_keyframe']]
 
         return keyframe_ids
+
+    def prepare_data(self, idx) -> Any:
+        """Get date processed by ``self.pipeline``. Note that ``idx`` is a
+        video index in default since the base element of video dataset is a
+        video. However, in some cases, we need to specific both the video index
+        and frame index. For example, in traing mode, we may want to sample the
+        specific frames and all the frames must be sampled once in a epoch; in
+        test mode, we may want to output data of a single image rather than the
+        whole video for saving memory.
+
+        Args:
+            idx (int): The index of ``data_info``.
+
+        Returns:
+            Any: Depends on ``self.pipeline``.
+        """
+        if isinstance(idx, tuple):
+            assert len(idx) == 2, 'The length of idx must be 2: '
+            '(video_index, frame_index)'
+            video_idx, frame_idx = idx[0], idx[1]
+        else:
+            video_idx, frame_idx = idx, None
+
+        data_info = self.get_data_info(video_idx)
+        if self.test_mode:
+            # Support two test_mode: frame-level and video-level
+            final_data_info = defaultdict(list)
+            if frame_idx is None:
+                frames_idx_list = list(range(data_info['video_length']))
+            else:
+                frames_idx_list = [frame_idx]
+                final_data_info['key_frame_id'] = frame_idx
+
+            for index in frames_idx_list:
+                frame_ann = data_info['images'][index]
+                frame_ann['video_id'] = data_info['video_id']
+                # Collate data_list (list of dict to dict of list)
+                for key, value in frame_ann.items():
+                    final_data_info[key].append(value)
+                # copy the info in video-level into img-level
+                # TODO: the value of this key is the same as that of
+                # `video_length` in test mode
+                final_data_info['ori_video_length'].append(
+                    data_info['video_length'])
+
+            final_data_info['video_length'] = data_info['video_length']
+            return self.pipeline(final_data_info)
+
+        else:
+            # Specify `key_frame_id` for the frame sampling in the pipeline
+            if frame_idx is not None:
+                data_info['key_frame_id'] = frame_idx
+            return self.pipeline(data_info)
+
+    @property
+    def num_total_keyframes(self):
+        """Get the number of all the keyframes in this video dataset."""
+        return sum(
+            [len([x for x in self.get_data_info(i)['images'] if x['is_ds_keyframe']]) \
+                    for i in range(len(self))])
 
 @DATA_SAMPLERS.register_module()
 class TrackCustomKeyframeSampler(TrackImgSampler):
@@ -167,3 +221,44 @@ class TrackCustomKeyframeSampler(TrackImgSampler):
             self.num_samples = int(
                 math.ceil(len(self.indices) * 1.0 / self.world_size))
             self.total_size = self.num_samples * self.world_size
+
+@TRANSFORMS.register_module()
+class UniformRefFrameSampleWithPad(UniformRefFrameSample):
+    def sampling_frames(self, video_length: int, key_frame_id: int):
+        """Sampling frames.
+
+        Args:
+            video_length (int): The length of the video.
+            key_frame_id (int): The key frame id.
+
+        Returns:
+            list[int]: The sampled frame indices.
+        """
+        if video_length > 1:
+            left = max(0, key_frame_id + self.frame_range[0])
+            right = min(key_frame_id + self.frame_range[1], video_length - 1)
+            frame_ids = list(range(0, video_length))
+
+            valid_ids = frame_ids[left:right + 1]
+            if self.filter_key_img and key_frame_id in valid_ids:
+                valid_ids.remove(key_frame_id)
+
+            # custom logic to pad with initial frame when we don't have enough history
+            if len(valid_ids) == 0:
+                valid_ids = [key_frame_id] * self.num_ref_imgs
+            elif len(valid_ids) < self.num_ref_imgs:
+                len_diff = self.num_ref_imgs - len(valid_ids)
+                valid_ids = [valid_ids[0]] * len_diff + valid_ids
+
+            ref_frame_ids = random.sample(valid_ids, self.num_ref_imgs)
+
+        else:
+            ref_frame_ids = [key_frame_id] * self.num_ref_imgs
+
+        sampled_frames_ids = [key_frame_id] + ref_frame_ids
+        sampled_frames_ids = sorted(sampled_frames_ids)
+
+        key_frames_ind = sampled_frames_ids.index(key_frame_id)
+        key_frame_flags = [False] * len(sampled_frames_ids)
+        key_frame_flags[key_frames_ind] = True
+        return sampled_frames_ids, key_frame_flags

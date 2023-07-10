@@ -2,22 +2,34 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/c80_phase_vid_instance.py',
-    'test_lg_ds_faster_rcnn.py',
+    '../configs/datasets/endoscapes_vid_instance.py',
+    'sv2lstg_faster_rcnn_base.py',
+    #'test_lg_ds_faster_rcnn.py',
 ]
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg', 'hooks.custom_hooks'],
-        allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
+    'hooks.custom_hooks', 'runner.custom_loops'], allow_failed_imports=False)
 
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
 lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
+
+# load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
+ds_head['type'] = 'STDSHead'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
 del lg_model.ds_head
 del lg_model.reconstruction_head
+
+# set init cfg for lg_model
+lg_model.init_cfg = dict(
+    type='Pretrained',
+    checkpoint=_base_.load_from,
+)
+del _base_.load_from
+
 
 model = dict(
     _delete_=True,
@@ -38,11 +50,11 @@ model = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80_phase',
+        prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_coco.json'),
-        metric=['bbox'],
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
+        metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
     )
@@ -51,14 +63,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='c80_phase',
+        prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_coco.json'),
-        metric=['bbox'],
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
+        metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test',
+        outfile_prefix='./results/endoscapes_preds/test',
         save_graphs=True,
     ),
 ]
@@ -68,13 +80,12 @@ train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=20,
     val_interval=1)
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')
+val_cfg = dict(type='ValLoopKeyframeEval')
+test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector")]
-#custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetector")]
+custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True)]
 
 # visualizer
 default_hooks = dict(

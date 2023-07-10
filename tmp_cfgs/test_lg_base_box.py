@@ -80,7 +80,7 @@ log_config = dict( # config to register logger hook
 )
 
 default_hooks = dict(
-    checkpoint=dict(save_best='c80_phase/bbox_mAP'),
+    checkpoint=dict(save_best='endoscapes/bbox_mAP'),
 )
 
 # visualizer
