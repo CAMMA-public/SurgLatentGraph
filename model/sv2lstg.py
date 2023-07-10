@@ -21,6 +21,9 @@ class SV2LSTG(BaseDetector):
             viz_feat_size=256, sem_feat_size=256, sim_embedder_feat_size=256,
             num_spat_edge_classes=4, num_temp_edge_classes=2, learn_sim_graph=False,
             semantic_feat_projector_layers: int = 3, predict_per_frame: bool = False,
+            use_positional_embedding: bool = True, num_sim_topk: int = 2,
+            temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
+            use_max_iou_only: bool = True, use_temporal_edges_only: bool = False,
             **kwargs):
         super().__init__(**kwargs)
 
@@ -49,12 +52,12 @@ class SV2LSTG(BaseDetector):
                 (semantic_feat_projector_layers - 1) + [sem_feat_size]
         self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='none')
 
-        # TODO(adit98) load these from cfg
-        self.num_sim_topk = 2
-        self.temporal_edge_ranges = 'exp'
-        self.edge_max_temporal_range = 15
-        self.use_max_iou_only = True
-        self.use_temporal_edges_only = False
+        self.num_sim_topk = num_sim_topk
+        self.temporal_edge_ranges = temporal_edge_ranges
+        self.edge_max_temporal_range = edge_max_temporal_range
+        self.use_max_iou_only = use_max_iou_only
+        self.use_temporal_edges_only = use_temporal_edges_only
+        self.use_positional_embedding = use_positional_embedding
 
         # set prediction params
         self.predict_per_frame = predict_per_frame
@@ -137,7 +140,7 @@ class SV2LSTG(BaseDetector):
         return feats, graphs, clip_results
 
     def build_st_graph(self, feats: BaseDataElement, graphs: BaseDataElement, clip_results: SampleList):
-        viz_graph = self._build_visual_edges(feats)
+        viz_graph = self._build_visual_edges(feats, graphs)
         node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) for cr in clip_results],
                 batch_first=True).transpose(1, 2)
         spat_graph = self._build_spatial_edges(node_boxes)
@@ -276,7 +279,7 @@ class SV2LSTG(BaseDetector):
 
         return torch.stack([union_x1, union_y1, union_x2, union_y2], -1)
 
-    def _build_visual_edges(self, feats: BaseDataElement):
+    def _build_visual_edges(self, feats: BaseDataElement, graphs: BaseDataElement):
         # store components of shape
         B, T, N, _ = feats.instance_feats.size()
 
@@ -303,22 +306,24 @@ class SV2LSTG(BaseDetector):
                     torch.arange(T).to(feats.instance_feats.device) * N).flatten(start_dim=1).long()
         sm_graph[torch.arange(sm_graph.shape[0]).view(-1, 1, 1), intra_frame_inds[0], intra_frame_inds[1]] -= 50
 
-        # 0 out padded edges
-        sm_graph[sm_graph == 0] -= 50
+        # 0 out padded edges in both directions
+        npi_all = graphs.nodes.nodes_per_img
+        for ind, npi_clip in enumerate(npi_all):
+            for ind, n in enumerate(npi_clip):
+                offset = ind * N
+                try:
+                    sm_graph[ind, offset + n.int():offset + N, offset:offset + N] -= 50
+                    sm_graph[ind, offset:offset + N, offset + n.int():offset + N] -= 50
+                except:
+                    breakpoint()
 
         # only keep topk most similar edges per node
         topk_sm_graph = torch.zeros_like(sm_graph)
         topk_vals, inds = sm_graph.topk(self.num_sim_topk, dim=-1)
+
+        # now concatenate arange with inds to get proper indices
         topk_vals_norm = topk_vals / (topk_vals.sum(-1).unsqueeze(-1) + 1e-5)
         topk_sm_graph.scatter_(-1, inds, topk_vals_norm)
-
-        # TODO(adit98) fix this
-        ## check for temporal edges within same img bug
-        #tmp = topk_sm_graph.nonzero()
-        #img_id_x = torch.div(tmp[:, 1], N, rounding_mode='floor')
-        #img_id_y = torch.div(tmp[:, 2], N, rounding_mode='floor')
-        #if (img_id_x == img_id_y).any():
-        #    breakpoint()
 
         return topk_sm_graph
 
@@ -336,10 +341,12 @@ class SV2LSTG(BaseDetector):
                 (boxes[:,:,:,2] - boxes[:,:,:,0] + 1)
 
         # TODO(adit98) vectorize this
+        edge_max_temporal_range = self.edge_max_temporal_range if self.edge_max_temporal_range > 0 \
+                else T
         if self.temporal_edge_ranges == 'exp':
-            ranges = [2 ** x for x in range(int(np.sqrt(self.edge_max_temporal_range)) + 1)]
+            ranges = [2 ** x for x in range(int(np.sqrt(edge_max_temporal_range)) + 1)]
         else:
-            ranges = range(1, self.edge_max_temporal_range + 1)
+            ranges = range(1, edge_max_temporal_range + 1)
 
         for r in ranges:
             for t in range(T-1, 0, -1): # build starting at last (latest) node
@@ -372,13 +379,6 @@ class SV2LSTG(BaseDetector):
         back_graph[back_graph != back_graph] = 0
 
         fb_graph = torch.maximum(front_graph.transpose(1, 2), back_graph)
-
-        # check for temporal edges within same img bug
-        tmp = fb_graph.nonzero()
-        img_id_x = torch.div(tmp[:, 1], N, rounding_mode='floor')
-        img_id_y = torch.div(tmp[:, 2], N, rounding_mode='floor')
-        if (img_id_x == img_id_y).any():
-            breakpoint()
 
         return fb_graph
 

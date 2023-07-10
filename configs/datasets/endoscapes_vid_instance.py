@@ -10,11 +10,26 @@ metainfo = {
         'gallbladder', 'tool'),
     'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
 }
-num_temp_frames = 2
+num_temp_frames = 5
 
 train_data_prefix = 'train'
 val_data_prefix = 'val'
 test_data_prefix = 'test'
+
+# aug
+rand_aug_surg = [
+        [dict(type='ShearX', level=8)],
+        [dict(type='ShearY', level=8)],
+        [dict(type='Rotate', level=8)],
+        [dict(type='TranslateX', level=8)],
+        [dict(type='TranslateY', level=8)],
+        [dict(type='AutoContrast', level=8)],
+        [dict(type='Equalize', level=8)],
+        [dict(type='Contrast', level=8)],
+        [dict(type='Color', level=8)],
+        [dict(type='Brightness', level=8)],
+        [dict(type='Sharpness', level=8)],
+]
 
 train_pipeline = [
     dict(
@@ -31,6 +46,15 @@ train_pipeline = [
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True),
             dict(type='Resize', scale=(399, 224), keep_ratio=True),
             dict(type='RandomFlip', prob=0.5),
+            #dict(
+            #    type='RandAugment',
+            #    aug_space=rand_aug_surg,
+            #),
+            dict(
+                type='Color',
+                min_mag = 0.6,
+                max_mag = 1.4,
+            ),
         ]
     ),
     dict(
@@ -61,7 +85,7 @@ eval_pipeline = [
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=8,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
@@ -78,7 +102,7 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
-    batch_size=8,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
@@ -96,7 +120,7 @@ val_dataloader=dict(
 )
 
 test_dataloader=dict(
-    batch_size=8,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),

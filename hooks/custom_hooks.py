@@ -54,21 +54,32 @@ class FreezeLGDetector(Hook):
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):
+    def __init__(self, temporal=False):
+        self.temporal = temporal
+
     def before_train(self, runner) -> None:
         # copy weights for backbone, neck if it exists
         if not runner._resume and runner.model.training:
-            if 'DeformableDETR' in type(runner.model.detector).__name__:
+            # NOTE hack
+            if self.temporal:
+                det = runner.model.lg_detector.detector
+                lg_model = runner.model.lg_detector
+            else:
+                det = runner.model.detector
+                lg_model = runner.model
+
+            if 'DeformableDETR' in type(det).__name__:
                 try:
-                    runner.model.trainable_backbone.load_state_dict(runner.model.detector.state_dict())
+                    lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
                     print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
                     print()
                 except AttributeError as e:
                     print(e)
 
-            elif 'Mask2Former' in type(runner.model.detector).__name__:
+            elif 'Mask2Former' in type(det).__name__:
                 try:
-                    runner.model.trainable_backbone.load_state_dict(runner.model.detector.state_dict())
+                    lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
                     print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
                     print()
@@ -77,9 +88,9 @@ class CopyDetectorBackbone(Hook):
 
             else:
                 try:
-                    runner.model.trainable_backbone.backbone.load_state_dict(runner.model.detector.backbone.state_dict())
+                    lg_model.trainable_backbone.backbone.load_state_dict(det.backbone.state_dict())
                     try:
-                        runner.model.trainable_backbone.neck.load_state_dict(runner.model.detector.neck.state_dict())
+                        lg_model.trainable_backbone.neck.load_state_dict(det.neck.state_dict())
                     except RuntimeError as re:
                         print("SKIPPING LOADING OF NECK WEIGHTS")
 

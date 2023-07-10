@@ -20,3 +20,4 @@ del _base_.backend_args
 
 model_imports = copy.deepcopy(_base_.custom_imports)
 del _base_.custom_imports
+del _base_.rand_aug_surg

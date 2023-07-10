@@ -5,12 +5,13 @@ from mmdet.utils import ConfigType, OptConfigType, InstanceList, OptMultiConfig
 from mmengine.structures import BaseDataElement
 from mmdet.structures import SampleList
 from .modules.gnn import GNNHead
-from .modules.layers import build_mlp
+from .modules.layers import build_mlp, PositionalEncoding
 import torch
 from torch import Tensor
 from torch_scatter import scatter_mean
 import torch.nn.functional as F
 from typing import List, Union
+import torch.nn.functional as F
 
 @MODELS.register_module()
 class DSHead(BaseModule, metaclass=ABCMeta):
@@ -40,6 +41,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.input_viz_feat_size = input_viz_feat_size
         self.final_sem_feat_size = final_sem_feat_size
         self.final_viz_feat_size = final_viz_feat_size
+        self.img_feat_size = img_feat_size
 
         self.node_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
         self.edge_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
@@ -47,17 +49,17 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.node_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
         self.edge_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
 
-        graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
+        self.graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
 
         # construct gnn
-        gnn_cfg.input_dim_node = graph_feat_projected_dim
-        gnn_cfg.input_dim_edge = graph_feat_projected_dim
+        gnn_cfg.input_dim_node = self.graph_feat_projected_dim
+        gnn_cfg.input_dim_edge = self.graph_feat_projected_dim
         self.gnn = MODELS.build(gnn_cfg)
 
         # img feat params
         self.use_img_feats = use_img_feats
         self.img_feat_key = img_feat_key
-        self.img_feat_projector = torch.nn.Linear(img_feat_size, graph_feat_projected_dim)
+        self.img_feat_projector = torch.nn.Linear(img_feat_size, self.graph_feat_projected_dim)
 
         # predictor, loss params
         if isinstance(loss, list):
@@ -155,21 +157,32 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
 @MODELS.register_module()
 class STDSHead(DSHead):
-    def __init__(self, graph_pooling_window: int = -1, use_temporal_model: bool = False,
+    def __init__(self, graph_pooling_window: int = 1, use_temporal_model: bool = False,
             temporal_arch: str = 'transformer', pred_per_frame: bool = False,
+            use_node_positional_embedding: bool = True, use_positional_embedding: bool = True,
             **kwargs) -> None:
         super().__init__(**kwargs)
         self.use_temporal_model = use_temporal_model
         self.graph_pooling_window = graph_pooling_window
         self.pred_per_frame = pred_per_frame
 
+        # positional embedding
+        self.use_node_positional_embedding = use_node_positional_embedding
+        self.use_positional_embedding = use_positional_embedding
+        if self.use_node_positional_embedding:
+            self.node_pe = PositionalEncoding(self.graph_feat_projected_dim,
+                    batch_first=True, return_enc_only=True, dropout=0)
+
+        if self.use_positional_embedding:
+            self.pe = PositionalEncoding(self.img_feat_size, batch_first=True,
+                    return_enc_only=True, dropout=0)
+
         # TODO construct temporal model
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement,
-            results: SampleList) -> Tensor:
+            results: SampleList = None) -> Tensor:
         # get dims
-        B = len(graph.nodes.nodes_per_img) # batch size
-        T = len(graph.nodes.nodes_per_img[0]) # clip length
+        B, T, N, _ = graph.nodes.feats.shape
 
         # downproject graph feats
         node_feats = []
@@ -189,7 +202,20 @@ class STDSHead(DSHead):
         if len(node_feats) == 0 or len(edge_feats) == 0:
             raise ValueError("Sum of final_viz_feat_size and final_sem_feat_size must be > 0")
 
-        graph.nodes.feats = torch.cat(node_feats, -1)
+        # add positional embedding to node feats
+        node_feats = torch.cat(node_feats, -1)
+
+        if self.use_node_positional_embedding:
+            # use node_to_fic_id to arrange pos_embeds
+            pos_embed = self.node_pe(torch.zeros(1, T, node_feats.shape[-1]).to(node_feats.device))
+            node_to_fic_id = torch.arange(5).view(1, -1, 1).repeat(B, 1, N)
+            pos_embed_scattered = pos_embed.squeeze()[node_to_fic_id]
+
+            # add to node_feats
+            node_feats = F.dropout(node_feats + pos_embed_scattered, 0.1,
+                    training=self.training)
+
+        graph.nodes.feats = node_feats
         dgl_g = self.gnn(graph)
 
         # get node features and pool to get graph feats
@@ -208,8 +234,13 @@ class STDSHead(DSHead):
             # get img feats
             img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
             img_feats = F.adaptive_avg_pool2d(img_feats, 1).squeeze(-1).squeeze(-1)
+
             if self.use_temporal_model:
                 img_feats = self.img_feat_temporal_model(img_feats)
+
+            elif self.use_positional_embedding:
+                pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
+                img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training)
 
             # downproject img feats
             projected_img_feats = self.img_feat_projector(img_feats)

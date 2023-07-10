@@ -17,6 +17,15 @@ lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
 # load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
 ds_head['type'] = 'STDSHead'
+ds_head['gnn_cfg'] = dict(
+    type='GNNHead',
+    num_layers=5,
+    arch='tripleconv',
+    add_self_loops=False,
+    use_reverse_edges=False,
+    norm='graph',
+    skip_connect=True,
+)
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
@@ -85,7 +94,7 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True)]
+custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True), dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(
