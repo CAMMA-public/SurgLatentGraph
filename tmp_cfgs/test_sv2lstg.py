@@ -22,7 +22,7 @@ ds_head['gnn_cfg'] = dict(
     num_layers=5,
     arch='tripleconv',
     add_self_loops=False,
-    use_reverse_edges=False,
+    use_reverse_edges=True,
     norm='graph',
     skip_connect=True,
 )
@@ -35,7 +35,8 @@ del lg_model.reconstruction_head
 # set init cfg for lg_model
 lg_model.init_cfg = dict(
     type='Pretrained',
-    checkpoint=_base_.load_from,
+    checkpoint='weights/lg_ds_faster_rcnn.pth',
+    #checkpoint=_base_.load_from,
 )
 del _base_.load_from
 
@@ -53,6 +54,7 @@ model = dict(
         pad_mask=True,
         pad_size_divisor=1,
     ),
+    use_spat_graph=True,
 )
 
 # metric
@@ -80,7 +82,6 @@ test_evaluator = [
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
         outfile_prefix='./results/endoscapes_preds/test',
-        save_graphs=True,
     ),
 ]
 
@@ -94,7 +95,7 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True), dict(type="CopyDetectorBackbone", temporal=True)]
+custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=False)]#, dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(
@@ -103,3 +104,10 @@ default_hooks = dict(
 vis_backends = [dict(type='LocalVisBackend')]
 visualizer = dict(
     type='TrackLocalVisualizer', vis_backends=vis_backends, name='visualizer')
+
+# optimizer
+optim_wrapper = dict(
+    _delete_=True,
+    optimizer=dict(type='AdamW', lr=0.0001),
+    clip_grad=dict(max_norm=10, norm_type=2),
+)

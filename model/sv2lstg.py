@@ -19,18 +19,21 @@ from .predictor_heads.modules.layers import build_mlp
 class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType,
             viz_feat_size=256, sem_feat_size=256, sim_embedder_feat_size=256,
-            num_spat_edge_classes=4, num_temp_edge_classes=2, learn_sim_graph=False,
-            semantic_feat_projector_layers: int = 3, predict_per_frame: bool = False,
+            num_frame_edge_classes=4, use_spat_graph: bool = False,
+            use_viz_graph: bool = False, learn_sim_graph: bool = False,
+            semantic_feat_projector_layers: int = 3, pred_per_frame: bool = False,
             use_positional_embedding: bool = True, num_sim_topk: int = 2,
             temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
             use_max_iou_only: bool = True, use_temporal_edges_only: bool = False,
-            **kwargs):
+            per_video: bool = False, **kwargs):
         super().__init__(**kwargs)
 
         # init lg detector
         self.lg_detector = MODELS.build(lg_detector)
 
         # init ds head
+        ds_head.pred_per_frame = pred_per_frame
+        ds_head.per_video = per_video
         self.ds_head = MODELS.build(ds_head)
 
         # visual graph feature projectors
@@ -40,14 +43,21 @@ class SV2LSTG(BaseDetector):
                 sim_embedder_feat_size, bias=False)
 
         # set extra params
-        self.num_spat_edge_classes = num_spat_edge_classes
-        self.num_temp_edge_classes = num_temp_edge_classes
+        self.num_frame_edge_classes = num_frame_edge_classes
+        self.use_spat_graph = use_spat_graph
+        self.use_viz_graph = use_viz_graph
         self.learn_sim_graph = learn_sim_graph
         self.viz_feat_size = viz_feat_size
         self.sem_feat_size = sem_feat_size
 
+        self.num_temp_edge_classes = 0
+        if self.use_viz_graph:
+            self.num_temp_edge_classes += 1
+        if self.use_spat_graph:
+            self.num_temp_edge_classes += 1
+
         # edge semantic feat projector
-        self.num_edge_classes = self.num_spat_edge_classes + self.num_temp_edge_classes
+        self.num_edge_classes = self.num_frame_edge_classes + self.num_temp_edge_classes
         dim_list = [self.num_edge_classes + 4] + [512] * \
                 (semantic_feat_projector_layers - 1) + [sem_feat_size]
         self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='none')
@@ -60,7 +70,8 @@ class SV2LSTG(BaseDetector):
         self.use_positional_embedding = use_positional_embedding
 
         # set prediction params
-        self.predict_per_frame = predict_per_frame
+        self.per_video = per_video
+        self.pred_per_frame = pred_per_frame or per_video
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
@@ -92,9 +103,10 @@ class SV2LSTG(BaseDetector):
         B, T, _, _, _ = batch_inputs.shape
 
         # only keep keyframes
-        for r in results:
-            for r, p in zip(results, ds_preds.repeat_interleave(T, dim=0)):
-                r.pred_ds = p
+        if self.per_video:
+            for r in results:
+                for r, p in zip(results, ds_preds.repeat_interleave(T, dim=0)):
+                    r.pred_ds = p
 
         else:
             results = results[T-1::T]
@@ -118,8 +130,13 @@ class SV2LSTG(BaseDetector):
         graphs.edges.edge_flats[:, 0] = graphs.edges.edge_flats[:, 0] % N
 
         # add E_T dummy classes to class logits
-        dummy_logits = torch.ones(graphs.edges.class_logits.shape[0],
-                self.num_temp_edge_classes).to(graphs.edges.class_logits.device) * graphs.edges.class_logits.min()
+        try:
+            dummy_logits = torch.ones(graphs.edges.class_logits.shape[0],
+                    self.num_temp_edge_classes).to(graphs.edges.class_logits.device) * graphs.edges.class_logits.min()
+        except:
+            dummy_logits = torch.zeros(graphs.edges.class_logits.shape[0],
+                    self.num_temp_edge_classes).to(graphs.edges.class_logits.device)
+
         graphs.edges.class_logits = torch.cat([graphs.edges.class_logits, dummy_logits], dim=1)
 
         # reshape graph edges by clip
@@ -140,14 +157,21 @@ class SV2LSTG(BaseDetector):
         return feats, graphs, clip_results
 
     def build_st_graph(self, feats: BaseDataElement, graphs: BaseDataElement, clip_results: SampleList):
-        viz_graph = self._build_visual_edges(feats, graphs)
-        node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) for cr in clip_results],
-                batch_first=True).transpose(1, 2)
-        spat_graph = self._build_spatial_edges(node_boxes)
+        viz_graph, spat_graph = None, None
+        if self.use_viz_graph:
+            viz_graph = self._build_visual_edges(feats, graphs)
 
-        # add viz and spat edges to st_graph, being mindful of indexing, and extract edge features
-        st_graph = self._featurize_st_graph(spat_graph, viz_graph, node_boxes,
-                graphs, clip_results[0][0].img_shape)
+        if self.use_spat_graph:
+            node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) \
+                    for cr in clip_results], batch_first=True).transpose(1, 2)
+            spat_graph = self._build_spatial_edges(node_boxes)
+
+        if viz_graph is not None or spat_graph is not None:
+            # add viz and spat edges to st_graph, being mindful of indexing, and extract edge features
+            st_graph = self._featurize_st_graph(spat_graph, viz_graph, node_boxes,
+                    graphs, clip_results[0][0].img_shape)
+        else:
+            st_graph = graphs
 
         return st_graph
 
@@ -156,10 +180,14 @@ class SV2LSTG(BaseDetector):
         # extract shape quantities, device
         B, T, N, _ = graphs.nodes.feats.shape
         M = T * N
-        device = spat_graph.device
+        device = spat_graph.device if spat_graph is not None else viz_graph.device
 
         # define graphs to use
-        graphs_to_use = [spat_graph, viz_graph]
+        graphs_to_use = []
+        if spat_graph is not None:
+            graphs_to_use.append(spat_graph)
+        if viz_graph is not None:
+            graphs_to_use.append(viz_graph)
 
         # create meshgrid to store node indices corresponding to each edge
         edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(device)
@@ -209,7 +237,7 @@ class SV2LSTG(BaseDetector):
                 graphs.edges.class_logits[ind] = extra_edge_classes
             else:
                 extra_edge_class_logits = torch.cat([torch.zeros(extra_edge_class_logits.shape[0],
-                    self.num_spat_edge_classes).to(device), extra_edge_class_logits], 1)
+                    self.num_frame_edge_classes).to(device), extra_edge_class_logits], 1)
                 graphs.edges.class_logits[ind] = torch.cat([graphs.edges.class_logits[ind],
                         extra_edge_class_logits])
 
@@ -230,14 +258,17 @@ class SV2LSTG(BaseDetector):
                 graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
                 graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
 
-            # update viz feats
-            extra_edge_viz_feats = graphs.nodes.feats[ind].view(M, -1)[extra_edge_flats].mean(1)[:, :self.viz_feat_size]
+            try:
+                # update viz feats
+                extra_edge_viz_feats = graphs.nodes.feats[ind].view(M, -1)[extra_edge_flats].mean(1)[:, :self.viz_feat_size]
+                # compute sem feats
+                extra_edge_sem_feats = self._compute_sem_feats(extra_edge_boxes,
+                        extra_edge_class_logits, batch_input_shape)
+                extra_edge_feats = torch.cat([extra_edge_viz_feats, extra_edge_sem_feats], dim=-1)
 
-            # compute sem feats
-            extra_edge_sem_feats = self._compute_sem_feats(extra_edge_boxes,
-                    extra_edge_class_logits, batch_input_shape)
+            except:
+                extra_edge_feats = torch.zeros(0, graphs.edges.feats[ind].shape[-1]).to(graphs.edges.feats[ind])
 
-            extra_edge_feats = torch.cat([extra_edge_viz_feats, extra_edge_sem_feats], dim=-1)
             if self.use_temporal_edges_only:
                 graphs.edges.feats[ind] = extra_edge_feats
             else:
@@ -311,11 +342,8 @@ class SV2LSTG(BaseDetector):
         for ind, npi_clip in enumerate(npi_all):
             for ind, n in enumerate(npi_clip):
                 offset = ind * N
-                try:
-                    sm_graph[ind, offset + n.int():offset + N, offset:offset + N] -= 50
-                    sm_graph[ind, offset:offset + N, offset + n.int():offset + N] -= 50
-                except:
-                    breakpoint()
+                sm_graph[ind, offset + n.int():offset + N, offset:offset + N] -= 50
+                sm_graph[ind, offset:offset + N, offset + n.int():offset + N] -= 50
 
         # only keep topk most similar edges per node
         topk_sm_graph = torch.zeros_like(sm_graph)

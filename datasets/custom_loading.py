@@ -100,35 +100,34 @@ class VideoDatasetWithDS(BaseVideoDataset):
             video_idx, frame_idx = idx, None
 
         data_info = self.get_data_info(video_idx)
-        if self.test_mode:
-            # Support two test_mode: frame-level and video-level
-            final_data_info = defaultdict(list)
-            if frame_idx is None:
-                frames_idx_list = list(range(data_info['video_length']))
-            else:
-                frames_idx_list = [frame_idx]
-                final_data_info['key_frame_id'] = frame_idx
+        #if self.test_mode:
+        #    # Support two test_mode: frame-level and video-level
+        #    final_data_info = defaultdict(list)
+        #    if frame_idx is None:
+        #        frames_idx_list = list(range(data_info['video_length']))
+        #    else:
+        #        frames_idx_list = [frame_idx]
+        #        final_data_info['key_frame_id'] = frame_idx
 
-            for index in frames_idx_list:
-                frame_ann = data_info['images'][index]
-                frame_ann['video_id'] = data_info['video_id']
-                # Collate data_list (list of dict to dict of list)
-                for key, value in frame_ann.items():
-                    final_data_info[key].append(value)
-                # copy the info in video-level into img-level
-                # TODO: the value of this key is the same as that of
-                # `video_length` in test mode
-                final_data_info['ori_video_length'].append(
-                    data_info['video_length'])
+        #    for index in frames_idx_list:
+        #        frame_ann = data_info['images'][index]
+        #        frame_ann['video_id'] = data_info['video_id']
+        #        # Collate data_list (list of dict to dict of list)
+        #        for key, value in frame_ann.items():
+        #            final_data_info[key].append(value)
+        #        # copy the info in video-level into img-level
+        #        # TODO: the value of this key is the same as that of
+        #        # `video_length` in test mode
+        #        final_data_info['ori_video_length'].append(
+        #            data_info['video_length'])
 
-            final_data_info['video_length'] = data_info['video_length']
-            return self.pipeline(final_data_info)
+        #    final_data_info['video_length'] = data_info['video_length']
+        #    return self.pipeline(final_data_info)
 
-        else:
-            # Specify `key_frame_id` for the frame sampling in the pipeline
-            if frame_idx is not None:
-                data_info['key_frame_id'] = frame_idx
-            return self.pipeline(data_info)
+        # Specify `key_frame_id` for the frame sampling in the pipeline
+        if frame_idx is not None:
+            data_info['key_frame_id'] = frame_idx
+        return self.pipeline(data_info)
 
     @property
     def num_total_keyframes(self):

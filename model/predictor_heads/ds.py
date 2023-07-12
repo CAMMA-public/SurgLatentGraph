@@ -159,12 +159,13 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 class STDSHead(DSHead):
     def __init__(self, graph_pooling_window: int = 1, use_temporal_model: bool = False,
             temporal_arch: str = 'transformer', pred_per_frame: bool = False,
-            use_node_positional_embedding: bool = True, use_positional_embedding: bool = True,
-            **kwargs) -> None:
+            per_video: bool = False, use_node_positional_embedding: bool = True,
+            use_positional_embedding: bool = True, **kwargs) -> None:
         super().__init__(**kwargs)
         self.use_temporal_model = use_temporal_model
         self.graph_pooling_window = graph_pooling_window
         self.pred_per_frame = pred_per_frame
+        self.per_video = per_video
 
         # positional embedding
         self.use_node_positional_embedding = use_node_positional_embedding
@@ -216,6 +217,7 @@ class STDSHead(DSHead):
                     training=self.training)
 
         graph.nodes.feats = node_feats
+        #graph.edges.feats = torch.cat(edge_feats, -1)
         dgl_g = self.gnn(graph)
 
         # get node features and pool to get graph feats
@@ -252,14 +254,11 @@ class STDSHead(DSHead):
         # pred-per-frame handles the second case, but can also apply to clip classification
         # during training, in case we still want per-frame output for clip classification
         if self.pred_per_frame:
-            ds_preds = self._ds_predict(final_feats.flatten(end_dim=1)).view(B, T,
-                    *final_feats.shape[2:])
+            ds_preds = self._ds_predict(final_feats)
 
-            if not self.training:
-                # filter preds for keyframes during evaluation
-                breakpoint()
-                ds_preds = [x for r, x in zip(results, ds_preds.flatten(end_dim=1)) \
-                        if r['is_ds_keyframe']]
+            if not self.training and self.per_video:
+                # keep only prediction for last frame in clip
+                ds_preds = ds_preds[:, -1]
 
         else:
             if self.graph_pooling_window == -1:
@@ -289,8 +288,8 @@ class STDSHead(DSHead):
             # keep only last gt per clip
             ds_gt = ds_gt[:, -1]
         else:
-            ds_preds = ds_preds.flatten()
-            ds_gt = ds_gt.flatten()
+            ds_preds = ds_preds.flatten(end_dim=1)
+            ds_gt = ds_gt.flatten(end_dim=1)
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
