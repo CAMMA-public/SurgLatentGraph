@@ -2,9 +2,8 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance.py',
+    '../configs/datasets/endoscapes_vid_instance_15.py',
     'sv2lstg_faster_rcnn_base.py',
-    #'test_lg_ds_faster_rcnn.py',
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
@@ -22,10 +21,11 @@ ds_head['gnn_cfg'] = dict(
     num_layers=5,
     arch='tripleconv',
     add_self_loops=False,
-    use_reverse_edges=True,
+    use_reverse_edges=False,
     norm='graph',
     skip_connect=True,
 )
+ds_head['num_temp_frames'] = _base_.num_temp_frames
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
@@ -55,6 +55,8 @@ model = dict(
         pad_size_divisor=1,
     ),
     use_spat_graph=True,
+    use_viz_graph=True,
+    pred_per_frame=True,
 )
 
 # metric
@@ -108,6 +110,11 @@ visualizer = dict(
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.0003),
     clip_grad=dict(max_norm=10, norm_type=2),
+    #paramwise_cfg=dict(
+    #    custom_keys={
+    #        'lg_detector': dict(lr_mult=0.01),
+    #    }
+    #)
 )

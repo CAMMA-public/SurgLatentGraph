@@ -10,7 +10,7 @@ metainfo = {
         'gallbladder', 'tool'),
     'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
 }
-num_temp_frames = 5
+num_temp_frames = 15
 
 train_data_prefix = 'train'
 val_data_prefix = 'val'
@@ -18,8 +18,8 @@ test_data_prefix = 'test'
 
 # aug
 rand_aug_surg = [
-        [dict(type='ShearX', level=8)],
-        [dict(type='ShearY', level=8)],
+        #[dict(type='ShearX', level=8)],
+        #[dict(type='ShearY', level=8)],
         [dict(type='Rotate', level=8)],
         [dict(type='TranslateX', level=8)],
         [dict(type='TranslateY', level=8)],
@@ -46,9 +46,10 @@ train_pipeline = [
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True),
             dict(type='Resize', scale=(399, 224), keep_ratio=True),
             dict(type='RandomFlip', prob=0.5),
-            #dict(type='RandomResize', scale=(0.5, 2), ratio_range=(399, 224)),
-            #dict(type='RandomAffine'),
-            #dict(type='CenterCrop', crop_size=(399, 224)),
+            dict(type='RandomAffine', max_rotate_degree=15, max_translate_ratio=0.05,
+                scaling_ratio_range=(1, 1)),
+            #dict(type='RandomResize', scale=[(200, 112), (600, 336)], keep_ratio=True),
+            #dict(type='CenterCrop', crop_size=(399, 224), auto_pad=True),
             #dict(
             #    type='RandAugment',
             #    aug_space=rand_aug_surg,
@@ -88,7 +89,7 @@ eval_pipeline = [
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=16,
+    batch_size=5,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
@@ -105,7 +106,7 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
-    batch_size=16,
+    batch_size=5,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
@@ -123,7 +124,7 @@ val_dataloader=dict(
 )
 
 test_dataloader=dict(
-    batch_size=16,
+    batch_size=5,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),

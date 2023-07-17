@@ -206,11 +206,9 @@ class LGDetector(BaseDetector):
     def extract_lg(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tuple[BaseDataElement]:
         # run detector to get detections
         with torch.no_grad():
-            detector_is_training = self.detector.training
             self.detector.training = False
             results = self.detector.predict(batch_inputs, batch_data_samples)
             detached_results = copy.deepcopy(self.detach_results(results))
-            self.detector.training = detector_is_training
 
         # get bb and fpn features
         feats = self.extract_feat(batch_inputs, detached_results)
