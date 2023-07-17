@@ -20,7 +20,7 @@ class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType,
             viz_feat_size=256, sem_feat_size=256, sim_embedder_feat_size=256,
             num_frame_edge_classes=4, use_spat_graph: bool = False,
-            use_viz_graph: bool = False, learn_sim_graph: bool = False,
+            use_viz_graph: bool = False, learn_sim_graph: bool = True,
             semantic_feat_projector_layers: int = 3, pred_per_frame: bool = False,
             use_positional_embedding: bool = True, num_sim_topk: int = 2,
             temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
@@ -80,7 +80,7 @@ class SV2LSTG(BaseDetector):
         feats, graphs, clip_results, _ = self.extract_feat(batch_inputs, batch_data_samples)
 
         # build spatiotemporal graph for each item in batch
-        st_graphs = self.build_st_graph(feats, graphs, clip_results)
+        st_graphs = self.build_st_graph(graphs, clip_results)
 
         # run ds head
         ds_losses = self.ds_head.loss(st_graphs, feats, batch_data_samples)
@@ -94,7 +94,7 @@ class SV2LSTG(BaseDetector):
                 batch_data_samples)
 
         # build spatiotemporal graph for each item in batch
-        st_graphs = self.build_st_graph(feats, graphs, clip_results)
+        st_graphs = self.build_st_graph(graphs, clip_results)
 
         # run ds head
         ds_preds = self.ds_head.predict(st_graphs, feats, results)
@@ -156,10 +156,10 @@ class SV2LSTG(BaseDetector):
 
         return feats, graphs, clip_results
 
-    def build_st_graph(self, feats: BaseDataElement, graphs: BaseDataElement, clip_results: SampleList):
+    def build_st_graph(self, graphs: BaseDataElement, clip_results: SampleList):
         viz_graph, spat_graph = None, None
         if self.use_viz_graph:
-            viz_graph = self._build_visual_edges(feats, graphs)
+            viz_graph = self._build_visual_edges(graphs)
 
         if self.use_spat_graph:
             node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) \
@@ -310,17 +310,17 @@ class SV2LSTG(BaseDetector):
 
         return torch.stack([union_x1, union_y1, union_x2, union_y2], -1)
 
-    def _build_visual_edges(self, feats: BaseDataElement, graphs: BaseDataElement):
+    def _build_visual_edges(self, graphs: BaseDataElement):
         # store components of shape
-        B, T, N, _ = feats.instance_feats.size()
+        B, T, N, _ = graphs.nodes.feats.size()
 
         # run kernel fns
         if self.learn_sim_graph:
-            sim1 = self.sim_embed1(feats.instance_feats).flatten(start_dim=1, end_dim=2)
-            sim2 = self.sim_embed2(feats.instance_feats).flatten(start_dim=1, end_dim=2).transpose(1, 2)
+            sim1 = self.sim_embed1(graphs.nodes.feats).flatten(start_dim=1, end_dim=2)
+            sim2 = self.sim_embed2(graphs.nodes.feats).flatten(start_dim=1, end_dim=2).transpose(1, 2)
         else:
-            sim1 = feats.instance_feats.flatten(start_dim=1, end_dim=2)
-            sim2 = feats.instance_feats.flatten(start_dim=1, end_dim=2).transpose(1, 2)
+            sim1 = graphs.nodes.feats.flatten(start_dim=1, end_dim=2)
+            sim2 = graphs.nodes.feats.flatten(start_dim=1, end_dim=2).transpose(1, 2)
 
         # COSINE SIMILARITY
         # compute pairwise dot products
@@ -333,14 +333,14 @@ class SV2LSTG(BaseDetector):
 
         # 0 out intra-frame edges
         intra_frame_inds = (torch.stack(torch.meshgrid(torch.arange(N),
-            torch.arange(N))).to(feats.instance_feats.device).unsqueeze(-1) + \
-                    torch.arange(T).to(feats.instance_feats.device) * N).flatten(start_dim=1).long()
+            torch.arange(N))).to(graphs.nodes.feats.device).unsqueeze(-1) + \
+                    torch.arange(T).to(graphs.nodes.feats.device) * N).flatten(start_dim=1).long()
         sm_graph[torch.arange(sm_graph.shape[0]).view(-1, 1, 1), intra_frame_inds[0], intra_frame_inds[1]] -= 50
 
         # 0 out padded edges in both directions
         npi_all = graphs.nodes.nodes_per_img
         for ind, npi_clip in enumerate(npi_all):
-            for ind, n in enumerate(npi_clip):
+            for n in npi_clip:
                 offset = ind * N
                 sm_graph[ind, offset + n.int():offset + N, offset:offset + N] -= 50
                 sm_graph[ind, offset:offset + N, offset + n.int():offset + N] -= 50
