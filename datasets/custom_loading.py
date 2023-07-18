@@ -26,6 +26,7 @@ class CocoDatasetWithDS(CocoDataset):
         data_info = super().parse_data_info(raw_data_info)
 
         # get ds labels
-        data_info['ds'] = raw_data_info['raw_img_info']['ds']
+        if 'ds' in raw_data_info['raw_img_info']:
+            data_info['ds'] = raw_data_info['raw_img_info']['ds']
 
         return data_info
