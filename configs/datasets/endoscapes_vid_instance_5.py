@@ -46,8 +46,8 @@ train_pipeline = [
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True),
             dict(type='Resize', scale=(399, 224), keep_ratio=True),
             dict(type='RandomFlip', prob=0.5),
-            dict(type='RandomAffine', max_rotate_degree=15, max_translate_ratio=0.05,
-                scaling_ratio_range=(1, 1)),
+            #dict(type='RandomAffine', max_rotate_degree=15, max_translate_ratio=0.05,
+            #    scaling_ratio_range=(1, 1)),
             #dict(type='RandomResize', scale=[(200, 112), (600, 336)], keep_ratio=True),
             #dict(type='CenterCrop', crop_size=(399, 224), auto_pad=True),
             #dict(
