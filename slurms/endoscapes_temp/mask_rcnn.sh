@@ -3,7 +3,7 @@
 #SBATCH -c 8
 #SBATCH --qos=qos_gpu-t4
 #SBATCH --gres=gpu:4
-#SBATCH --time=20:00:00
+#SBATCH --time=15:00:00
 #SBATCH -p gpu_p13
 #SBATCH -J latentgraph_mask_rcnn
 #SBATCH --error latentgraph_mask_rcnn_error.log
