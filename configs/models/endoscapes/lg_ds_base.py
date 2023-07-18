@@ -152,6 +152,7 @@ auto_scale_lr = dict(enable=False)
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='endoscapes/ds_average_precision'),
+    visualization=dict(draw=False),
 )
 
 # loading
