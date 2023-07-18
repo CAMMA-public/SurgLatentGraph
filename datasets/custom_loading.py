@@ -1,8 +1,10 @@
 from mmdet.datasets import CocoDataset
+from mmdet.datasets.base_video_dataset import BaseVideoDataset
 from mmdet.registry import TRANSFORMS, DATASETS, DATA_SAMPLERS
-from mmdet.datasets import BaseVideoDataset
-from mmdet.datasets.samplers import TrackImgSampler
-from mmdet.datasets.transforms import LoadAnnotations, UniformRefFrameSample, LoadTrackAnnotations
+from mmdet.datasets.samplers.track_img_sampler import TrackImgSampler
+from mmdet.datasets.transforms import LoadAnnotations
+from mmdet.datasets.transforms.loading import LoadTrackAnnotations
+from mmdet.datasets.transforms.frame_sampling import UniformRefFrameSample
 from mmengine.dataset import ClassBalancedDataset, ConcatDataset
 from mmengine.dist import get_dist_info, sync_random_seed
 from typing import List, Union, Sized, Optional, Any
@@ -49,7 +51,8 @@ class CocoDatasetWithDS(CocoDataset):
         data_info = super().parse_data_info(raw_data_info)
 
         # get ds labels
-        data_info['ds'] = raw_data_info['raw_img_info']['ds']
+        if 'ds' in raw_data_info['raw_img_info']:
+            data_info['ds'] = raw_data_info['raw_img_info']['ds']
 
         return data_info
 
