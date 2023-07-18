@@ -26,6 +26,7 @@ ds_head['gnn_cfg'] = dict(
     skip_connect=True,
 )
 ds_head['num_temp_frames'] = _base_.num_temp_frames
+ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
