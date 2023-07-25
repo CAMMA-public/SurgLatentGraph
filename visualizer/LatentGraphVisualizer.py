@@ -4,34 +4,51 @@ from mmdet.structures import DetDataSample
 from mmengine.structures import InstanceData
 from typing import Dict, List, Optional, Tuple, Union, Sequence
 import numpy as np
+import torch
+import os
 
 @VISUALIZERS.register_module()
 class LatentGraphVisualizer(DetLocalVisualizer):
     def __init__(self, name: str, save_graphs: bool = False,
-            gt_graph_use_pred_instances: bool = False, **kwargs):
+            gt_graph_use_pred_instances: bool = False, draw: bool = False, **kwargs):
         super().__init__(**kwargs)
+        self.draw = draw
         self.save_graphs = save_graphs
         self.gt_graph_use_pred_instances = gt_graph_use_pred_instances
 
     def add_datasample(self, name: str, image: np.ndarray,
             data_sample: Optional['DetDataSample'] = None,
             out_file: Optional[str] = None, **kwargs):
-        super().add_datasample(name, image, data_sample, out_file=out_file, **kwargs)
-        breakpoint()
 
-        if gts is not None and 'pred_edges' in results[0] and self.save_graphs:
-            img_ids = []
-            for idx, result in enumerate(results):
-                img_ids.append(result['img_id'])
+        if self.draw:
+            super().add_datasample(name, image, data_sample, out_file=out_file, **kwargs)
 
-            # make dirs to save
-            if not os.path.exists(os.path.join(outfile_prefix, 'graphs')):
-                os.makedirs(os.path.join(outfile_prefix, 'graphs', 'gt'))
-                os.makedirs(os.path.join(outfile_prefix, 'graphs', 'pred'))
+        if self.save_graphs:
+            # create graph dir
+            if not os.path.exists('latent_graphs'):
+                os.makedirs('latent_graphs')
 
-            self.graphs_to_networkx(results, gts, img_ids, outfile_prefix)
+            # create filename
+            graph_filename = str(data_sample.img_id) + '.npz'
 
-            result_files['graph'] = os.path.join(outfile_prefix, 'graphs')
+            # save latent graph
+            np.savez(os.path.join('latent_graphs', graph_filename), data_sample.lg.numpy())
+            #torch.save(data_sample.lg, os.path.join('latent_graphs', graph_filename))
+            #dump(data_sample.lg, os.path.join('latent_graphs', graph_filename))
+
+        ## save graph object
+        ##if not os.path.exists(
+
+        ## convert graphs to networkx
+
+        ## make dirs to save
+        #if not os.path.exists(os.path.join(outfile_prefix, 'graphs')):
+        #    os.makedirs(os.path.join(outfile_prefix, 'graphs', 'gt'))
+        #    os.makedirs(os.path.join(outfile_prefix, 'graphs', 'pred'))
+
+        #self.graphs_to_networkx(data_sample, [data_sample.img_id], outfile_prefix)
+
+        #result_files['graph'] = os.path.join(outfile_prefix, 'graphs')
 
     def graphs_to_networkx(self, results: Sequence[dict], gts: Sequence[dict], img_ids: Sequence[int], outfile_prefix: str):
         # Define colors

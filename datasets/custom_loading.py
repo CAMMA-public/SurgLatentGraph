@@ -7,11 +7,15 @@ from mmdet.datasets.transforms.loading import LoadTrackAnnotations
 from mmdet.datasets.transforms.frame_sampling import UniformRefFrameSample
 from mmengine.dataset import ClassBalancedDataset, ConcatDataset
 from mmengine.dist import get_dist_info, sync_random_seed
+from mmengine.fileio import get
+from mmcv.transforms import LoadImageFromFile
 from typing import List, Union, Sized, Optional, Any
 import numpy as np
 import math
 import random
+import os
 from collections import defaultdict
+from io import BytesIO
 
 @TRANSFORMS.register_module()
 class LoadAnnotationsWithDS(LoadAnnotations):
@@ -31,6 +35,11 @@ class LoadAnnotationsWithDS(LoadAnnotations):
 
 @TRANSFORMS.register_module()
 class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
+    def __init__(self, load_graph: bool = False, saved_graph_dir: str = '', **kwargs):
+        super(LoadTrackAnnotationsWithDS, self).__init__(**kwargs)
+        self.load_graph = load_graph
+        self.saved_graph_dir = saved_graph_dir
+
     def _load_ds(self, results: dict) -> None:
         """Private function to load downstream annotations.
 
@@ -40,8 +49,20 @@ class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
         gt_ds = results.get('ds')
         results['ds'] = np.array(gt_ds)
 
+    def _load_graph(self, results: dict) -> None:
+        graph_path = os.path.join(self.saved_graph_dir, str(results['id']) + '.npz')
+        graph_bytes = get(graph_path, backend_args=self.backend_args)
+        with np.load(BytesIO(graph_bytes), allow_pickle=True) as f:
+            lg = f['arr_0'].item()
+
+        results['lg'] = lg.to_tensor()
+
     def transform(self, results: dict) -> dict:
-        results = super().transform(results)
+        if self.load_graph:
+            self._load_graph(results)
+        else:
+            results = super().transform(results)
+
         self._load_ds(results)
         return results
 

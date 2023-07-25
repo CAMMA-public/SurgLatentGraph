@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance_10.py',
+    '../configs/datasets/endoscapes_vid_instance_15_load_graphs.py',
     'sv2lstg_faster_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
@@ -48,12 +48,7 @@ model = dict(
     lg_detector=lg_model,
     ds_head=ds_head,
     data_preprocessor=dict(
-        type='TrackDataPreprocessor',
-        mean=[123.675, 116.28, 103.53],
-        std=[58.395, 57.12, 57.375],
-        bgr_to_rgb=True,
-        pad_mask=True,
-        pad_size_divisor=1,
+        type='SavedLGPreprocessor',
     ),
     use_spat_graph=True,
     use_viz_graph=True,

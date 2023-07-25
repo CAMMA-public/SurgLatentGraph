@@ -18,8 +18,8 @@ test_data_prefix = 'test'
 
 # aug
 rand_aug_surg = [
-        #[dict(type='ShearX', level=8)],
-        #[dict(type='ShearY', level=8)],
+        [dict(type='ShearX', level=8)],
+        [dict(type='ShearY', level=8)],
         [dict(type='Rotate', level=8)],
         [dict(type='TranslateX', level=8)],
         [dict(type='TranslateY', level=8)],
@@ -63,7 +63,7 @@ train_pipeline = [
     ),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
     ),
 ]
 
@@ -83,13 +83,13 @@ eval_pipeline = [
         ]),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
     ),
 ]
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=5,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
@@ -106,7 +106,7 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
-    batch_size=5,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
@@ -124,7 +124,7 @@ val_dataloader=dict(
 )
 
 test_dataloader=dict(
-    batch_size=5,
+    batch_size=16,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),

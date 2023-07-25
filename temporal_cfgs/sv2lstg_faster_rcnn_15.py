@@ -7,7 +7,7 @@ _base_ = [
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
-    'hooks.custom_hooks', 'runner.custom_loops'], allow_failed_imports=False)
+    'hooks.custom_hooks', 'runner.custom_loops', 'model.saved_lg_preprocessor'], allow_failed_imports=False)
 
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
@@ -67,7 +67,7 @@ val_evaluator = [
         prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
@@ -80,11 +80,11 @@ test_evaluator = [
         prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test',
+        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
     ),
 ]
 

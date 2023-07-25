@@ -68,18 +68,18 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
 
             # predictors
-            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers
+            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node, num_classes))
+                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node * 2, num_classes))
 
         else:
             # loss
             self.loss_fn = MODELS.build(loss)
 
             # predictor
-            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
+            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers + [num_classes]
             self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
         self.loss_weight = loss_weight
@@ -158,10 +158,11 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
 @MODELS.register_module()
 class STDSHead(DSHead):
-    def __init__(self, num_temp_frames: int, graph_pooling_window: int = 1, use_temporal_model: bool = False,
-            temporal_arch: str = 'transformer', pred_per_frame: bool = False,
-            per_video: bool = False, use_node_positional_embedding: bool = True,
-            use_positional_embedding: bool = True, **kwargs) -> None:
+    def __init__(self, num_temp_frames: int, graph_pooling_window: int = 1,
+            use_temporal_model: bool = False, temporal_arch: str = 'transformer',
+            pred_per_frame: bool = False, per_video: bool = False,
+            use_node_positional_embedding: bool = True,
+            use_positional_embedding: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
         self.num_temp_frames = num_temp_frames
         self.use_temporal_model = use_temporal_model
@@ -252,7 +253,8 @@ class STDSHead(DSHead):
 
             # downproject img feats
             projected_img_feats = self.img_feat_projector(img_feats)
-            final_feats = graph_feats.view(B, T, -1) + projected_img_feats
+            final_feats = torch.cat([graph_feats.view(B, T, -1), projected_img_feats], -1)
+            #final_feats = graph_feats.view(B, T, -1) + projected_img_feats
 
         # 2 modes: 1 prediction per clip for clip classification, or output per-keyframe for
         # whole-video inputs

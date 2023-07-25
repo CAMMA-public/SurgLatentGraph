@@ -6,10 +6,10 @@ import numpy as np
 from typing import List, Tuple, Union
 import torchvision.transforms.functional as TF
 from torchvision.transforms import InterpolationMode
-from mmdet.structures import SampleList, OptSampleList
+from mmdet.structures import SampleList, OptSampleList, DetDataSample
 from mmdet.structures.bbox import bbox2roi, roi2bbox, scale_boxes
 from mmdet.models.detectors.base import BaseDetector
-from mmengine.structures import BaseDataElement
+from mmengine.structures import BaseDataElement, InstanceData
 from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from mmdet.registry import MODELS
 from .lg_cvs import LGDetector
@@ -19,8 +19,8 @@ from .predictor_heads.modules.layers import build_mlp
 class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType,
             viz_feat_size=256, sem_feat_size=256, sim_embedder_feat_size=256,
-            num_frame_edge_classes=4, use_spat_graph: bool = False,
-            use_viz_graph: bool = False, learn_sim_graph: bool = True,
+            num_frame_edge_classes=4, use_spat_graph: bool = True,
+            use_viz_graph: bool = True, learn_sim_graph: bool = True,
             semantic_feat_projector_layers: int = 3, pred_per_frame: bool = False,
             use_positional_embedding: bool = True, num_sim_topk: int = 2,
             temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
@@ -100,7 +100,7 @@ class SV2LSTG(BaseDetector):
         ds_preds = self.ds_head.predict(st_graphs, feats, results)
 
         # update results
-        B, T, _, _, _ = batch_inputs.shape
+        T = len(batch_data_samples[0].video_data_samples)
 
         # only keep keyframes
         if self.per_video:
@@ -115,19 +115,18 @@ class SV2LSTG(BaseDetector):
 
         return results
 
-    def reshape_as_clip(self, feats: BaseDataElement, graphs: BaseDataElement, results: SampleList, B: int, N: int) -> Tuple[BaseDataElement]:
-        # reshape quantities in feats by clip
-        feats.bb_feats = [x.view(B, N, *x.shape[1:]) for x in feats.bb_feats]
-        feats.neck_feats = [x.view(B, N, *x.shape[1:]) for x in feats.neck_feats]
-        feats.instance_feats = feats.instance_feats.view(B, N, *feats.instance_feats.shape[1:])
-        feats.semantic_feats = feats.semantic_feats.view(B, N, *feats.semantic_feats.shape[1:])
+    def reshape_as_clip(self, feats: BaseDataElement, graphs: BaseDataElement, results: SampleList, B: int, T: int) -> Tuple[BaseDataElement]: # reshape quantities in feats by clip
+        feats.bb_feats = [x.view(B, T, *x.shape[1:]) for x in feats.bb_feats]
+        feats.neck_feats = [x.view(B, T, *x.shape[1:]) for x in feats.neck_feats]
+        feats.instance_feats = feats.instance_feats.view(B, T, *feats.instance_feats.shape[1:])
+        feats.semantic_feats = feats.semantic_feats.view(B, T, *feats.semantic_feats.shape[1:])
 
         # reshape graph nodes by clip
-        graphs.nodes.nodes_per_img = Tensor(graphs.nodes.nodes_per_img).split(N)
-        graphs.nodes.feats = graphs.nodes.feats.view(B, N, *graphs.nodes.feats.shape[1:])
+        graphs.nodes.nodes_per_img = Tensor(graphs.nodes.nodes_per_img).split(T)
+        graphs.nodes.feats = graphs.nodes.feats.view(B, T, *graphs.nodes.feats.shape[1:])
 
         # set graph edge_flats first dim to be frame_id within clip, not frame_id within batch
-        graphs.edges.edge_flats[:, 0] = graphs.edges.edge_flats[:, 0] % N
+        graphs.edges.edge_flats[:, 0] = graphs.edges.edge_flats[:, 0] % T
 
         # add E_T dummy classes to class logits
         try:
@@ -140,19 +139,23 @@ class SV2LSTG(BaseDetector):
         graphs.edges.class_logits = torch.cat([graphs.edges.class_logits, dummy_logits], dim=1)
 
         # reshape graph edges by clip
-        graphs.edges.edges_per_img = list(graphs.edges.edges_per_img.split(N))
+        graphs.edges.edges_per_img = list(graphs.edges.edges_per_img.split(T))
         graphs.edges.edges_per_clip = [sum(x) for x in graphs.edges.edges_per_img]
         graphs.edges.edge_flats = list(graphs.edges.edge_flats.split(graphs.edges.edges_per_clip))
         graphs.edges.class_logits = list(graphs.edges.class_logits.split(graphs.edges.edges_per_clip))
         graphs.edges.feats = list(graphs.edges.feats.split(graphs.edges.edges_per_clip))
-        graphs.edges.presence_logits = graphs.edges.presence_logits.view(B, N,
-                *graphs.edges.presence_logits.shape[1:])
-        graphs.edges.boxes = list(torch.cat(graphs.edges.boxes).split(graphs.edges.edges_per_clip))
-        graphs.edges.boxesA = list(torch.cat(graphs.edges.boxesA).split(graphs.edges.edges_per_clip))
-        graphs.edges.boxesB = list(torch.cat(graphs.edges.boxesB).split(graphs.edges.edges_per_clip))
+        graphs.edges.boxes = list(graphs.edges.boxes.split(graphs.edges.edges_per_clip))
+        graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
+        graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
+
+        if 'presence_logits' in graphs.edges.keys():
+            del graphs.edges.presence_logits
 
         # reshape results
-        clip_results = [results[N*i:N*(i+1)] for i in range(B)]
+        if results is None:
+            clip_results = None
+        else:
+            clip_results = [results[T*i:T*(i+1)] for i in range(B)]
 
         return feats, graphs, clip_results
 
@@ -178,8 +181,14 @@ class SV2LSTG(BaseDetector):
     def _featurize_st_graph(self, spat_graph: Tensor, viz_graph: Tensor, node_boxes: Tensor,
             graphs: BaseDataElement, batch_input_shape: Tensor):
         # extract shape quantities, device
-        B, T, N, _ = graphs.nodes.feats.shape
+        B, T, N, _ = node_boxes.shape
         M = T * N
+
+        if M == 0: # no fg objects in batch
+            # leave graphs as is (node feats contain some dummy features which will be used for classification)
+            graphs.edges.edges_per_clip = [sum(x) for x in graphs.edges.edges_per_img]
+            return graphs
+
         device = spat_graph.device if spat_graph is not None else viz_graph.device
 
         # define graphs to use
@@ -363,7 +372,7 @@ class SV2LSTG(BaseDetector):
         back_graph = torch.zeros((B, M, M)).to(boxes.device)
 
         if M == 0:
-            return front_graph
+            return None
 
         areas = (boxes[:,:,:,3] - boxes[:,:,:,1] + 1) * \
                 (boxes[:,:,:,2] - boxes[:,:,:,0] + 1)
@@ -425,13 +434,62 @@ class SV2LSTG(BaseDetector):
         return iou
 
     def extract_feat(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tuple[BaseDataElement]:
-        # run lg detector on all images
-        feats, graphs, results = self.lg_detector.extract_lg(batch_inputs.flatten(end_dim=1),
-                [x for y in batch_data_samples for x in y])
+        if 'lg' in batch_data_samples[0].video_data_samples[0].metainfo:
+            lg_list = [x.pop('lg') for b in batch_data_samples for x in b.video_data_samples]
+
+            # box perturb
+            if self.training and self.lg_detector.perturb_factor > 0:
+                # TODO(adit98) perturb by clip
+                perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes for l in lg_list],
+                        batch_data_samples[0][0].img_shape)
+                for l, p in zip(lg_list, perturbed_boxes):
+                    l.nodes.bboxes = p
+
+            graphs = BaseDataElement()
+            graphs.nodes = BaseDataElement()
+            graphs.edges = BaseDataElement()
+
+            # collate node info
+            graphs.nodes.feats = pad_sequence([l.nodes.feats for l in lg_list], batch_first=True)
+            graphs.nodes.nodes_per_img = [l.nodes.nodes_per_img for l in lg_list]
+
+            # collate edge info
+            graphs.edges.feats = torch.cat([l.edges.feats for l in lg_list])
+            graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
+            graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
+            graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
+            graphs.edges.class_logits = torch.cat([l.edges.class_logits for l in lg_list])
+            graphs.edges.edge_flats = torch.cat([torch.cat([torch.ones(
+                l.edges.edge_flats.shape[0], 1).to(l.edges.edge_flats) * ind,
+                l.edges.edge_flats], dim=1) for ind, l in enumerate(lg_list)])
+            graphs.edges.edges_per_img = Tensor([l.edges.feats.shape[0] for l in lg_list]).int()
+
+            # set feats
+            feats = BaseDataElement()
+            feats.bb_feats = (torch.stack([l.img_feats.view(-1, 1, 1) for l in lg_list]),)
+            feats.neck_feats = (torch.stack([l.img_feats.view(-1, 1, 1) for l in lg_list]),)
+            feats.instance_feats = graphs.nodes.feats[..., :self.viz_feat_size]
+            feats.semantic_feats = graphs.nodes.feats[..., self.viz_feat_size:]
+
+            # add node info to results
+            metainfo = [x.metainfo for b in batch_data_samples for x in b.video_data_samples]
+            pred_instances = [InstanceData(bboxes=l.nodes.bboxes, scores=l.nodes.scores,
+                labels=l.nodes.labels) for l in lg_list]
+            results = [DetDataSample(pred_instances=p, metainfo=m) for p, m in zip(pred_instances, metainfo)]
+
+        else:
+            feats, graphs, results = self.lg_detector.extract_lg(batch_inputs.flatten(end_dim=1),
+                    [x for y in batch_data_samples for x in y])
+
+            # concatenate boxes
+            graphs.edges.boxes = torch.cat(graphs.edges.boxes)
+            graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
+            graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
 
         # reorganize feats and graphs by clip
-        B, N = batch_inputs.shape[:2]
-        feats, graphs, clip_results = self.reshape_as_clip(feats, graphs, results, B, N)
+        B = len(batch_data_samples)
+        T = len(batch_data_samples[0].video_data_samples)
+        feats, graphs, clip_results = self.reshape_as_clip(feats, graphs, results, B, T)
 
         return feats, graphs, clip_results, results
 

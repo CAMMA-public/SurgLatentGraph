@@ -18,8 +18,8 @@ test_data_prefix = 'test'
 
 # aug
 rand_aug_surg = [
-        #[dict(type='ShearX', level=8)],
-        #[dict(type='ShearY', level=8)],
+        [dict(type='ShearX', level=8)],
+        [dict(type='ShearY', level=8)],
         [dict(type='Rotate', level=8)],
         [dict(type='TranslateX', level=8)],
         [dict(type='TranslateY', level=8)],
@@ -63,7 +63,7 @@ train_pipeline = [
     ),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
     ),
 ]
 
@@ -83,7 +83,7 @@ eval_pipeline = [
         ]),
     dict(
         type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe'),
+        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
     ),
 ]
 

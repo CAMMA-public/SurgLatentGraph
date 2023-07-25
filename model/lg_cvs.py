@@ -181,6 +181,42 @@ class LGDetector(BaseDetector):
                     r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
                     r.pred_edges.relations = graph.edges.class_logits[batch_inds]
 
+                    # LATENT GRAPH
+
+                    # extract graph for frame i, add to result
+                    g_i = BaseDataElement()
+                    g_i.nodes = BaseDataElement()
+                    g_i.edges = BaseDataElement()
+                    g_i.nodes.feats = graph.nodes.feats[ind]
+                    g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
+                    g_i.nodes.bboxes = r.pred_instances.bboxes
+                    g_i.nodes.scores = r.pred_instances.scores
+                    g_i.nodes.labels = r.pred_instances.labels
+
+                    # split edge quantities and add
+                    epi = graph.edges.edges_per_img.tolist()
+                    for k in graph.edges.keys():
+                        if k in ['batch_index', 'presence_logits', 'edges_per_img']:
+                            continue
+
+                        elif k == 'edge_flats':
+                            val = graph.edges.get(k).split(epi)[ind][:, 1:]
+
+                        elif not isinstance(graph.edges.get(k), Tensor):
+                            # no need to split, just index
+                            val = graph.edges.get(k)[ind]
+
+                        else:
+                            val = graph.edges.get(k).split(epi)[ind]
+
+                        g_i.edges.set_data({k: val})
+
+                    # pool img feats and add to graph
+                    g_i.img_feats = F.adaptive_avg_pool2d(feats.bb_feats[-1][ind], 1).squeeze()
+
+                    # add graph to result
+                    r.lg = g_i
+
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
             reconstructed_imgs, _, _ = self.reconstruction_head.predict(detached_results,
