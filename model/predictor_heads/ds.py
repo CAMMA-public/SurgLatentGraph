@@ -13,6 +13,7 @@ from torch_scatter import scatter_mean
 import torch.nn.functional as F
 from typing import List, Union
 import torch.nn.functional as F
+import random
 
 @MODELS.register_module()
 class DSHead(BaseModule, metaclass=ABCMeta):
@@ -68,18 +69,19 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
 
             # predictors
-            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers
+            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node * 2, num_classes))
+                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node,
+                    num_classes))
 
         else:
             # loss
             self.loss_fn = MODELS.build(loss)
 
             # predictor
-            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers + [num_classes]
+            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
             self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
         self.loss_weight = loss_weight
@@ -187,8 +189,7 @@ class STDSHead(DSHead):
             self.img_feat_temporal_model = self._create_temporal_model()
             self.img_feat_projector = torch.nn.Linear(2048, self.img_feat_projector.out_features)
 
-    def predict(self, graph: BaseDataElement, feats: BaseDataElement,
-            results: SampleList = None) -> Tensor:
+    def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
         # get dims
         B, T, N, _ = graph.nodes.feats.shape
 
@@ -212,25 +213,24 @@ class STDSHead(DSHead):
 
         # add positional embedding to node feats
         node_feats = torch.cat(node_feats, -1)
-
         if self.use_node_positional_embedding:
             # use node_to_fic_id to arrange pos_embeds
             pos_embed = self.node_pe(torch.zeros(1, T, node_feats.shape[-1]).to(node_feats.device))
-            node_to_fic_id = torch.arange(T).view(1, -1, 1).repeat(B, 1, N)
-            pos_embed_scattered = pos_embed.squeeze()[node_to_fic_id]
 
             # add to node_feats
-            node_feats = F.dropout(node_feats + pos_embed_scattered, 0.1,
+            node_feats = F.dropout(node_feats + pos_embed.unsqueeze(2), 0.1,
                     training=self.training)
 
         graph.nodes.feats = node_feats
         graph.edges.feats = torch.cat(edge_feats, -1)
         dgl_g = self.gnn(graph)
 
+        # TODO edit graph
+
         # get node features and pool to get graph feats
-        orig_node_feats = torch.cat([torch.cat([f[:n] for f, n in zip(cf, npi.int())]) \
-                for cf, npi in zip(graph.nodes.feats, graph.nodes.nodes_per_img)])
-        node_feats = dgl_g.ndata['feats'] + orig_node_feats # skip connection
+        node_feats = dgl_g.ndata['feats'] + dgl_g.ndata['orig_feats'] # skip connection
+        #node_feats = dgl_g.ndata['orig_feats']
+        #node_feats = dgl_g.ndata['feats']
 
         # pool node feats by img
         node_to_img = torch.cat([ind * T + torch.arange(T).repeat_interleave(n.int()).long().to(
@@ -251,10 +251,11 @@ class STDSHead(DSHead):
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
                 img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training).mean(1, keepdims=True)
 
-            # downproject img feats
-            projected_img_feats = self.img_feat_projector(img_feats)
-            final_feats = torch.cat([graph_feats.view(B, T, -1), projected_img_feats], -1)
-            #final_feats = graph_feats.view(B, T, -1) + projected_img_feats
+            img_feats = self.img_feat_projector(img_feats)
+            final_feats = img_feats + graph_feats.view(B, T, -1)
+
+        else:
+            final_feats = graph_feats.view(B, T, -1)
 
         # 2 modes: 1 prediction per clip for clip classification, or output per-keyframe for
         # whole-video inputs
@@ -348,6 +349,114 @@ class STDSHead(DSHead):
             ds_feats = self.ds_predictor_head(final_feats)
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)
         else:
-            ds_preds = self.ds_predictor(final_feats)
+            if final_feats.ndim > 2:
+                ds_preds = self.ds_predictor(final_feats.view(-1, *final_feats.shape[2:]))
+                ds_preds = ds_preds.view(*final_feats.shape[:2], -1)
+            else:
+                ds_preds = self.ds_predictor(final_feats)
 
         return ds_preds
+
+    def _edit_graph(self, batched_graph, nodes_per_img):
+        if (self.training and random.random() > 0.5):
+            return batched_graph, nodes_per_img
+
+        # split graph into clip graphs
+        node_labels = batched_graph.ndata['labels'][:, 1:].argmax(-1)
+        node_features = batched_graph.ndata['node_feats']
+        nodes_per_clip = batched_graph.batch_num_nodes()
+        edges_per_clip = batched_graph.batch_num_edges()
+        edge_flats = torch.stack(batched_graph.edges(), -1)
+        clip_graphs = dgl.unbatch(batched_graph)
+
+        # compute node degrees and split by frame
+        node_degrees_frame = [(g.in_degrees() + g.out_degrees()).split(npi) for g, npi in zip(clip_graphs, nodes_per_img)]
+
+        # split labels, node_degrees by frame
+        node_labels_frame = [g.split(npi) for g, npi in zip(node_labels.long().split(nodes_per_clip.tolist()), nodes_per_img)]
+
+        # compute the instance of each class that has max degree in each frame
+        max_degree_inds = [[scatter_max(d, l)[1] for d, l in zip(ndf, nlf)] for ndf, nlf in zip(node_degrees_frame, node_labels_frame)]
+
+        # compute the node that each node was reduced to (either the same node or maps to another node of the same class)
+        node_reassignment_map = [[m[c] for m, c in zip(mc, nc)] for mc, nc in zip(max_degree_inds, node_labels_frame)]
+
+        # if we want to keep all instances of an object class, set that
+        keep_instance_inds = (node_labels.unsqueeze(-1) == (torch.tensor(self.keep_all_instances).to(node_labels) - 1)).any(-1)
+        keep_instance_inds_frame = [x.split(npi) for x, npi in zip(keep_instance_inds.split(
+            nodes_per_clip.tolist()), nodes_per_img)]
+
+        # get the indices where the actual degree matches the max degree
+        inds_to_keep_frame = [[torch.cat([m[m < len(l)], torch.where(k)[0]]).unique() for d, l, k, m in zip(
+            ndf, nlf, kiif, md)] for ndf, nlf, kiif, md in zip(node_degrees_frame,
+                    node_labels_frame, keep_instance_inds_frame, max_degree_inds)]
+
+        # inds_to_keep_frame -> inds_to_keep
+        frame_offsets = [torch.tensor([0] + npi[:-1]).cumsum(0) for npi in nodes_per_img]
+        clip_offsets = torch.tensor([0] + [sum(x) for x in nodes_per_img[:-1]]).cumsum(0)
+        inds_to_keep = [[i + o + co for i, o in zip(clip_inds, fo)] for clip_inds, fo, co in zip(
+            inds_to_keep_frame, frame_offsets, clip_offsets)]
+
+        # flatten node reassignment map and add offsets
+        node_reassignment_map = torch.cat([torch.cat([n + o + co for n, o in zip(nrm, fo)]) for nrm, fo, co in zip(
+            node_reassignment_map, frame_offsets, clip_offsets)])
+
+        if self.combine_nodes and (not self.training or random.random() > 0.5): # always edit in eval, random in train
+            # use node reassignment map to combine node features, set in batched graph
+            updated_node_features = scatter_mean(node_features, node_reassignment_map,
+                    dim=0, dim_size=node_features.shape[0])
+            batched_graph.ndata['node_features'] = updated_node_features
+
+        reassign_edges = False
+        if self.reassign_edges and (not self.training or random.random() > 0.5): # always edit in eval, random in train
+            reassign_edges = True
+            # use node reassignment map to edit edge flats
+            updated_edge_flats = node_reassignment_map[edge_flats[edge_flats[:, 0].sort().indices]]
+
+            # get inds where edge was updated
+            updated_inds = torch.where((edge_flats[edge_flats[:, 0].sort().indices] != updated_edge_flats).any(-1))[0]
+
+            # of these inds, select unique inds, filter updated_edge_flats
+            _, idx, counts = updated_edge_flats[updated_inds].unique(dim=0,
+                    return_counts=True, return_inverse=True)
+            unique_inds = updated_inds[torch.where(counts[idx] <= 1)] # stores the id of the original edge from which we want to copy the edge data
+            updated_edge_flats = updated_edge_flats[unique_inds]
+
+            # get remaining edge data, filter with unique_inds
+            updated_edge_data = {}
+            for k in batched_graph.edata.keys():
+                if not 'edge' in k:
+                    continue
+
+                updated_edge_data.update({k: batched_graph.edata[k][unique_inds]})
+
+            # add edges to graph
+            batched_graph = dgl.add_edges(batched_graph, updated_edge_flats[:, 0],
+                    updated_edge_flats[:, 1], data=updated_edge_data)
+
+            # remove self loops that may have been added
+            batched_graph = batched_graph.remove_self_loop()
+            if self.add_self_loops:
+                batched_graph = batched_graph.add_self_loop()
+
+        # now only keep inds_to_keep in batched_graph, recompute nodes_per_img
+        edited_nodes_per_img = [[len(x) for x in i] for i in inds_to_keep]
+        inds_to_keep_tensor = torch.cat([torch.cat(i) for i in inds_to_keep])
+        edited_batched_graph = batched_graph.subgraph(inds_to_keep_tensor)
+
+        # finally update batch nodes per img and batch edges per img
+        batch_num_nodes = torch.tensor([sum(x) for x in edited_nodes_per_img])
+        if not reassign_edges:
+            # compute batch num edges
+            edges_to_keep = (edge_flats.unsqueeze(-1) == inds_to_keep_tensor).any(-1).all(-1)
+            batch_num_edges = torch.tensor([x.sum() for x in edges_to_keep.split(edges_per_clip.tolist())])
+        else:
+            # compute batch_num_edges
+            all_edge_flats = torch.stack(batched_graph.edges(), -1)
+            edge_to_clip = (all_edge_flats.unsqueeze(-1) >= batch_num_nodes.to(all_edge_flats.device).cumsum(0)).sum(-1).max(-1).values
+            _, batch_num_edges = edge_to_clip.unique(sorted=True, return_counts=True)
+
+        edited_batched_graph.set_batch_num_nodes(batch_num_nodes)
+        edited_batched_graph.set_batch_num_edges(batch_num_edges)
+
+        return edited_batched_graph, edited_nodes_per_img

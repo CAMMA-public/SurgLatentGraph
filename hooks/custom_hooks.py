@@ -1,10 +1,11 @@
 from mmdet.registry import HOOKS
 from mmengine.hooks import Hook
+from prettytable import PrettyTable
 
 @HOOKS.register_module()
 class FreezeDetectorHook(Hook):
-    def __init__(self, freeze_graph_head=False):
-        self.freeze_graph_head = freeze_graph_head
+    def __init__(self, train_ds_only=False):
+        self.train_ds_only = train_ds_only
 
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
@@ -15,18 +16,36 @@ class FreezeDetectorHook(Hook):
 
         model.detector.eval()
 
-        # also freeze graph head (but not edge_sem_feat_projector) if it exists
-        if self.freeze_graph_head:
-            try:
-                for name, p in model.graph_head.named_parameters():
-                    if not 'edge_semantic_feat_projector' in name:
-                        p.requires_grad = False
-                for name, m in model.graph_head.named_modules():
-                    if not 'edge_semantic_feat_projector' in name:
-                        m.eval()
+        # if only training ds, freeze everything but ds_head
+        if self.train_ds_only:
+            for name, p in model.named_parameters():
+                if 'ds_head' in name:
+                    continue
 
-            except AttributeError as e:
-                print(e)
+                p.requires_grad = False
+
+            for name, m in model.graph_head.named_modules():
+                if 'ds_head' in name:
+                    continue
+
+                m.eval()
+
+@HOOKS.register_module()
+class CountTrainableParameters(Hook):
+    def before_train(self, runner) -> None:
+        self.count_parameters(runner.model)
+
+    def count_parameters(self, model):
+        table = PrettyTable(["Modules", "Parameters"])
+        total_params = 0
+        for name, parameter in model.named_parameters():
+            if not parameter.requires_grad: continue
+            params = parameter.numel()
+            table.add_row([name, params])
+            total_params += params
+
+        print(table)
+        print(f"Total Trainable Params: {total_params}")
 
 @HOOKS.register_module()
 class FreezeLGDetector(Hook):

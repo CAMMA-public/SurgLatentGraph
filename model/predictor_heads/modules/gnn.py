@@ -10,6 +10,7 @@ from torch import Tensor
 import torch.nn.functional as F
 import dgl
 from .gnn_models import GraphTripleConvNet
+import random
 
 @MODELS.register_module()
 class GNNHead(BaseModule, metaclass=ABCMeta):
@@ -48,6 +49,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
         node_feats, edge_feats = self.gnn_head(dgl_g.ndata['feats'],
                 dgl_g.edata['feats'], torch.stack(dgl_g.edges(), 1), dgl_g)
 
+        dgl_g.ndata['orig_feats'] = dgl_g.ndata['feats']
         dgl_g.ndata['feats'] = node_feats
         dgl_g.edata['orig_feats'] = dgl_g.edata['feats']
         dgl_g.edata['feats'] = edge_feats
@@ -79,11 +81,13 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
             g = dgl.graph(batch_edge_flats[:, -2:].unbind(1), num_nodes=sum(nodes_per_clip))
 
             # add attributes to graph
+            for k, v in graph.nodes.items():
+                skip_keys = ['nodes_per_img']
+                if k in skip_keys: continue
 
-            # for each img in each clip, remove padded nodes and concatenate all features for batch of clips
-            g.ndata['feats'] = torch.cat([torch.cat([f[:n] for f, n in zip(cf,
-                npi_i.int())]) for cf, npi_i in zip(graph.nodes.feats,
-                    graph.nodes.nodes_per_img)])
+                # for each img in each clip, remove padded nodes and concatenate all values for batch of clips
+                g.ndata[k] = torch.cat([torch.cat([v_i[:n] for v_i, n in zip(cv,
+                    npi_i.int())]) for cv, npi_i in zip(v, graph.nodes.nodes_per_img)])
 
             for k, v in graph.edges.items():
                 skip_keys = ['edges_per_img', 'edges_per_clip', 'batch_index', 'edge_flats', 'presence_logits']
@@ -92,6 +96,10 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                     v = torch.cat(v)
 
                 g.edata[k] = v.view(-1, v.shape[-1])
+
+            # add in batch info
+            g.set_batch_num_nodes(Tensor(nodes_per_clip))
+            g.set_batch_num_edges(graph.edges.edges_per_clip)
 
         else:
             edge_offsets = torch.cumsum(Tensor([0] + graph.nodes.nodes_per_img[:-1]), 0).to(graph.edges.edge_flats.device)

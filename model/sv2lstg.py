@@ -3,6 +3,7 @@ from torch import Tensor
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 import numpy as np
+import random
 from typing import List, Tuple, Union
 import torchvision.transforms.functional as TF
 from torchvision.transforms import InterpolationMode
@@ -22,10 +23,10 @@ class SV2LSTG(BaseDetector):
             num_frame_edge_classes=4, use_spat_graph: bool = True,
             use_viz_graph: bool = True, learn_sim_graph: bool = True,
             semantic_feat_projector_layers: int = 3, pred_per_frame: bool = False,
-            use_positional_embedding: bool = True, num_sim_topk: int = 2,
-            temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
-            use_max_iou_only: bool = True, use_temporal_edges_only: bool = False,
-            per_video: bool = False, **kwargs):
+            num_sim_topk: int = 2, temporal_edge_ranges: str = 'exp',
+            edge_max_temporal_range: int = -1, use_max_iou_only: bool = True,
+            use_temporal_edges_only: bool = False, per_video: bool = False,
+            **kwargs):
         super().__init__(**kwargs)
 
         # init lg detector
@@ -67,7 +68,7 @@ class SV2LSTG(BaseDetector):
         self.edge_max_temporal_range = edge_max_temporal_range
         self.use_max_iou_only = use_max_iou_only
         self.use_temporal_edges_only = use_temporal_edges_only
-        self.use_positional_embedding = use_positional_embedding
+        self.perturb = self.lg_detector.perturb_factor > 0
 
         # set prediction params
         self.per_video = per_video
@@ -97,7 +98,7 @@ class SV2LSTG(BaseDetector):
         st_graphs = self.build_st_graph(graphs, clip_results)
 
         # run ds head
-        ds_preds = self.ds_head.predict(st_graphs, feats, results)
+        ds_preds = self.ds_head.predict(st_graphs, feats)
 
         # update results
         T = len(batch_data_samples[0].video_data_samples)
@@ -105,7 +106,7 @@ class SV2LSTG(BaseDetector):
         # only keep keyframes
         if self.per_video:
             for r in results:
-                for r, p in zip(results, ds_preds.repeat_interleave(T, dim=0)):
+                for r, p in zip(results, ds_preds):
                     r.pred_ds = p
 
         else:
@@ -124,6 +125,8 @@ class SV2LSTG(BaseDetector):
         # reshape graph nodes by clip
         graphs.nodes.nodes_per_img = Tensor(graphs.nodes.nodes_per_img).split(T)
         graphs.nodes.feats = graphs.nodes.feats.view(B, T, *graphs.nodes.feats.shape[1:])
+        graphs.nodes.labels = graphs.nodes.labels.view(B, T, *graphs.nodes.labels.shape[1:])
+        graphs.nodes.scores = graphs.nodes.scores.view(B, T, *graphs.nodes.scores.shape[1:])
 
         # set graph edge_flats first dim to be frame_id within clip, not frame_id within batch
         graphs.edges.edge_flats[:, 0] = graphs.edges.edge_flats[:, 0] % T
@@ -438,7 +441,7 @@ class SV2LSTG(BaseDetector):
             lg_list = [x.pop('lg') for b in batch_data_samples for x in b.video_data_samples]
 
             # box perturb
-            if self.training and self.lg_detector.perturb_factor > 0:
+            if self.training and self.perturb:
                 # TODO(adit98) perturb by clip
                 perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes for l in lg_list],
                         batch_data_samples[0][0].img_shape)
@@ -452,6 +455,10 @@ class SV2LSTG(BaseDetector):
             # collate node info
             graphs.nodes.feats = pad_sequence([l.nodes.feats for l in lg_list], batch_first=True)
             graphs.nodes.nodes_per_img = [l.nodes.nodes_per_img for l in lg_list]
+            graphs.nodes.labels = pad_sequence([l.nodes.labels for l in lg_list],
+                    batch_first=True)
+            graphs.nodes.scores = pad_sequence([l.nodes.scores for l in lg_list],
+                    batch_first=True)
 
             # collate edge info
             graphs.edges.feats = torch.cat([l.edges.feats for l in lg_list])
@@ -478,8 +485,14 @@ class SV2LSTG(BaseDetector):
             results = [DetDataSample(pred_instances=p, metainfo=m) for p, m in zip(pred_instances, metainfo)]
 
         else:
-            feats, graphs, results = self.lg_detector.extract_lg(batch_inputs.flatten(end_dim=1),
-                    [x for y in batch_data_samples for x in y])
+            feats, graphs, detached_results, results, _ = self.lg_detector.extract_lg(
+                    batch_inputs.flatten(end_dim=1),
+                    [x for y in batch_data_samples for x in y],
+                    force_perturb=self.training and self.perturb)
+            graphs.nodes.labels = pad_sequence([r.pred_instances.labels for r in results],
+                    batch_first=True)
+            graphs.nodes.scores = pad_sequence([r.pred_instances.scores for r in results],
+                    batch_first=True)
 
             # concatenate boxes
             graphs.edges.boxes = torch.cat(graphs.edges.boxes)
