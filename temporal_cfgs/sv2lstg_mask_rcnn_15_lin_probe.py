@@ -16,17 +16,12 @@ lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
 # load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
 ds_head['type'] = 'STDSHead'
-ds_head['gnn_cfg'] = dict(
-    type='GNNHead',
-    num_layers=5,
-    arch='tripleconv',
-    add_self_loops=False,
-    use_reverse_edges=False,
-    norm='graph',
-    skip_connect=True,
-)
+ds_head['gnn_cfg']['num_layers'] = 5
 ds_head['num_temp_frames'] = _base_.num_temp_frames
-ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
+#ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
+ds_head['use_node_positional_embedding'] = True
+ds_head['use_temporal_model'] = True
+ds_head['temporal_arch'] = 'gru'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
