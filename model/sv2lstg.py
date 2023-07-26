@@ -68,7 +68,8 @@ class SV2LSTG(BaseDetector):
         self.edge_max_temporal_range = edge_max_temporal_range
         self.use_max_iou_only = use_max_iou_only
         self.use_temporal_edges_only = use_temporal_edges_only
-        self.perturb = self.lg_detector.perturb_factor > 0
+        #self.perturb = self.lg_detector.perturb_factor > 0
+        self.perturb = False
 
         # set prediction params
         self.per_video = per_video
