@@ -89,7 +89,7 @@ eval_pipeline = [
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=16,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
@@ -106,7 +106,7 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
-    batch_size=16,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
@@ -124,7 +124,7 @@ val_dataloader=dict(
 )
 
 test_dataloader=dict(
-    batch_size=16,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
