@@ -64,24 +64,28 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.img_feat_projector = torch.nn.Linear(img_feat_size, self.graph_feat_projected_dim)
 
         # predictor, loss params
+        if self.use_img_feats:
+            predictor_dim = gnn_cfg.input_dim_node * 2
+        else:
+            predictor_dim = gnn_cfg.input_dim_node
+
         if isinstance(loss, list):
             # losses
             self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
 
             # predictors
-            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers
+            dim_list = [predictor_dim] * num_predictor_layers
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node * 2,
-                    num_classes))
+                self.ds_predictor.append(torch.nn.Linear(predictor_dim, num_classes))
 
         else:
             # loss
             self.loss_fn = MODELS.build(loss)
 
             # predictor
-            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers + [num_classes]
+            dim_list = [predictor_dim] * num_predictor_layers + [num_classes]
             self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
         self.loss_weight = loss_weight
@@ -125,7 +129,8 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
             img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
                 1).squeeze(-1).squeeze(-1))
-            final_feats = img_feats + graph_feats
+            final_feats = torch.cat([img_feats, graph_feats], -1)
+            #final_feats = img_feats + graph_feats
         else:
             final_feats = graph_feats
 
