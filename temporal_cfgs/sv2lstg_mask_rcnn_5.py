@@ -20,7 +20,7 @@ ds_head['gnn_cfg']['num_layers'] = 5
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 #ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
 ds_head['use_node_positional_embedding'] = True
-ds_head['use_temporal_model'] = True
+ds_head['use_temporal_model'] = False
 ds_head['temporal_arch'] = 'gru'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
@@ -106,7 +106,7 @@ visualizer = dict(
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.000001),
     clip_grad=dict(max_norm=10, norm_type=2),
     #paramwise_cfg=dict(
     #    custom_keys={
