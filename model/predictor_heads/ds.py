@@ -69,11 +69,11 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
 
             # predictors
-            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers
+            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node,
+                self.ds_predictor.append(torch.nn.Linear(gnn_cfg.input_dim_node * 2,
                     num_classes))
 
         else:
@@ -81,7 +81,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             self.loss_fn = MODELS.build(loss)
 
             # predictor
-            dim_list = [gnn_cfg.input_dim_node] * num_predictor_layers + [num_classes]
+            dim_list = [gnn_cfg.input_dim_node * 2] * num_predictor_layers + [num_classes]
             self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
         self.loss_weight = loss_weight
@@ -164,13 +164,18 @@ class STDSHead(DSHead):
             use_temporal_model: bool = False, temporal_arch: str = 'transformer',
             pred_per_frame: bool = False, per_video: bool = False,
             use_node_positional_embedding: bool = True,
-            use_positional_embedding: bool = False, **kwargs) -> None:
+            use_positional_embedding: bool = False, edit_graph: bool = False,
+            reassign_edges: bool = False, combine_nodes: bool = False,
+            **kwargs) -> None:
         super().__init__(**kwargs)
         self.num_temp_frames = num_temp_frames
         self.use_temporal_model = use_temporal_model
         self.graph_pooling_window = graph_pooling_window
         self.pred_per_frame = pred_per_frame
         self.per_video = per_video
+        self.edit_graph = edit_graph
+        self.reassign_edges = reassign_edges
+        self.combine_nodes = combine_nodes
 
         # positional embedding
         self.use_node_positional_embedding = use_node_positional_embedding
@@ -226,11 +231,11 @@ class STDSHead(DSHead):
         dgl_g = self.gnn(graph)
 
         # TODO edit graph
+        if self.edit_graph:
+            dgl_g = self._edit_graph(dgl_g, graph.nodes.nodes_per_img)
 
         # get node features and pool to get graph feats
         node_feats = dgl_g.ndata['feats'] + dgl_g.ndata['orig_feats'] # skip connection
-        #node_feats = dgl_g.ndata['orig_feats']
-        #node_feats = dgl_g.ndata['feats']
 
         # pool node feats by img
         node_to_img = torch.cat([ind * T + torch.arange(T).repeat_interleave(n.int()).long().to(
@@ -252,7 +257,8 @@ class STDSHead(DSHead):
                 img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training).mean(1, keepdims=True)
 
             img_feats = self.img_feat_projector(img_feats)
-            final_feats = img_feats + graph_feats.view(B, T, -1)
+            #final_feats = img_feats + graph_feats.view(B, T, -1)
+            final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
 
         else:
             final_feats = graph_feats.view(B, T, -1)

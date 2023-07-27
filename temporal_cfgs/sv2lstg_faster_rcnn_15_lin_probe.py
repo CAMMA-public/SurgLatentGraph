@@ -19,8 +19,8 @@ ds_head['type'] = 'STDSHead'
 ds_head['gnn_cfg']['num_layers'] = 5
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 #ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
-ds_head['use_temporal_model'] = False
-ds_head['temporal_arch'] = 'gru'
+ds_head['use_temporal_model'] = True
+ds_head['temporal_arch'] = 'transformer'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
@@ -87,7 +87,6 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=False)]#, dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(
@@ -102,9 +101,4 @@ optim_wrapper = dict(
     _delete_=True,
     optimizer=dict(type='AdamW', lr=0.0001),
     clip_grad=dict(max_norm=10, norm_type=2),
-    #paramwise_cfg=dict(
-    #    custom_keys={
-    #        'lg_detector': dict(lr_mult=0.01),
-    #    }
-    #)
 )

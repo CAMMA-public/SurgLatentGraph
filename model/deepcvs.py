@@ -36,6 +36,7 @@ class DeepCVS(BaseDetector):
             reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None,
             reconstruction_img_stats: ConfigType = None,
+            use_gt_dets: bool = False,
             **kwargs):
         super().__init__(**kwargs)
         self.detector = MODELS.build(detector)
@@ -69,6 +70,7 @@ class DeepCVS(BaseDetector):
         self.reconstruction_img_stats = reconstruction_img_stats if reconstruction_img_stats is not None else None
 
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
+        self.use_gt_dets = use_gt_dets
 
     def _construct_layout(self, layout_size, classes, boxes, masks=None):
         box_layout = torch.zeros(len(boxes), self.num_nodes, *layout_size).to(boxes[0].device)
@@ -133,6 +135,9 @@ class DeepCVS(BaseDetector):
         if self.reconstruction_head is None:
             return [None] * len(results), None, None
 
+        if self.use_gt_dets:
+            raise NotImplementedError("Reconstruction Head not implemented for gt dets")
+
         feats = BaseDataElement()
         feats.bb_feats = ds_feats
         feats.instance_feats = ds_feats.unsqueeze(1).repeat(1, 16, 1)
@@ -193,21 +198,41 @@ class DeepCVS(BaseDetector):
         img_size = results[0].batch_input_shape
         scale_factor = (Tensor(img_size) / Tensor(detections_size)).flip(0).to(batch_inputs.device)
 
-        classes = [r.pred_instances.labels for r in results]
-        boxes = [scale_boxes(r.pred_instances.bboxes, scale_factor) for r in results]
-        if 'masks' in results[0].pred_instances:
-            masks = []
-            for r in results:
-                if r.pred_instances.masks.shape[0] == 0:
-                    masks.append(torch.zeros(0, *img_size).to(r.pred_instances.masks.device))
-                else:
-                    masks.append(TF.resize(r.pred_instances.masks, img_size,
-                        interpolation=InterpolationMode.NEAREST))
+        if self.use_gt_dets:
+            classes = [r.gt_instances.labels for r in results]
+            boxes = [scale_boxes(r.gt_instances.bboxes, scale_factor) for r in results]
+            if 'masks' in results[0].gt_instances:
+                masks = []
+                for r in results:
+                    if r.gt_instances.masks.masks.shape[0] == 0:
+                        masks.append(torch.zeros(0, *img_size).to(batch_inputs.device))
+                    else:
+                        masks.append(torch.from_numpy(r.gt_instances.masks.resize(
+                            img_size).masks).to(batch_inputs.device))
+                        #masks.append(TF.resize(torch.from_numpy(r.gt_instances.masks.masks).to(
+                        #    batch_inputs.device), img_size, interpolation=InterpolationMode.NEAREST))
 
-            _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
+                _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
+
+            else:
+                layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
         else:
-            layout, _, _  = self._construct_layout(img_size, classes, boxes)
+            classes = [r.pred_instances.labels for r in results]
+            boxes = [scale_boxes(r.pred_instances.bboxes, scale_factor) for r in results]
+            if 'masks' in results[0].pred_instances:
+                masks = []
+                for r in results:
+                    if r.pred_instances.masks.shape[0] == 0:
+                        masks.append(torch.zeros(0, *img_size).to(r.pred_instances.masks.device))
+                    else:
+                        masks.append(TF.resize(r.pred_instances.masks, img_size,
+                            interpolation=InterpolationMode.NEAREST))
+
+                _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
+
+            else:
+                layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
         # make sure we only store pure bg pixels with a 0 in channel 0
         layout[:, 0] = 1 - layout[:, 1:].max(1).values

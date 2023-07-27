@@ -40,7 +40,7 @@ class LGDetector(BaseDetector):
             use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
             graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
-            trainable_detector_cfg: OptConfigType = None,
+            use_gt_dets: bool = False, trainable_detector_cfg: OptConfigType = None,
             trainable_backbone_cfg: OptConfigType = None,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
@@ -48,7 +48,8 @@ class LGDetector(BaseDetector):
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
-        self.perturb_factor = perturb_factor
+        self.use_gt_dets = use_gt_dets
+        self.perturb_factor = perturb_factor if not use_gt_dets else 0
 
         # if trainable detector cfg is defined, that is used for trainable backbone
         if trainable_detector_cfg is not None:
@@ -246,9 +247,14 @@ class LGDetector(BaseDetector):
 
     def extract_feat(self, batch_inputs: Tensor, results: SampleList, force_perturb: bool = False) -> BaseDataElement:
         feats = BaseDataElement()
-        boxes = [r.pred_instances.bboxes for r in results]
-        classes = [r.pred_instances.labels for r in results]
-        scores = [r.pred_instances.scores for r in results]
+        if self.use_gt_dets:
+            boxes = [r.gt_instances.bboxes.to(batch_inputs.device) for r in results]
+            classes = [r.gt_instances.labels.to(batch_inputs.device) for r in results]
+            scores = [torch.ones_like(c) for c in classes]
+        else:
+            boxes = [r.pred_instances.bboxes for r in results]
+            classes = [r.pred_instances.labels for r in results]
+            scores = [r.pred_instances.scores for r in results]
 
         # apply box perturbation
         if (self.training or force_perturb) and self.perturb_factor > 0:
