@@ -79,7 +79,6 @@ class CopyDetectorBackbone(Hook):
     def before_train(self, runner) -> None:
         # copy weights for backbone, neck if it exists
         if not runner._resume and runner.model.training:
-            # NOTE hack
             if self.temporal:
                 det = runner.model.lg_detector.detector
                 lg_model = runner.model.lg_detector

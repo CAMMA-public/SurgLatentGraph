@@ -33,8 +33,8 @@ del lg_model.reconstruction_head
 # set init cfg for lg_model
 lg_model.init_cfg = dict(
     type='Pretrained',
-    checkpoint='weights/lg_ds_faster_rcnn.pth',
-    #checkpoint=_base_.load_from,
+    #checkpoint='weights/lg_ds_faster_rcnn.pth',
+    checkpoint=_base_.load_from,
 )
 del _base_.load_from
 
@@ -95,7 +95,7 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True)]#, dict(type="CopyDetectorBackbone", temporal=True)]
+custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True), dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(
@@ -110,9 +110,9 @@ optim_wrapper = dict(
     _delete_=True,
     optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
-    paramwise_cfg=dict(
-        custom_keys={
-            'lg_detector': dict(lr_mult=0.1),
-        }
-    )
+    #paramwise_cfg=dict(
+    #    custom_keys={
+    #        'lg_detector': dict(lr_mult=0.1),
+    #    }
+    #)
 )
