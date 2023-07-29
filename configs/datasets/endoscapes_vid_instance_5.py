@@ -18,11 +18,11 @@ test_data_prefix = 'test'
 
 # aug
 rand_aug_surg = [
-        [dict(type='ShearX', level=8)],
-        [dict(type='ShearY', level=8)],
-        [dict(type='Rotate', level=8)],
-        [dict(type='TranslateX', level=8)],
-        [dict(type='TranslateY', level=8)],
+        #[dict(type='ShearX', level=8)],
+        #[dict(type='ShearY', level=8)],
+        #[dict(type='Rotate', level=8)],
+        #[dict(type='TranslateX', level=8)],
+        #[dict(type='TranslateY', level=8)],
         [dict(type='AutoContrast', level=8)],
         [dict(type='Equalize', level=8)],
         [dict(type='Contrast', level=8)],
@@ -47,19 +47,18 @@ train_pipeline = [
             dict(type='Resize', scale=(399, 224), keep_ratio=True),
             dict(type='RandomFlip', prob=0.5),
             dict(type='RandomAffine', max_rotate_degree=15, max_translate_ratio=0.05,
-                scaling_ratio_range=(1, 1)),
-            #dict(type='RandomResize', scale=[(200, 112), (600, 336)], keep_ratio=True),
-            #dict(type='CenterCrop', crop_size=(399, 224), auto_pad=True),
-            #dict(
-            #    type='RandAugment',
-            #    aug_space=rand_aug_surg,
-            #),
-            dict(
-                type='Color',
-                min_mag = 0.6,
-                max_mag = 1.4,
-            ),
+                max_shear_degree=5, scaling_ratio_range=(1, 1)),
         ]
+    ),
+    dict(
+        type='TransformBroadcaster',
+        share_random_params=False,
+        transforms=[
+            dict(
+                type='RandAugment',
+                aug_space=rand_aug_surg,
+            ),
+        ],
     ),
     dict(
         type='PackTrackInputs',
