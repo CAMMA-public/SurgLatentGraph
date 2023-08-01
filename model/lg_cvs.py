@@ -153,8 +153,9 @@ class LGDetector(BaseDetector):
                 r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
                 r.pred_edges.relations = graph.edges.class_logits[batch_inds]
 
-                # LATENT GRAPH
-
+        # LATENT GRAPH
+        if graph is not None:
+            for ind, r in enumerate(results):
                 # extract graph for frame i, add to result
                 g_i = BaseDataElement()
                 g_i.nodes = BaseDataElement()
