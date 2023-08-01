@@ -106,32 +106,27 @@ test_dataloader = dict(
 )
 
 # metric (in case we need to change dataset)
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=_base_.data_root,
-        data_prefix=_base_.val_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
-        use_pred_boxes_recon=True,
-        metric=[],
-    )
-]
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=_base_.data_root,
+    data_prefix=_base_.val_data_prefix,
+    ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=_base_.data_root,
-        data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
-        metric=[],
-        #additional_metrics = ['reconstruction'],
-        use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_phase_preds/test',
-        save_graphs=save_graphs,
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=_base_.data_root,
+    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
+    metric=[],
+    #additional_metrics = ['reconstruction'],
+    use_pred_boxes_recon=True,
+    outfile_prefix='./results/c80_phase_preds/test',
+)
 
 # optimizer
 del _base_.param_scheduler

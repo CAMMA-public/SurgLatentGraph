@@ -22,6 +22,8 @@ lg_model = dict(
         compute_gt_eval=False,
     ),
     reconstruction_head=None,
+    trainable_backbone_cfg=None,
+    trainable_neck_cfg=None,
 )
 
 test_dataloader = dict(
@@ -31,9 +33,4 @@ test_dataloader = dict(
     )
 )
 
-test_evaluator = [
-    dict(
-        type='DumpDetResults',
-        out_file_path='dets.pkl',
-    ),
-]
+test_evaluator = dict(save_lg=True)

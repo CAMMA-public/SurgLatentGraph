@@ -31,9 +31,4 @@ test_dataloader = dict(
     )
 )
 
-test_evaluator = [
-    dict(
-        type='DumpDetResults',
-        out_file_path='dets.pkl',
-    ),
-]
+test_evaluator = dict(save_lg=True)

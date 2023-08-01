@@ -17,11 +17,15 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 from matplotlib import rc
+from typing import List
 
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
-    def __init__(self, data_root, data_prefix, use_pred_boxes_recon, additional_metrics=[],
-            clip_eval=False, pred_per_frame=False, **kwargs):
+    def __init__(self, data_root: str, data_prefix: str, use_pred_boxes_recon: bool,
+            additional_metrics: List = [], clip_eval: bool = False,
+            pred_per_frame: bool = False, save_lg: bool = False,
+            **kwargs):
+
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
         self.data_root = data_root
@@ -30,6 +34,7 @@ class CocoMetricRGD(CocoMetric):
         self.additional_metrics = additional_metrics
         self.clip_eval = clip_eval # whether results and gts are clips
         self.pred_per_frame = pred_per_frame # whether we want to keep predictions for each frame
+        self.save_lg = save_lg
 
         # fonts
         try:
@@ -47,60 +52,66 @@ class CocoMetricRGD(CocoMetric):
             pass
 
     def process(self, data_batch: Dict, data_samples: Sequence[dict]) -> None:
-        if len(self.metrics) > 0:
-            super().process(data_batch, data_samples)
-
+        if self.save_lg:
+            pass
         else:
-            for data_sample in data_samples:
-                result = dict()
-                result['img_id'] = data_sample['img_id']
-                result['bboxes'] = data_sample['pred_instances']['bboxes']
-                result['labels'] = data_sample['pred_instances']['labels']
+            if len(self.metrics) > 0:
+                super().process(data_batch, data_samples)
 
-                # parse gt
-                gt = dict()
-                if 'ori_shape' in data_sample:
-                    gt['width'] = data_sample['ori_shape'][1]
-                    gt['height'] = data_sample['ori_shape'][0]
-                else:
-                    gt['width'] = data_sample['img_shape'][1]
-                    gt['height'] = data_sample['img_shape'][0]
+            else:
+                for data_sample in data_samples:
+                    result = dict()
+                    result['img_id'] = data_sample['img_id']
+                    result['bboxes'] = data_sample['pred_instances']['bboxes']
+                    result['labels'] = data_sample['pred_instances']['labels']
 
-                gt['img_id'] = data_sample['img_id']
-                if self._coco_api is None:
-                    # TODO: Need to refactor to support LoadAnnotations
-                    assert 'instances' in data_sample, \
-                        'ground truth is required for evaluation when ' \
-                        '`ann_file` is not provided'
-                    gt['anns'] = data_sample['instances']
-                # add converted result to the results list
-                self.results.append((gt, result))
+                    # parse gt
+                    gt = dict()
+                    if 'ori_shape' in data_sample:
+                        gt['width'] = data_sample['ori_shape'][1]
+                        gt['height'] = data_sample['ori_shape'][0]
+                    else:
+                        gt['width'] = data_sample['img_shape'][1]
+                        gt['height'] = data_sample['img_shape'][0]
 
-        gts, preds = list(map(list, zip(*self.results[-1 * len(data_samples):])))
-        for p, g, data_sample in zip(preds, gts, data_samples):
-            if 'reconstruction' in data_sample:
-                p['reconstruction'] = data_sample['reconstruction']
+                    gt['img_id'] = data_sample['img_id']
+                    if self._coco_api is None:
+                        # TODO: Need to refactor to support LoadAnnotations
+                        assert 'instances' in data_sample, \
+                            'ground truth is required for evaluation when ' \
+                            '`ann_file` is not provided'
+                        gt['anns'] = data_sample['instances']
+                    # add converted result to the results list
+                    self.results.append((gt, result))
 
-            if 'gt_edges' in data_sample:
-                g['gt_edges'] = data_sample['gt_edges']
+            gts, preds = list(map(list, zip(*self.results[-1 * len(data_samples):])))
+            for p, g, data_sample in zip(preds, gts, data_samples):
+                if 'reconstruction' in data_sample:
+                    p['reconstruction'] = data_sample['reconstruction']
 
-                # add det gt also
-                g['gt_instances'] = data_sample['gt_instances']
+                if 'gt_edges' in data_sample:
+                    g['gt_edges'] = data_sample['gt_edges']
 
-            if 'pred_edges' in data_sample:
-                p['pred_edges'] = data_sample['pred_edges']
+                    # add det gt also
+                    g['gt_instances'] = data_sample['gt_instances']
 
-            if 'pred_ds' in data_sample:
-                p['ds'] = data_sample['pred_ds']
-                g['ds'] = data_sample['ds']
+                if 'pred_edges' in data_sample:
+                    p['pred_edges'] = data_sample['pred_edges']
 
-            if 'is_ds_keyframe' in data_sample:
-                p['is_ds_keyframe'] = data_sample['is_ds_keyframe']
-                g['is_ds_keyframe'] = data_sample['is_ds_keyframe']
+                if 'pred_ds' in data_sample:
+                    p['ds'] = data_sample['pred_ds']
+                    g['ds'] = data_sample['ds']
 
-        self.results[-1 * len(data_samples):] = zip(gts, preds)
+                if 'is_ds_keyframe' in data_sample:
+                    p['is_ds_keyframe'] = data_sample['is_ds_keyframe']
+                    g['is_ds_keyframe'] = data_sample['is_ds_keyframe']
+
+            self.results[-1 * len(data_samples):] = zip(gts, preds)
 
     def compute_metrics(self, results: list) -> Dict[str, float]:
+        if self.save_lg: # skip eval if we are saving
+            return {}
+
         if len(self.metrics) > 0:
             eval_results = super().compute_metrics(results)
         else:
@@ -244,6 +255,9 @@ class CocoMetricRGD(CocoMetric):
         return eval_results
 
     def results2json(self, results: Sequence[dict], outfile_prefix: str, gts: Sequence[dict] = None) -> dict:
+        if self.save_lg: # skip eval if we are saving
+            return {}
+
         if len(self.metrics) > 0:
             result_files = super().results2json(results, outfile_prefix)
         else:
