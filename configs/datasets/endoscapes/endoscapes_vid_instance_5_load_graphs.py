@@ -14,7 +14,7 @@ train_pipeline = [
         type='TransformBroadcaster',
         transforms=[
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True, load_graph=True,
-                saved_graph_dir='latent_graphs'),
+                saved_graph_dir='latent_graphs/endoscapes_faster_rcnn'),
         ]
     ),
     dict(
@@ -34,7 +34,7 @@ eval_pipeline = [
         type='TransformBroadcaster',
         transforms=[
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True, load_graph=True,
-                saved_graph_dir='latent_graphs'),
+                saved_graph_dir='latent_graphs/endoscapes_faster_rcnn'),
         ]),
     dict(
         type='PackTrackInputs',

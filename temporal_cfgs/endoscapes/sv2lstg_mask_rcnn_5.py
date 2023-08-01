@@ -2,8 +2,8 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance_5_load_graphs.py',
-    'sv2lstg_faster_rcnn_base.py',
+    '../../configs/datasets/endoscapes/endoscapes_vid_instance_5.py',
+    'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
@@ -12,6 +12,9 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
 lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
+
+# turn off box perturbation
+lg_model.perturb_factor = 0
 
 # load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
@@ -31,10 +34,11 @@ del lg_model.reconstruction_head
 # set init cfg for lg_model
 lg_model.init_cfg = dict(
     type='Pretrained',
-    checkpoint='weights/lg_ds_faster_rcnn.pth',
-    #checkpoint=_base_.load_from,
+    #checkpoint='weights/lg_ds_mask_rcnn.pth',
+    checkpoint=_base_.load_from,
 )
 del _base_.load_from
+
 
 model = dict(
     _delete_=True,
@@ -42,7 +46,12 @@ model = dict(
     lg_detector=lg_model,
     ds_head=ds_head,
     data_preprocessor=dict(
-        type='SavedLGPreprocessor',
+        type='TrackDataPreprocessor',
+        mean=[123.675, 116.28, 103.53],
+        std=[58.395, 57.12, 57.375],
+        bgr_to_rgb=True,
+        pad_mask=True,
+        pad_size_divisor=1,
     ),
     use_spat_graph=True,
     use_viz_graph=True,
@@ -87,6 +96,7 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
+custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=True), dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(
@@ -99,6 +109,11 @@ visualizer = dict(
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
+    paramwise_cfg=dict(
+        custom_keys={
+            'lg_detector': dict(lr_mult=0.5),
+        }
+    )
 )

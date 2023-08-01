@@ -87,21 +87,21 @@ train_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='train_phase/annotation_phase_coco.json',
+        ann_file='train_phase/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='val_phase/annotation_phase_coco.json',
+        ann_file='val_phase/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='test_phase/annotation_phase_coco.json',
+        ann_file='test_phase/annotation_ds_coco.json',
     ),
 )
 
@@ -111,7 +111,7 @@ val_evaluator = dict(
     prefix='c80_phase',
     data_root=_base_.data_root,
     data_prefix=_base_.val_data_prefix,
-    ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
+    ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
     use_pred_boxes_recon=True,
     metric=[],
 )
@@ -121,7 +121,7 @@ test_evaluator = dict(
     prefix='c80_phase',
     data_root=_base_.data_root,
     data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
+    ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
     metric=[],
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,

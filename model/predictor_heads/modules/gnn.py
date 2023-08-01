@@ -28,7 +28,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
     """
     def __init__(self, num_layers: int, arch: str, add_self_loops: bool, use_reverse_edges: bool,
             norm: str, skip_connect: bool, input_dim_node: int, input_dim_edge: int,
-            hidden_dim: int = 512, dropout: float = 0.0,
+            causal: bool = False, hidden_dim: int = 512, dropout: float = 0.0,
             init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
         self.add_self_loops = add_self_loops
@@ -37,7 +37,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
             self.gnn_head = GraphTripleConvNet(input_dim_node, input_dim_edge,
                     hidden_dim=hidden_dim, num_layers=num_layers, mlp_normalization=norm,
                     skip_connect=skip_connect, dropout=dropout, use_net2=False,
-                    use_edges=True, final_nonlinearity=False)
+                    use_edges=True, final_nonlinearity=False, causal=causal)
         else:
             raise NotImplementedError
 

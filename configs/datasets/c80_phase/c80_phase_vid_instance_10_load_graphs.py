@@ -1,6 +1,6 @@
 import os
 
-_base_ = 'endoscapes_vid_instance_10.py'
+_base_ = 'c80_phase_vid_instance_10.py'
 num_temp_frames = _base_.num_temp_frames
 
 train_pipeline = [
@@ -14,7 +14,7 @@ train_pipeline = [
         type='TransformBroadcaster',
         transforms=[
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True, load_graph=True,
-                saved_graph_dir='latent_graphs'),
+                saved_graph_dir='latent_graphs/c80_phase_faster_rcnn'),
         ]
     ),
     dict(
@@ -34,7 +34,7 @@ eval_pipeline = [
         type='TransformBroadcaster',
         transforms=[
             dict(type='LoadTrackAnnotationsWithDS', with_mask=True, load_graph=True,
-                saved_graph_dir='latent_graphs'),
+                saved_graph_dir='latent_graphs/c80_phase_faster_rcnn'),
         ]),
     dict(
         type='PackTrackInputs',

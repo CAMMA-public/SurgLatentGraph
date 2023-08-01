@@ -166,11 +166,13 @@ class TrackCustomKeyframeSampler(TrackImgSampler):
         self,
         dataset: Sized,
         seed: Optional[int] = None,
+        load_video: bool = False,
     ) -> None:
         rank, world_size = get_dist_info()
         self.rank = rank
         self.world_size = world_size
         self.epoch = 0
+        self.load_video = load_video
         if seed is None:
             self.seed = sync_random_seed()
         else:
@@ -226,15 +228,23 @@ class TrackCustomKeyframeSampler(TrackImgSampler):
                 for videos_inds in chunks:
                     indices_chunk = []
                     for video_ind in videos_inds:
-                        indices_chunk.extend([
-                            (video_ind, frame_ind) for frame_ind in self.dataset.get_keyframes_per_video(video_ind)
-                        ])
+                        if self.load_video:
+                            indices_chunk.extend([video_ind])
+                        else:
+                            indices_chunk.extend([
+                                (video_ind, frame_ind) for frame_ind in self.dataset.get_keyframes_per_video(video_ind)
+                            ])
+
                     self.indices.append(indices_chunk)
+
             else:
                 for video_ind in range(num_videos):
-                    self.indices.extend([
-                        (video_ind, frame_ind) for frame_ind in self.dataset.get_keyframes_per_video(video_ind)
-                    ])
+                    if self.load_video:
+                        self.indices.extend([video_ind])
+                    else:
+                        self.indices.extend([
+                            (video_ind, frame_ind) for frame_ind in self.dataset.get_keyframes_per_video(video_ind)
+                        ])
 
         if self.test_mode:
             self.num_samples = len(self.indices[self.rank])

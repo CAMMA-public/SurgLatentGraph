@@ -31,7 +31,7 @@ def _init_weights(module):
 class GraphTripleConv(nn.Module):
     def __init__(self, input_dim_obj, input_dim_pred, output_dim=None, output_dim_pred=None,
             hidden_dim=512, pooling='avg', mlp_normalization='none', skip_connect=False,
-            dropout=0.0, use_net2=True, use_edges=True, final_nonlinearity=True):
+            dropout=0.0, use_net2=True, use_edges=True, final_nonlinearity=True, causal=False):
         super(GraphTripleConv, self).__init__()
         if output_dim is None:
             output_dim = input_dim_obj
@@ -46,6 +46,7 @@ class GraphTripleConv(nn.Module):
         self.use_net2 = use_net2
         self.use_edges = use_edges
         self.final_nonlinearity = final_nonlinearity
+        self.causal = causal
         if mlp_normalization is not None and mlp_normalization != 'none':
             self.norm = Norm(mlp_normalization, output_dim)
         else:
@@ -146,8 +147,13 @@ class GraphTripleConv(nn.Module):
         # we first need to expand the indices to have shape (num_triples, D)
         s_idx_exp = s_idx.view(-1, 1).expand_as(new_s_vecs)
         o_idx_exp = o_idx.view(-1, 1).expand_as(new_o_vecs)
-        # print(pooled_obj_vecs.shape, o_idx_exp.shape)
-        pooled_obj_vecs = pooled_obj_vecs.scatter_add(0, s_idx_exp, new_s_vecs)
+
+        # In causal mode, we only update the node that the edge points to, assuming that
+        # the graph has been constructed such that future nodes do not have edges to
+        # past nodes (e.g. not (t+n, t), only (t, t+n)).
+        if not self.causal:
+            pooled_obj_vecs = pooled_obj_vecs.scatter_add(0, s_idx_exp, new_s_vecs)
+
         pooled_obj_vecs = pooled_obj_vecs.scatter_add(0, o_idx_exp, new_o_vecs)
 
         if self.pooling == 'avg':
@@ -192,7 +198,7 @@ class GraphTripleConv(nn.Module):
 class GraphTripleConvNet(nn.Module):
     def __init__(self, input_dim_obj, input_dim_pred, output_dim=None, output_dim_pred=None,
             num_layers=5, hidden_dim=512, pooling='avg', mlp_normalization='none', skip_connect=False,
-            dropout=0.0, use_net2=True, use_edges=True, final_nonlinearity=True):
+            dropout=0.0, use_net2=True, use_edges=True, final_nonlinearity=True, causal=False):
         super(GraphTripleConvNet, self).__init__()
 
         self.num_layers = num_layers
@@ -209,6 +215,7 @@ class GraphTripleConvNet(nn.Module):
           'dropout': dropout,
           'use_net2': use_net2,
           'use_edges': use_edges,
+          'causal': causal,
         }
 
         # modify input dim after first conv layer

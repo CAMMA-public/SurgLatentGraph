@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance_5.py',
+    '../../configs/datasets/endoscapes/endoscapes_vid_instance_10.py',
     'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports

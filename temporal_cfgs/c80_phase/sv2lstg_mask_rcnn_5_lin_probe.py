@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance_5_load_graphs.py',
+    '../../configs/datasets/c80_phase/c80_phase_vid_instance_5_load_graphs.py',
     'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
@@ -17,23 +17,15 @@ lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
 ds_head = copy.deepcopy(lg_model.ds_head)
 ds_head['type'] = 'STDSHead'
 ds_head['gnn_cfg']['num_layers'] = 5
+ds_head['causal'] = True
 ds_head['num_temp_frames'] = _base_.num_temp_frames
-#ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
-ds_head['use_node_positional_embedding'] = True
 ds_head['use_temporal_model'] = True
-ds_head['temporal_arch'] = 'transformer'
+ds_head['temporal_arch'] = 'tcn'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
 del lg_model.ds_head
 del lg_model.reconstruction_head
-
-# set init cfg for lg_model
-lg_model.init_cfg = dict(
-    type='Pretrained',
-    checkpoint='weights/lg_ds_mask_rcnn.pth',
-    #checkpoint=_base_.load_from,
-)
 del _base_.load_from
 
 
@@ -54,10 +46,10 @@ model = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
         metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
@@ -67,14 +59,14 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
         metric=[],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+        outfile_prefix='./results/c80_phase_preds/test/lg_cvs',
     ),
 ]
 

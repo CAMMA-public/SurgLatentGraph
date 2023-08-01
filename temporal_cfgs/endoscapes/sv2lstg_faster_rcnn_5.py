@@ -2,8 +2,8 @@ import os
 import copy
 
 _base_ = [
-    '../configs/datasets/endoscapes_vid_instance_15.py',
-    'sv2lstg_mask_rcnn_base.py',
+    '../../configs/datasets/endoscapes/endoscapes_vid_instance_5.py',
+    'sv2lstg_faster_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
@@ -34,7 +34,7 @@ del lg_model.reconstruction_head
 # set init cfg for lg_model
 lg_model.init_cfg = dict(
     type='Pretrained',
-    #checkpoint='weights/lg_ds_mask_rcnn.pth',
+    #checkpoint='weights/lg_ds_faster_rcnn.pth',
     checkpoint=_base_.load_from,
 )
 del _base_.load_from

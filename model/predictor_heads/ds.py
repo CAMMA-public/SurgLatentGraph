@@ -7,6 +7,7 @@ from mmdet.structures import SampleList
 from .modules.gnn import GNNHead
 from .modules.layers import build_mlp, PositionalEncoding
 from .modules.utils import *
+from .modules.mstcn import MultiStageModel as MSTCN
 import torch
 from torch import Tensor
 from torch_scatter import scatter_mean
@@ -171,8 +172,11 @@ class STDSHead(DSHead):
             use_node_positional_embedding: bool = True,
             use_positional_embedding: bool = False, edit_graph: bool = False,
             reassign_edges: bool = False, combine_nodes: bool = False,
-            **kwargs) -> None:
-        super().__init__(**kwargs)
+            causal: bool = False, gnn_cfg: ConfigType = None, **kwargs) -> None:
+
+        # set causal in gnn_cfg
+        gnn_cfg.causal = causal
+        super().__init__(gnn_cfg=gnn_cfg, **kwargs)
         self.num_temp_frames = num_temp_frames
         self.use_temporal_model = use_temporal_model
         self.graph_pooling_window = graph_pooling_window
@@ -181,6 +185,7 @@ class STDSHead(DSHead):
         self.edit_graph = edit_graph
         self.reassign_edges = reassign_edges
         self.combine_nodes = combine_nodes
+        self.causal = causal
 
         # positional embedding
         self.use_node_positional_embedding = use_node_positional_embedding
@@ -255,7 +260,8 @@ class STDSHead(DSHead):
             img_feats = F.adaptive_avg_pool2d(img_feats, 1).squeeze(-1).squeeze(-1)
 
             if self.use_temporal_model:
-                img_feats = self.img_feat_temporal_model(img_feats)
+                tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
+                img_feats = tcn_output.mean(0).permute(0, 2, 1)
 
             elif self.use_positional_embedding:
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
