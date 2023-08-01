@@ -32,5 +32,9 @@ if 'neck' in detector:
 
 del _base_.lg_model
 
+visualizer = dict(
+    prefix=_base_.visualizer.prefix.replace('base', 'faster_rcnn'),
+)
+
 # modify load_from
 load_from = _base_.load_from.replace('base', 'faster_rcnn')

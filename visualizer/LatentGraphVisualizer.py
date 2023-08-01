@@ -9,9 +9,10 @@ import os
 
 @VISUALIZERS.register_module()
 class LatentGraphVisualizer(DetLocalVisualizer):
-    def __init__(self, name: str, save_graphs: bool = False,
+    def __init__(self, name: str, prefix: str = 'endoscapes_faster_rcnn', save_graphs: bool = False,
             gt_graph_use_pred_instances: bool = False, draw: bool = False, **kwargs):
         super().__init__(**kwargs)
+        self.prefix = prefix
         self.draw = draw
         self.save_graphs = save_graphs
         self.gt_graph_use_pred_instances = gt_graph_use_pred_instances
@@ -25,14 +26,15 @@ class LatentGraphVisualizer(DetLocalVisualizer):
 
         if self.save_graphs:
             # create graph dir
-            if not os.path.exists('latent_graphs'):
-                os.makedirs('latent_graphs')
+            save_dir = os.path.join('latent_graphs', self.prefix)
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
 
             # create filename
             graph_filename = str(data_sample.img_id) + '.npz'
 
             # save latent graph
-            np.savez(os.path.join('latent_graphs', graph_filename), data_sample.lg.numpy())
+            np.savez(os.path.join(save_dir, graph_filename), data_sample.lg.numpy())
             #torch.save(data_sample.lg, os.path.join('latent_graphs', graph_filename))
             #dump(data_sample.lg, os.path.join('latent_graphs', graph_filename))
 

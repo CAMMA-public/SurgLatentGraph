@@ -6,6 +6,7 @@ custom_imports = dict(imports=orig_imports + ['visualizer.LatentGraphVisualizer'
 
 visualizer = dict(
     type='LatentGraphVisualizer',
+    prefix='c80_phase_base',
     save_graphs=True,
     draw=False,
 )
@@ -25,8 +26,8 @@ lg_model = dict(
 
 test_dataloader = dict(
     dataset=dict(
-        ann_file='annotation_coco_all_frames.json',
-        data_prefix=dict(img='all/'),
+        ann_file='all_phase/annotation_coco_all_frames.json',
+        data_prefix=dict(img='all_phase/'),
     )
 )
 
