@@ -202,6 +202,21 @@ class SV2LSTG(BaseDetector):
         if viz_graph is not None:
             graphs_to_use.append(viz_graph)
 
+        # pad spat graph if needed
+        if len(graphs_to_use) == 2 and graphs_to_use[0].shape[-1] != graphs_to_use[1].shape[-1]:
+            # pad spat graph before adding
+            padded_spat_graph = torch.zeros_like(graphs_to_use[1])
+            padded_spat_graph[:B, :M, :M] = graphs_to_use[0]
+            graphs_to_use[0] = padded_spat_graph
+
+            # pad node_boxes
+            pad_dim = (padded_spat_graph.shape[-1] - M) // T
+            node_boxes = F.pad(node_boxes, (0, 0, 0, pad_dim))
+
+            # recompute dims
+            B, T, N, _ = node_boxes.shape
+            M = T * N
+
         # create meshgrid to store node indices corresponding to each edge
         edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(device)
 
