@@ -260,8 +260,11 @@ class STDSHead(DSHead):
             img_feats = F.adaptive_avg_pool2d(img_feats, 1).squeeze(-1).squeeze(-1)
 
             if self.use_temporal_model:
-                tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
-                img_feats = tcn_output.mean(0).permute(0, 2, 1)
+                if self.temporal_arch == 'tcn':
+                    tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
+                    img_feats = tcn_output.mean(0).permute(0, 2, 1)
+                else:
+                    img_feats = self.img_feat_temporal_model(img_feats)
 
             elif self.use_positional_embedding:
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
