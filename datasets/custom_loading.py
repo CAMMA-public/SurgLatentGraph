@@ -4,18 +4,20 @@ from mmdet.registry import TRANSFORMS, DATASETS, DATA_SAMPLERS
 from mmdet.datasets.samplers.track_img_sampler import TrackImgSampler
 from mmdet.datasets.transforms import LoadAnnotations
 from mmdet.datasets.transforms.loading import LoadTrackAnnotations
-from mmdet.datasets.transforms.frame_sampling import UniformRefFrameSample
+from mmdet.datasets.transforms.frame_sampling import UniformRefFrameSample, BaseFrameSample
 from mmengine.dataset import ClassBalancedDataset, ConcatDataset
 from mmengine.dist import get_dist_info, sync_random_seed
 from mmengine.fileio import get
 from mmcv.transforms import LoadImageFromFile
-from typing import List, Union, Sized, Optional, Any
+from typing import List, Union, Sized, Optional, Any, Dict
 import numpy as np
 import math
 import random
 import os
+import torch
 from collections import defaultdict
 from io import BytesIO
+import imagesize
 
 @TRANSFORMS.register_module()
 class LoadAnnotationsWithDS(LoadAnnotations):
@@ -35,11 +37,6 @@ class LoadAnnotationsWithDS(LoadAnnotations):
 
 @TRANSFORMS.register_module()
 class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
-    def __init__(self, load_graph: bool = False, saved_graph_dir: str = '', **kwargs):
-        super(LoadTrackAnnotationsWithDS, self).__init__(**kwargs)
-        self.load_graph = load_graph
-        self.saved_graph_dir = saved_graph_dir
-
     def _load_ds(self, results: dict) -> None:
         """Private function to load downstream annotations.
 
@@ -49,21 +46,42 @@ class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
         gt_ds = results.get('ds')
         results['ds'] = np.array(gt_ds)
 
-    def _load_graph(self, results: dict) -> None:
-        graph_path = os.path.join(self.saved_graph_dir, str(results['id']) + '.npz')
-        graph_bytes = get(graph_path, backend_args=self.backend_args)
-        with np.load(BytesIO(graph_bytes), allow_pickle=True) as f:
-            lg = f['arr_0'].item()
+    def transform(self, results: dict) -> dict:
+        self._load_ds(results)
+        return results
 
-        results['lg'] = lg.to_tensor()
+@TRANSFORMS.register_module()
+class LoadLG(LoadImageFromFile):
+    def __init__(self, saved_graph_dir: str = '', load_keyframes_only: bool = False,
+            skip_keys: List = [], **kwargs):
+        super(LoadLG, self).__init__(**kwargs)
+        self.saved_graph_dir = saved_graph_dir
+        self.load_keyframes_only = load_keyframes_only
+        self.skip_keys = skip_keys
 
     def transform(self, results: dict) -> dict:
-        if self.load_graph:
-            self._load_graph(results)
+        if self.load_keyframes_only and not results['key_frame_flags']:
+            results['lg'] = torch.zeros(0)
         else:
-            results = super().transform(results)
+            graph_path = os.path.join(self.saved_graph_dir, str(results['id']) + '.npz')
+            graph_bytes = get(graph_path, backend_args=self.backend_args)
+            with np.load(BytesIO(graph_bytes), allow_pickle=True) as f:
+                lg = f['arr_0'].item()
 
-        self._load_ds(results)
+            del graph_bytes
+
+            # remove unwanted keys
+            for k in self.skip_keys:
+                if k in lg.nodes:
+                    del lg.nodes[k]
+                if k in lg.edges:
+                    del lg.edges[k]
+
+            results['lg'] = lg.to_tensor()
+
+        # img size
+        results['img_shape'] = imagesize.get(results['img_path'])[::-1]
+
         return results
 
 @DATASETS.register_module()
@@ -151,6 +169,7 @@ class VideoDatasetWithDS(BaseVideoDataset):
         # Specify `key_frame_id` for the frame sampling in the pipeline
         if frame_idx is not None:
             data_info['key_frame_id'] = frame_idx
+
         return self.pipeline(data_info)
 
     @property
@@ -295,3 +314,23 @@ class UniformRefFrameSampleWithPad(UniformRefFrameSample):
         key_frame_flags = [False] * len(sampled_frames_ids)
         key_frame_flags[key_frames_ind] = True
         return sampled_frames_ids, key_frame_flags
+
+@TRANSFORMS.register_module()
+class AllFramesSample(BaseFrameSample):
+    def __init__(self, sampling_ratio: int = 1, collect_video_keys: List[str] = ['video_id', 'video_length']):
+        super().__init__(collect_video_keys=collect_video_keys)
+        self.sampling_ratio = sampling_ratio
+
+    def sampling_frames(self, video_infos: dict):
+        frame_ids = [x['frame_id'] for x in video_infos['images']]
+        key_frame_flags = [(x['is_ds_keyframe'] and (ind % self.sampling_ratio == 0)) \
+                for ind, x in enumerate(video_infos['images'])]
+
+        return frame_ids, key_frame_flags
+
+    def transform(self, video_infos: dict) -> Optional[Dict[str, List]]:
+        frame_ids, key_frame_flags = self.sampling_frames(video_infos)
+        results = self.prepare_data(video_infos, frame_ids)
+        results['key_frame_flags'] = key_frame_flags
+
+        return results

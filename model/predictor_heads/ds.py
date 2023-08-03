@@ -302,7 +302,7 @@ class STDSHead(DSHead):
     def loss(self, graph: BaseDataElement, feats: BaseDataElement,
             batch_data_samples: SampleList) -> Tensor:
         ds_preds = self.predict(graph, feats)
-        ds_gt = torch.stack([torch.stack([torch.from_numpy(b.ds) for b in vds.video_data_samples]) \
+        ds_gt = torch.stack([torch.stack([torch.from_numpy(b.ds) for b in vds]) \
                 for vds in batch_data_samples]).to(ds_preds.device)
 
         # preprocess gt

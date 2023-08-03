@@ -77,23 +77,34 @@ class SV2LSTG(BaseDetector):
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
+        if self.per_video:
+            filtered_batch_data_samples = [[b for ind, b in enumerate(bds) \
+                    if ind in bds.key_frames_inds] for bds in batch_data_samples]
+        else:
+            filtered_batch_data_samples = batch_data_samples
 
         # extract frame-wise graphs by running lg detector on all images and reshape values
-        feats, graphs, clip_results, _ = self.extract_feat(batch_inputs, batch_data_samples)
+        feats, graphs, clip_results, _ = self.extract_feat(batch_inputs, filtered_batch_data_samples)
 
         # build spatiotemporal graph for each item in batch
         st_graphs = self.build_st_graph(graphs, clip_results)
 
         # run ds head
-        ds_losses = self.ds_head.loss(st_graphs, feats, batch_data_samples)
+        ds_losses = self.ds_head.loss(st_graphs, feats, filtered_batch_data_samples)
         losses.update(ds_losses)
 
         return losses
 
     def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
+        if self.per_video:
+            filtered_batch_data_samples = [[b for ind, b in enumerate(bds) \
+                    if ind in bds.key_frames_inds] for bds in batch_data_samples]
+        else:
+            filtered_batch_data_samples = batch_data_samples
+
         # extract frame-wise graphs by running lg detector on all images and reshape values
         feats, graphs, clip_results, results = self.extract_feat(batch_inputs,
-                batch_data_samples)
+                filtered_batch_data_samples)
 
         # build spatiotemporal graph for each item in batch
         st_graphs = self.build_st_graph(graphs, clip_results)
@@ -102,12 +113,29 @@ class SV2LSTG(BaseDetector):
         ds_preds = self.ds_head.predict(st_graphs, feats)
 
         # update results
-        T = len(batch_data_samples[0].video_data_samples)
+        T = len(filtered_batch_data_samples[0])
 
         # only keep keyframes
         if self.per_video:
+            # upsample predictions if needed
+            if len(filtered_batch_data_samples[0]) < len(batch_data_samples[0]):
+                # compute upsample factor
+                upsample_factor = int(np.ceil(len(batch_data_samples[0]) / len(filtered_batch_data_samples[0])))
+
+                # pad results
+                dummy_instance_data = InstanceData(bboxes=torch.zeros(0, 4),
+                        scores=torch.zeros(0), labels=torch.zeros(0)).to(ds_preds.device)
+                interp_results = [DetDataSample(metainfo=b.metainfo, pred_instances=dummy_instance_data) \
+                        for ind, b in enumerate(batch_data_samples[0])]
+                results = [results[ind // upsample_factor] if ind % upsample_factor == 0 else i \
+                        for ind, i in enumerate(interp_results)]
+
+                # pad predictions
+                ds_preds = ds_preds.repeat_interleave(upsample_factor, dim=1)[:,
+                        :len(batch_data_samples[0])]
+
             for r in results:
-                for r, p in zip(results, ds_preds):
+                for r, p in zip(results, ds_preds.view(-1, ds_preds.shape[-1])):
                     r.pred_ds = p
 
         else:
@@ -149,8 +177,8 @@ class SV2LSTG(BaseDetector):
         graphs.edges.class_logits = list(graphs.edges.class_logits.split(graphs.edges.edges_per_clip))
         graphs.edges.feats = list(graphs.edges.feats.split(graphs.edges.edges_per_clip))
         graphs.edges.boxes = list(graphs.edges.boxes.split(graphs.edges.edges_per_clip))
-        graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
-        graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
+        #graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
+        #graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
 
         if 'presence_logits' in graphs.edges.keys():
             del graphs.edges.presence_logits
@@ -164,13 +192,14 @@ class SV2LSTG(BaseDetector):
         return feats, graphs, clip_results
 
     def build_st_graph(self, graphs: BaseDataElement, clip_results: SampleList):
+        node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) \
+                for cr in clip_results], batch_first=True).transpose(1, 2)
+
         viz_graph, spat_graph = None, None
         if self.use_viz_graph:
             viz_graph = self._build_visual_edges(graphs)
 
         if self.use_spat_graph:
-            node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) \
-                    for cr in clip_results], batch_first=True).transpose(1, 2)
             spat_graph = self._build_spatial_edges(node_boxes)
 
         if viz_graph is not None or spat_graph is not None:
@@ -221,9 +250,9 @@ class SV2LSTG(BaseDetector):
         edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(device)
 
         # calculate offsets to add to the meshgrid computed indices based on the number of nodes in each graph in each clip
-        batch_nodes_per_img = torch.stack(graphs.nodes.nodes_per_img).to(device)
+        batch_nodes_per_img = torch.stack(graphs.nodes.nodes_per_img)
         offsets = torch.cumsum(torch.cat([torch.zeros(batch_nodes_per_img.shape[0], 1).to(device),
-            batch_nodes_per_img[:, :-1]], -1), -1).unsqueeze(-1).repeat(1, 1, N)
+            batch_nodes_per_img[:, :-1].to(device)], -1), -1).unsqueeze(-1).repeat(1, 1, N)
 
         # get corrected edge indices
         edge_x = (edge_x - N * torch.arange(T).unsqueeze(-1).repeat(1, N).view(-1, 1).to(device)) + \
@@ -233,8 +262,18 @@ class SV2LSTG(BaseDetector):
         # compute edge presence
         temporal_edge_adj_mat = torch.triu(sum(graphs_to_use), diagonal=1) # 0 if no edge, > 0 if there is an edge
 
-        # TODO(adit98) use nodes per img for this
-        # set invalid inds to 0 (find this out by checking for boxes that are all 0 bc of the pad operation)
+        # set invalid inds to 0 (based on nodes per img)
+
+        #npi = graphs.nodes.nodes_per_img
+        #npi_mask = torch.stack([pad_sequence(torch.ones(T).repeat_interleave(n.int()).split(
+        #    n.int().tolist()), batch_first=True) for n in npi]).to(device)
+        #if npi_mask.ndim == 2:
+        #    npi_mask.unsqueeze(0)
+        #npi_invalid_edge_inds = (1 - npi_mask.flatten(start_dim=1)).long()
+        #for t, i in zip(temporal_edge_adj_mat, invalid_edge_inds):
+        #    t[i] = 0
+        #    t[:, i] = 0
+
         invalid_edge_inds = (node_boxes == torch.zeros(4).to(device)).all(-1).flatten(start_dim=1)
         temporal_edge_adj_mat[invalid_edge_inds] = 0
         temporal_edge_adj_mat[invalid_edge_inds.unsqueeze(1).repeat(1, M, 1)] = 0
@@ -270,21 +309,21 @@ class SV2LSTG(BaseDetector):
                         extra_edge_class_logits])
 
             # update boxes
-            eb = self._box_union(node_boxes.flatten(start_dim=1, end_dim=2),
-                    node_boxes.flatten(start_dim=1, end_dim=2))[ind]
+            eb = self._box_union(node_boxes[ind].flatten(end_dim=1).unsqueeze(0),
+                    node_boxes[ind].flatten(end_dim=1).unsqueeze(0))[0]
             pad_size = eam.shape[0] - eb.shape[0]
             eb = F.pad(eb.permute(2, 0, 1), (0, pad_size, 0, pad_size)).permute(1, 2, 0)
             extra_edge_boxes = eb[eam > 0]
-            extra_boxesA = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 0]]
-            extra_boxesB = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 1]]
+            #extra_boxesA = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 0]]
+            #extra_boxesB = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 1]]
             if self.use_temporal_edges_only:
                 graphs.edges.boxes[ind] = extra_edge_boxes
-                graphs.edges.boxesA[ind] = extra_boxesA
-                graphs.edges.boxesB[ind] = extra_boxesB
+                #graphs.edges.boxesA[ind] = extra_boxesA
+                #graphs.edges.boxesB[ind] = extra_boxesB
             else:
                 graphs.edges.boxes[ind] = torch.cat([graphs.edges.boxes[ind], extra_edge_boxes])
-                graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
-                graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
+                #graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
+                #graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
 
             try:
                 # update viz feats
@@ -453,8 +492,8 @@ class SV2LSTG(BaseDetector):
         return iou
 
     def extract_feat(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tuple[BaseDataElement]:
-        if 'lg' in batch_data_samples[0].video_data_samples[0].metainfo:
-            lg_list = [x.pop('lg') for b in batch_data_samples for x in b.video_data_samples]
+        if 'lg' in batch_data_samples[0][0].metainfo:
+            lg_list = [x.pop('lg') for b in batch_data_samples for x in b]
 
             # box perturb
             if self.training and self.perturb:
@@ -479,8 +518,8 @@ class SV2LSTG(BaseDetector):
             # collate edge info
             graphs.edges.feats = torch.cat([l.edges.feats for l in lg_list])
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
-            graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
-            graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
+            #graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
+            #graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
             graphs.edges.class_logits = torch.cat([l.edges.class_logits for l in lg_list])
             graphs.edges.edge_flats = torch.cat([torch.cat([torch.ones(
                 l.edges.edge_flats.shape[0], 1).to(l.edges.edge_flats) * ind,
@@ -495,7 +534,7 @@ class SV2LSTG(BaseDetector):
             feats.semantic_feats = graphs.nodes.feats[..., self.viz_feat_size:]
 
             # add node info to results
-            metainfo = [x.metainfo for b in batch_data_samples for x in b.video_data_samples]
+            metainfo = [x.metainfo for b in batch_data_samples for x in b]
             pred_instances = [InstanceData(bboxes=l.nodes.bboxes, scores=l.nodes.scores,
                 labels=l.nodes.labels) for l in lg_list]
             results = [DetDataSample(pred_instances=p, metainfo=m) for p, m in zip(pred_instances, metainfo)]
@@ -512,12 +551,12 @@ class SV2LSTG(BaseDetector):
 
             # concatenate boxes
             graphs.edges.boxes = torch.cat(graphs.edges.boxes)
-            graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
-            graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
+            #graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
+            #graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
 
         # reorganize feats and graphs by clip
         B = len(batch_data_samples)
-        T = len(batch_data_samples[0].video_data_samples)
+        T = len(batch_data_samples[0])
         feats, graphs, clip_results = self.reshape_as_clip(feats, graphs, results, B, T)
 
         return feats, graphs, clip_results, results

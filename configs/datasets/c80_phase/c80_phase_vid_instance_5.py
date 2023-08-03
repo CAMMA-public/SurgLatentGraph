@@ -91,8 +91,8 @@ train_dataloader=dict(
     batch_size=20,
     num_workers=4,
     persistent_workers=True,
-    sampler=dict(type='TrackCustomKeyframeSampler'),
-    batch_sampler=dict(type='TrackAspectRatioBatchSampler'),
+    sampler=dict(type='TrackCustomKeyframeSampler', load_video=True),
+    #batch_sampler=dict(type='TrackAspectRatioBatchSampler'),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
@@ -108,7 +108,7 @@ val_dataloader=dict(
     batch_size=20,
     num_workers=4,
     persistent_workers=True,
-    sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
+    sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler', load_video=True),
     dataset=dict(
         _delete_=True,
         type=dataset_type,
@@ -126,7 +126,7 @@ test_dataloader=dict(
     batch_size=20,
     num_workers=4,
     persistent_workers=True,
-    sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
+    sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler', load_video=True),
     dataset=dict(
         _delete_=True,
         type=dataset_type,

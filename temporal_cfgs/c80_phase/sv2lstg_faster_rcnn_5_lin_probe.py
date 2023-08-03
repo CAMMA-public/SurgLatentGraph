@@ -16,11 +16,13 @@ lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
 # load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
 ds_head['type'] = 'STDSHead'
-ds_head['gnn_cfg']['num_layers'] = 5
+ds_head['gnn_cfg']['num_layers'] = 8
 ds_head['causal'] = True
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 ds_head['use_temporal_model'] = True
 ds_head['temporal_arch'] = 'tcn'
+ds_head['final_viz_feat_size'] = 256
+ds_head['final_sem_feat_size'] = 256
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
@@ -36,9 +38,12 @@ model = dict(
     data_preprocessor=dict(
         type='SavedLGPreprocessor',
     ),
+    edge_max_temporal_range=10,
     use_spat_graph=True,
     use_viz_graph=True,
+    learn_sim_graph=False,
     pred_per_frame=True,
+    per_video=True,
 )
 
 # metric
@@ -72,8 +77,7 @@ test_evaluator = [
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=10,
-    val_interval=1)
+    max_epochs=30)
 val_cfg = dict(type='ValLoopKeyframeEval')
 test_cfg = dict(type='TestLoopKeyframeEval')
 
@@ -82,7 +86,9 @@ del _base_.custom_hooks
 
 # visualizer
 default_hooks = dict(
-    visualization=dict(type='TrackVisualizationHook', draw=False))
+    visualization=dict(type='TrackVisualizationHook', draw=False),
+    logger=dict(interval=5),
+)
 
 vis_backends = [dict(type='LocalVisBackend')]
 visualizer = dict(
@@ -91,6 +97,8 @@ visualizer = dict(
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.0003),
     clip_grad=dict(max_norm=10, norm_type=2),
 )
+
+# logging
