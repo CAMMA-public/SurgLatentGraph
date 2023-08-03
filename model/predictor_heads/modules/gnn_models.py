@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from dgl.nn.pytorch import EGATConv
-from torch_geometric.nn import FastRGCNConv, RGATConv, SAGEConv
+#from torch_geometric.nn import FastRGCNConv, RGATConv, SAGEConv
 import copy
 from .layers import build_mlp
 from .norm import Norm

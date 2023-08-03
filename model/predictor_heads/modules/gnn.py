@@ -98,8 +98,8 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 g.edata[k] = v.view(-1, v.shape[-1])
 
             # add in batch info
-            g.set_batch_num_nodes(Tensor(nodes_per_clip))
-            g.set_batch_num_edges(graph.edges.edges_per_clip)
+            g.set_batch_num_nodes(Tensor(nodes_per_clip).int().to(device))
+            g.set_batch_num_edges(Tensor(graph.edges.edges_per_clip).int().to(device))
 
         else:
             edge_offsets = torch.cumsum(Tensor([0] + graph.nodes.nodes_per_img[:-1]), 0).to(graph.edges.edge_flats.device)
