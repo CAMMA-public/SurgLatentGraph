@@ -59,7 +59,7 @@ class SV2LSTG(BaseDetector):
 
         # edge semantic feat projector
         self.num_edge_classes = self.num_frame_edge_classes + self.num_temp_edge_classes
-        dim_list = [self.num_edge_classes + 4] + [512] * \
+        dim_list = [self.num_edge_classes + 4] + [sem_feat_size] * \
                 (semantic_feat_projector_layers - 1) + [sem_feat_size]
         self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='none')
 
@@ -264,17 +264,10 @@ class SV2LSTG(BaseDetector):
 
         # set invalid inds to 0 (based on nodes per img)
 
-        #npi = graphs.nodes.nodes_per_img
-        #npi_mask = torch.stack([pad_sequence(torch.ones(T).repeat_interleave(n.int()).split(
-        #    n.int().tolist()), batch_first=True) for n in npi]).to(device)
-        #if npi_mask.ndim == 2:
-        #    npi_mask.unsqueeze(0)
-        #npi_invalid_edge_inds = (1 - npi_mask.flatten(start_dim=1)).long()
-        #for t, i in zip(temporal_edge_adj_mat, invalid_edge_inds):
-        #    t[i] = 0
-        #    t[:, i] = 0
-
         invalid_edge_inds = (node_boxes == torch.zeros(4).to(device)).all(-1).flatten(start_dim=1)
+        #for ind, e in enumerate(invalid_edge_inds):
+        #    temporal_edge_adj_mat[ind][e] = 0
+        #    temporal_edge_adj_mat[ind][:, e] = 0
         temporal_edge_adj_mat[invalid_edge_inds] = 0
         temporal_edge_adj_mat[invalid_edge_inds.unsqueeze(1).repeat(1, M, 1)] = 0
 
@@ -309,6 +302,7 @@ class SV2LSTG(BaseDetector):
                         extra_edge_class_logits])
 
             # update boxes
+            #eb = torch.zeros(M, M, 4).to(device)
             eb = self._box_union(node_boxes[ind].flatten(end_dim=1).unsqueeze(0),
                     node_boxes[ind].flatten(end_dim=1).unsqueeze(0))[0]
             pad_size = eam.shape[0] - eb.shape[0]
