@@ -262,7 +262,7 @@ class STDSHead(DSHead):
             if self.use_temporal_model:
                 if self.temporal_arch == 'tcn':
                     tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
-                    img_feats = tcn_output.mean(0).permute(0, 2, 1)
+                    img_feats = tcn_output.sum(0).permute(0, 2, 1)
                 else:
                     img_feats = self.img_feat_temporal_model(img_feats)
 
