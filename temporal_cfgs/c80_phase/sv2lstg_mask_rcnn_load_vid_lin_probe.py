@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../../configs/datasets/c80_phase/c80_phase_vid_instance_5_load_graphs.py',
+    '../../configs/datasets/c80_phase/c80_phase_vid_instance_load_all.py',
     'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
