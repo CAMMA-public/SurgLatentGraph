@@ -1,6 +1,7 @@
 from mmdet.registry import HOOKS
 from mmengine.hooks import Hook
 from prettytable import PrettyTable
+import torch
 
 @HOOKS.register_module()
 class FreezeDetectorHook(Hook):
@@ -117,3 +118,14 @@ class CopyDetectorBackbone(Hook):
                     print()
                 except AttributeError as e:
                     print(e)
+
+@HOOKS.register_module()
+class ClearGPUMem(Hook):
+    def after_train_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()
+
+    def after_val_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()
+
+    def after_test_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()

@@ -101,8 +101,8 @@ class LGDetector(BaseDetector):
             losses = {}
 
         # extract LG
-        feats, graph, detached_results, _, _ = self.extract_lg(batch_inputs,
-                batch_data_samples)
+        feats, graph, detached_results, _, _, losses = self.extract_lg(batch_inputs,
+                batch_data_samples, losses=losses)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -132,7 +132,7 @@ class LGDetector(BaseDetector):
 
     def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
         # extract LG
-        feats, graph, detached_results, results, gt_edges = self.extract_lg(batch_inputs,
+        feats, graph, detached_results, results, gt_edges, _ = self.extract_lg(batch_inputs,
                 batch_data_samples)
 
         if gt_edges is not None:
@@ -213,7 +213,7 @@ class LGDetector(BaseDetector):
         return results
 
     def extract_lg(self, batch_inputs: Tensor, batch_data_samples: SampleList,
-            force_perturb: bool = False) -> Tuple[BaseDataElement]:
+            force_perturb: bool = False, losses: dict = None) -> Tuple[BaseDataElement]:
         # run detector to get detections
         with torch.no_grad():
             detector_is_training = self.detector.training
@@ -237,7 +237,7 @@ class LGDetector(BaseDetector):
             else:
                 feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
 
-        return feats, graph, detached_results, results, gt_edges
+        return feats, graph, detached_results, results, gt_edges, losses
 
     def detach_results(self, results: SampleList) -> SampleList:
         for i in range(len(results)):
