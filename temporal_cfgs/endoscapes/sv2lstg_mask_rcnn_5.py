@@ -34,11 +34,9 @@ del lg_model.reconstruction_head
 # set init cfg for lg_model
 lg_model.init_cfg = dict(
     type='Pretrained',
-    #checkpoint='weights/lg_ds_mask_rcnn.pth',
     checkpoint=_base_.load_from,
 )
 del _base_.load_from
-
 
 model = dict(
     _delete_=True,

@@ -10,7 +10,12 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
     'hooks.custom_hooks', 'runner.custom_loops', 'model.saved_lg_preprocessor'], allow_failed_imports=False)
 
 # set saved graph dir in pipelines
-train_pipeline[1]['transforms'][0]['saved_graph_dir'] = 'latent_graphs/c80_phase_faster_rcnn'
+_base_.train_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/c80_phase_faster_rcnn'
+_base_.val_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/c80_phase_faster_rcnn'
+_base_.test_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/c80_phase_faster_rcnn'
 
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)

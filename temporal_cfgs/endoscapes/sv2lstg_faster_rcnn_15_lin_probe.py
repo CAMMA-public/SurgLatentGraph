@@ -9,6 +9,14 @@ orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
     'hooks.custom_hooks', 'runner.custom_loops', 'model.saved_lg_preprocessor'], allow_failed_imports=False)
 
+# set saved graph dir in pipelines
+_base_.train_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/endoscapes_faster_rcnn'
+_base_.val_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/endoscapes_faster_rcnn'
+_base_.test_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/endoscapes_faster_rcnn'
+
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
 lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
@@ -26,15 +34,7 @@ ds_head['temporal_arch'] = 'transformer'
 del lg_model.data_preprocessor
 del lg_model.ds_head
 del lg_model.reconstruction_head
-
-# set init cfg for lg_model
-lg_model.init_cfg = dict(
-    type='Pretrained',
-    checkpoint='weights/lg_ds_faster_rcnn.pth',
-    #checkpoint=_base_.load_from,
-)
 del _base_.load_from
-
 
 model = dict(
     _delete_=True,

@@ -266,8 +266,8 @@ class SV2LSTG(BaseDetector):
             batch_nodes_per_img[:, :-1].to(device)], -1), -1).unsqueeze(-1).repeat(1, 1, N)
 
         # get corrected edge indices
-        edge_inds = edge_inds - N * torch.arange(T).repeat_interleave(N).to(device) + \
-                offsets.view(-1)
+        edge_inds = (edge_inds - N * torch.arange(T).repeat_interleave(N).to(device)).unsqueeze(0) + \
+                offsets.view(B, -1)
 
         # stack graphs to use to get temporal_edge_class
         temporal_edge_class = torch.stack(graphs_to_use, -1)
@@ -280,8 +280,8 @@ class SV2LSTG(BaseDetector):
 
         # set invalid inds to 0 (based on nodes per img)
         npi = graphs.nodes.nodes_per_img
-        npi_mask = torch.stack([pad_sequence(torch.ones(T).repeat_interleave(n.int()).split(
-            n.int().tolist()), batch_first=True).view(M,).to_sparse() for n in npi]).to(device)
+        npi_mask = torch.stack([pad_sequence(list(torch.ones(T).repeat_interleave(n.int()).split(
+            n.int().tolist())) + [torch.zeros(N)], batch_first=True)[:-1].view(M,).to_sparse() for n in npi]).to(device)
         valid_edge_inds = npi_mask.float()
 
         # mask out invalid_edge_inds on both axes
@@ -291,7 +291,7 @@ class SV2LSTG(BaseDetector):
                 temporal_edge_class.coalesce())
 
         # update graphs.edges with temporal edge quantities
-        for ind, (ec, edge_i) in enumerate(zip(temporal_edge_class, edge_inds)):
+        for ind, ec in enumerate(temporal_edge_class):
             # get information from ec
             all_nonzero_vals = ec.coalesce().values()
             all_nonzero_inds = ec.coalesce().indices()
@@ -299,7 +299,7 @@ class SV2LSTG(BaseDetector):
                     dim=-1, sorted=True, return_inverse=True, return_counts=True)
 
             # UPDATE EDGE FLATS
-            extra_edge_flats = edge_inds[nonzero_uids]
+            extra_edge_flats = edge_inds[ind][nonzero_uids]
 
             # add img id for temporal edges (set as T, 0 to T-1 being the frame ids)
             extra_edge_flats = torch.cat([torch.ones(1, extra_edge_flats.shape[-1]).to(device) * T,
