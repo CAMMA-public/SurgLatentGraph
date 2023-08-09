@@ -15,6 +15,7 @@ from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from mmdet.registry import MODELS
 from .lg_cvs import LGDetector
 from .predictor_heads.modules.layers import build_mlp
+from .predictor_heads.modules.utils import apply_sparse_mask, get_sparse_mask_inds
 
 @MODELS.register_module()
 class SV2LSTG(BaseDetector):
@@ -122,21 +123,30 @@ class SV2LSTG(BaseDetector):
                 # compute upsample factor
                 upsample_factor = int(np.ceil(len(batch_data_samples[0]) / len(filtered_batch_data_samples[0])))
 
-                # pad results
-                dummy_instance_data = InstanceData(bboxes=torch.zeros(0, 4),
-                        scores=torch.zeros(0), labels=torch.zeros(0)).to(ds_preds.device)
-                interp_results = [DetDataSample(metainfo=b.metainfo, pred_instances=dummy_instance_data) \
-                        for ind, b in enumerate(batch_data_samples[0])]
-                results = [results[ind // upsample_factor] if ind % upsample_factor == 0 else i \
-                        for ind, i in enumerate(interp_results)]
-
                 # pad predictions
                 ds_preds = ds_preds.repeat_interleave(upsample_factor, dim=1)[:,
                         :len(batch_data_samples[0])]
 
-            for r in results:
-                for r, p in zip(results, ds_preds.view(-1, ds_preds.shape[-1])):
-                    r.pred_ds = p
+                # pad results and add ds_preds
+                padded_results = []
+                dummy_instance_data = InstanceData(bboxes=torch.zeros(0, 4),
+                        scores=torch.zeros(0), labels=torch.zeros(0)).to(ds_preds.device)
+
+                for ind, (b, ds) in enumerate(zip(batch_data_samples[0], ds_preds.flatten(end_dim=1))):
+                    if ind % upsample_factor == 0:
+                        r = results[ind // upsample_factor]
+
+                    else:
+                        r = DetDataSample(metainfo=b.metainfo,
+                                pred_instances=dummy_instance_data)
+
+                    r.pred_ds = ds
+                    padded_results.append(r)
+
+            else:
+                for r in results:
+                    for r, p in zip(results, ds_preds.view(-1, ds_preds.shape[-1])):
+                        r.pred_ds = p
 
         else:
             results = results[T-1::T]
@@ -233,6 +243,7 @@ class SV2LSTG(BaseDetector):
 
         # pad spat graph if needed
         if len(graphs_to_use) == 2 and graphs_to_use[0].shape[-1] != graphs_to_use[1].shape[-1]:
+            breakpoint()
             # pad spat graph before adding
             padded_spat_graph = torch.zeros_like(graphs_to_use[1])
             padded_spat_graph[:B, :M, :M] = graphs_to_use[0]
@@ -247,7 +258,7 @@ class SV2LSTG(BaseDetector):
             M = T * N
 
         # create meshgrid to store node indices corresponding to each edge
-        edge_x = torch.meshgrid(torch.arange(M), torch.arange(M))[0].to(device)
+        edge_inds = torch.arange(M).to(device)
 
         # calculate offsets to add to the meshgrid computed indices based on the number of nodes in each graph in each clip
         batch_nodes_per_img = torch.stack(graphs.nodes.nodes_per_img)
@@ -255,35 +266,44 @@ class SV2LSTG(BaseDetector):
             batch_nodes_per_img[:, :-1].to(device)], -1), -1).unsqueeze(-1).repeat(1, 1, N)
 
         # get corrected edge indices
-        edge_x = (edge_x - N * torch.arange(T).unsqueeze(-1).repeat(1, N).view(-1, 1).to(device)) + \
-                offsets.view(offsets.shape[0], -1, 1)
-        edge_y = edge_x.transpose(1, 2)
+        edge_inds = edge_inds - N * torch.arange(T).repeat_interleave(N).to(device) + \
+                offsets.view(-1)
 
-        # compute edge presence
-        temporal_edge_adj_mat = torch.triu(sum(graphs_to_use), diagonal=1) # 0 if no edge, > 0 if there is an edge
-
-        # set invalid inds to 0 (based on nodes per img)
-
-        invalid_edge_inds = (node_boxes == torch.zeros(4).to(device)).all(-1).flatten(start_dim=1)
-        #for ind, e in enumerate(invalid_edge_inds):
-        #    temporal_edge_adj_mat[ind][e] = 0
-        #    temporal_edge_adj_mat[ind][:, e] = 0
-        temporal_edge_adj_mat[invalid_edge_inds] = 0
-        temporal_edge_adj_mat[invalid_edge_inds.unsqueeze(1).repeat(1, M, 1)] = 0
-
-        # compute presence, box, class of each edge
+        # stack graphs to use to get temporal_edge_class
         temporal_edge_class = torch.stack(graphs_to_use, -1)
 
-        # update graphs.edges with temporal edge quantities
-        for ind, (eam, ec, edge_x_i, edge_y_i) in enumerate(zip(temporal_edge_adj_mat,
-                temporal_edge_class, edge_x, edge_y)):
+        # upper triangular mask
+        mask = torch.triu(torch.ones(*temporal_edge_class.shape[:-1]), diagonal=1).to_sparse().to(device)
 
-            # update edge flats
-            extra_edge_flats = torch.stack([edge_x_i[eam > 0], edge_y_i[eam > 0]], -1).long()
+        # apply mask
+        temporal_edge_class = apply_sparse_mask(temporal_edge_class, mask)
+
+        # set invalid inds to 0 (based on nodes per img)
+        npi = graphs.nodes.nodes_per_img
+        npi_mask = torch.stack([pad_sequence(torch.ones(T).repeat_interleave(n.int()).split(
+            n.int().tolist()), batch_first=True).view(M,).to_sparse() for n in npi]).to(device)
+        valid_edge_inds = npi_mask.float()
+
+        # mask out invalid_edge_inds on both axes
+        temporal_edge_class = temporal_edge_class * valid_edge_inds.to_dense().view(B, -1, 1, 1)
+        temporal_edge_class = temporal_edge_class * valid_edge_inds.to_dense().view(B, 1, -1, 1)
+        temporal_edge_class = torch.masked._combine_input_and_mask(sum, temporal_edge_class.coalesce(),
+                temporal_edge_class.coalesce())
+
+        # update graphs.edges with temporal edge quantities
+        for ind, (ec, edge_i) in enumerate(zip(temporal_edge_class, edge_inds)):
+            # get information from ec
+            all_nonzero_vals = ec.coalesce().values()
+            all_nonzero_inds = ec.coalesce().indices()
+            nonzero_uids, nonzero_idx, nonzero_counts = torch.unique(all_nonzero_inds[:2],
+                    dim=-1, sorted=True, return_inverse=True, return_counts=True)
+
+            # UPDATE EDGE FLATS
+            extra_edge_flats = edge_inds[nonzero_uids]
 
             # add img id for temporal edges (set as T, 0 to T-1 being the frame ids)
-            extra_edge_flats = torch.cat([torch.ones_like(extra_edge_flats)[:, 0:1] * T,
-                extra_edge_flats], dim=1)
+            extra_edge_flats = torch.cat([torch.ones(1, extra_edge_flats.shape[-1]).to(device) * T,
+                extra_edge_flats]).T.long()
 
             if self.use_temporal_edges_only:
                 graphs.edges.edge_flats[ind] = extra_edge_flats
@@ -291,10 +311,22 @@ class SV2LSTG(BaseDetector):
                 graphs.edges.edge_flats[ind] = torch.cat([graphs.edges.edge_flats[ind],
                     extra_edge_flats])
 
-            # update class logits
-            extra_edge_class_logits = ec[eam > 0]
+            # UPDATE CLASS LOGITS
+
+            # define extra_edge_class_logits
+            extra_edge_class_logits = torch.ones(nonzero_uids.shape[-1], ec.shape[-1]).to(device)
+
+            # loop through edge type and populate class logits
+            for i in range(ec.shape[-1]):
+                inds_i = (all_nonzero_inds[-1] == i)
+
+                # find target index for each edge, assign value
+                extra_edge_class_logits[nonzero_idx[inds_i], i] = all_nonzero_vals[inds_i]
+
             if self.use_temporal_edges_only:
-                graphs.edges.class_logits[ind] = extra_edge_classes
+                extra_edge_class_logits = torch.cat([torch.zeros(extra_edge_class_logits.shape[0],
+                    self.num_frame_edge_classes).to(device), extra_edge_class_logits], 1)
+                graphs.edges.class_logits[ind] = extra_edge_class_logits
             else:
                 extra_edge_class_logits = torch.cat([torch.zeros(extra_edge_class_logits.shape[0],
                     self.num_frame_edge_classes).to(device), extra_edge_class_logits], 1)
@@ -302,14 +334,9 @@ class SV2LSTG(BaseDetector):
                         extra_edge_class_logits])
 
             # update boxes
-            #eb = torch.zeros(M, M, 4).to(device)
-            eb = self._box_union(node_boxes[ind].flatten(end_dim=1).unsqueeze(0),
-                    node_boxes[ind].flatten(end_dim=1).unsqueeze(0))[0]
-            pad_size = eam.shape[0] - eb.shape[0]
-            eb = F.pad(eb.permute(2, 0, 1), (0, pad_size, 0, pad_size)).permute(1, 2, 0)
-            extra_edge_boxes = eb[eam > 0]
-            #extra_boxesA = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 0]]
-            #extra_boxesB = node_boxes[ind].flatten(end_dim=1)[torch.nonzero(eam > 0)[:, 1]]
+            extra_boxesA = node_boxes[ind].flatten(end_dim=1)[nonzero_uids[0]]
+            extra_boxesB = node_boxes[ind].flatten(end_dim=1)[nonzero_uids[1]]
+            extra_edge_boxes = self._box_union(extra_boxesA, extra_boxesB)
             if self.use_temporal_edges_only:
                 graphs.edges.boxes[ind] = extra_edge_boxes
                 #graphs.edges.boxesA[ind] = extra_boxesA
@@ -322,6 +349,7 @@ class SV2LSTG(BaseDetector):
             try:
                 # update viz feats
                 extra_edge_viz_feats = graphs.nodes.feats[ind].view(M, -1)[extra_edge_flats].mean(1)[:, :self.viz_feat_size]
+
                 # compute sem feats
                 extra_edge_sem_feats = self._compute_sem_feats(extra_edge_boxes,
                         extra_edge_class_logits, batch_input_shape)
@@ -354,22 +382,30 @@ class SV2LSTG(BaseDetector):
 
         return sem_feats
 
-    def _box_union(self, boxes1, boxes2):
-        # boxes1, boxes2: Tensors of shape (B, N1, 4) and (B, N2, 4) representing bounding boxes in (x1, y1, x2, y2) format
-        B, N1, _ = boxes1.shape
-        B, N2, _ = boxes2.shape
+    def _box_union(self, boxesA, boxesB):
+        """
+        Compute the union of boxes in two lists.
 
-        # Expand dimensions to perform broadcasting
-        boxes1 = boxes1.unsqueeze(2)  # (B, N1, 1, 4)
-        boxes2 = boxes2.unsqueeze(1)  # (B, 1, N2, 4)
+        Args:
+            boxesA (torch.Tensor): Tensor of shape (N, 4) representing the boxes in list A.
+            boxesB (torch.Tensor): Tensor of shape (N, 4) representing the boxes in list B.
 
-        # Compute the coordinates of the intersection bounding boxes
-        union_x1 = torch.min(boxes1[:, :, :, 0], boxes2[:, :, :, 0])  # (B, N1, N2)
-        union_y1 = torch.min(boxes1[:, :, :, 1], boxes2[:, :, :, 1])  # (B, N1, N2)
-        union_x2 = torch.max(boxes1[:, :, :, 2], boxes2[:, :, :, 2])  # (B, N1, N2)
-        union_y2 = torch.max(boxes1[:, :, :, 3], boxes2[:, :, :, 3])  # (B, N1, N2)
+        Returns:
+            torch.Tensor: Tensor of shape (N, 4) representing the union of boxes.
+        """
 
-        return torch.stack([union_x1, union_y1, union_x2, union_y2], -1)
+        # Compute the minimum x and y coordinates
+        x_min = torch.min(boxesA[:, 0], boxesB[:, 0])
+        y_min = torch.min(boxesA[:, 1], boxesB[:, 1])
+
+        # Compute the maximum x and y coordinates
+        x_max = torch.max(boxesA[:, 2], boxesB[:, 2])
+        y_max = torch.max(boxesA[:, 3], boxesB[:, 3])
+
+        # Create the union boxes tensor
+        union_boxes = torch.stack([x_min, y_min, x_max, y_max], dim=1)
+
+        return union_boxes
 
     def _build_visual_edges(self, graphs: BaseDataElement):
         # store components of shape
@@ -390,7 +426,7 @@ class SV2LSTG(BaseDetector):
                 torch.linalg.norm(sim2, dim=1, keepdim=True)) + 1e-5
         sm_graph = torch.clamp(sm_graph / sm_graph_norm_factor, 0, 1)
         if sm_graph.shape[-1] == 0:
-            return sm_graph
+            return sm_graph.to_sparse()
 
         # 0 out intra-frame edges
         intra_frame_inds = (torch.stack(torch.meshgrid(torch.arange(N),
@@ -414,14 +450,14 @@ class SV2LSTG(BaseDetector):
         topk_vals_norm = topk_vals / (topk_vals.sum(-1).unsqueeze(-1) + 1e-5)
         topk_sm_graph.scatter_(-1, inds, topk_vals_norm)
 
-        return topk_sm_graph
+        return topk_sm_graph.to_sparse()
 
     def _build_spatial_edges(self, boxes: Tensor):
         B, T, N, _ = boxes.size()
         M = T*N
 
-        front_graph = torch.zeros((B, M, M)).to(boxes.device)
-        back_graph = torch.zeros((B, M, M)).to(boxes.device)
+        front_graph = torch.zeros(B, M, M).to(boxes.device)
+        back_graph = torch.zeros(B, M, M).to(boxes.device)
 
         if M == 0:
             return None
@@ -429,9 +465,8 @@ class SV2LSTG(BaseDetector):
         areas = (boxes[:,:,:,3] - boxes[:,:,:,1] + 1) * \
                 (boxes[:,:,:,2] - boxes[:,:,:,0] + 1)
 
-        # TODO(adit98) vectorize this
-        edge_max_temporal_range = self.edge_max_temporal_range if self.edge_max_temporal_range > 0 \
-                else T
+        # set temporal edge ranges
+        edge_max_temporal_range = self.edge_max_temporal_range if self.edge_max_temporal_range > 0 else T
         if self.temporal_edge_ranges == 'exp':
             ranges = [2 ** x for x in range(int(np.sqrt(edge_max_temporal_range)) + 1)]
         else:
@@ -443,31 +478,27 @@ class SV2LSTG(BaseDetector):
                     continue
                 for i in range(N):
                     ious = self._compute_iou(boxes[:,t,i], boxes[:,t-r], areas[:,t,i:i+1],
-                            areas[:,t-r])
+                            areas[:,t-r]).nan_to_num(0)
                     if self.use_max_iou_only:
                         norm_iou = F.one_hot(ious.argmax(-1), num_classes=N)
                     else:
-                        norm_iou = ious / ious.sum(-1).unsqueeze(-1)
+                        norm_iou = ious / (ious.sum(-1).unsqueeze(-1) + 1e-5)
 
-                    # update front graph with normalized ious
-                    front_graph[:, t*N+i, (t-r)*N:(t-r+1)*N] = norm_iou
-
-                    # update back graph with raw ious
-                    back_graph[:, (t-r)*N:(t-r+1)*N, t*N+i] = ious
+                    front_graph[:, t*N + i, (t-r)*N:(t-r+1)*N] = norm_iou
+                    back_graph[:, (t-r)*N:(t-r+1)*N, t*N + i] = ious
 
                 # normalize back graph by sum of all incoming edges for each pair in temporal range r
                 if self.use_max_iou_only:
-                    back_graph[:, (t-r)*N:(t-r+1)*N, t*N:(t+1)*N] = F.one_hot(back_graph[:,
-                        (t-r)*N:(t-r+1)*N, t*N:(t+1)*N].argmax(-1), num_classes=N)
+                    bg_vals = back_graph[:, (t-r)*N:(t-r+1)*N, t*N:(t+1)*N]
+                    back_graph[:, (t-r)*N:(t-r+1)*N, t*N:(t+1)*N] = F.one_hot(bg_vals.argmax(-1),
+                            num_classes=N)
+
                 else:
                     back_graph[:, (t-r)*N:(t-r+1)*N, t*N:(t+1)*N] /= back_graph[:,
                             (t-r)*N:(t-r+1)*N, t*N:(t+1)*N].sum(-1).unsqueeze(-1)
 
-        # NaN to zero
-        front_graph[front_graph != front_graph] = 0
-        back_graph[back_graph != back_graph] = 0
-
-        fb_graph = torch.maximum(front_graph.transpose(1, 2), back_graph)
+        # combine forward and backward graph
+        fb_graph = torch.maximum(front_graph.transpose(1, 2), back_graph).to_sparse()
 
         return fb_graph
 
@@ -534,7 +565,7 @@ class SV2LSTG(BaseDetector):
             results = [DetDataSample(pred_instances=p, metainfo=m) for p, m in zip(pred_instances, metainfo)]
 
         else:
-            feats, graphs, detached_results, results, _ = self.lg_detector.extract_lg(
+            feats, graphs, detached_results, results, _, _ = self.lg_detector.extract_lg(
                     batch_inputs.flatten(end_dim=1),
                     [x for y in batch_data_samples for x in y],
                     force_perturb=self.training and self.perturb)
