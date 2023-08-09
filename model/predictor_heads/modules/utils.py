@@ -45,3 +45,44 @@ class CustomSequential(nn.Sequential):
                 input = module(input)
 
         return input
+
+def apply_sparse_mask(mat, mask):
+    # get intersection mask
+    if mat.ndim > mask.ndim:
+        intersect_mask = torch.stack([torch.masked._combine_input_and_mask(
+            sum, mask.coalesce(), mat.coalesce()[..., i]) \
+                    for i in range(mat.shape[-1])], -1)
+    else:
+        intersect_mask = torch.masked._combine_input_and_mask(sum, mask.coalesce(),
+                mat.coalesce())
+
+    intersect_mask = torch.masked._combine_input_and_mask(sum, intersect_mask.coalesce(),
+            intersect_mask.coalesce())
+
+    # mask mat
+    mat = torch.masked._combine_input_and_mask(sum, mat.coalesce(),
+            intersect_mask.coalesce())
+
+    # remove any excess 0s
+    mat = torch.masked._combine_input_and_mask(sum, mat.coalesce(), mat.coalesce())
+
+    return mat
+
+def get_sparse_mask_inds(mat, inds, N):
+    sparse_inds = []
+    for dim, i in enumerate(inds):
+        if i == -1:
+            sparse_inds.append(torch.arange(mat.shape[0], device=mat.device).repeat_interleave(N))
+
+        elif isinstance(i, tuple) or isinstance(i, list):
+            sparse_inds.append(torch.arange(i[0], i[1], device=mat.device))
+
+        else:
+            sparse_inds.append(torch.ones(1, device=mat.device).repeat_interleave(N) * i)
+
+    try:
+        sparse_inds = torch.stack(sparse_inds)
+    except:
+        raise ValueError("Invalid indices for get_sparse_mask_inds!")
+
+    return sparse_inds
