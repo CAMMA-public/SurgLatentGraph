@@ -10,11 +10,12 @@ from .modules.utils import *
 from .modules.mstcn import MultiStageModel as MSTCN
 import torch
 from torch import Tensor
-from torch_scatter import scatter_mean
+from torch_scatter import scatter_mean, scatter_max
 import torch.nn.functional as F
 from typing import List, Union
 import torch.nn.functional as F
 import random
+import dgl
 
 @MODELS.register_module()
 class DSHead(BaseModule, metaclass=ABCMeta):
@@ -34,9 +35,9 @@ class DSHead(BaseModule, metaclass=ABCMeta):
     def __init__(self, num_classes: int, gnn_cfg: ConfigType,
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
-            loss: Union[List, ConfigType], use_img_feats=True, loss_consensus: str = 'mode',
-            num_predictor_layers: int = 2, loss_weight: float = 1.0,
-            init_cfg: OptMultiConfig = None) -> None:
+            loss: Union[List, ConfigType], use_img_feats=True, img_feats_only: bool = False,
+            loss_consensus: str = 'mode', num_predictor_layers: int = 2,
+            loss_weight: float = 1.0, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # set viz and sem dims for projecting node/edge feats in input graph
@@ -61,11 +62,12 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         # img feat params
         self.use_img_feats = use_img_feats
+        self.img_feats_only = img_feats_only
         self.img_feat_key = img_feat_key
         self.img_feat_projector = torch.nn.Linear(img_feat_size, self.graph_feat_projected_dim)
 
         # predictor, loss params
-        if self.use_img_feats:
+        if self.use_img_feats and not self.img_feats_only:
             predictor_dim = gnn_cfg.input_dim_node * 2
         else:
             predictor_dim = gnn_cfg.input_dim_node
@@ -171,11 +173,13 @@ class STDSHead(DSHead):
             pred_per_frame: bool = False, per_video: bool = False,
             use_node_positional_embedding: bool = True,
             use_positional_embedding: bool = False, edit_graph: bool = False,
-            reassign_edges: bool = False, combine_nodes: bool = False,
-            causal: bool = False, gnn_cfg: ConfigType = None, **kwargs) -> None:
+            reassign_edges: bool = True, combine_nodes: bool = True,
+            causal: bool = False, gnn_cfg: ConfigType = None,
+            keep_all_instances: list = [0, 0, 0, 0, 0, 1], **kwargs) -> None:
 
         # set causal in gnn_cfg
         gnn_cfg.causal = causal
+        self.gnn_cfg = gnn_cfg
         super().__init__(gnn_cfg=gnn_cfg, **kwargs)
         self.num_temp_frames = num_temp_frames
         self.use_temporal_model = use_temporal_model
@@ -185,6 +189,7 @@ class STDSHead(DSHead):
         self.edit_graph = edit_graph
         self.reassign_edges = reassign_edges
         self.combine_nodes = combine_nodes
+        self.keep_all_instances = keep_all_instances
         self.causal = causal
 
         # positional embedding
@@ -240,9 +245,10 @@ class STDSHead(DSHead):
         graph.edges.feats = torch.cat(edge_feats, -1)
         dgl_g = self.gnn(graph)
 
-        # TODO edit graph
+        # edit graph
         if self.edit_graph:
-            dgl_g = self._edit_graph(dgl_g, graph.nodes.nodes_per_img)
+            dgl_g, edited_nodes_per_img = self._edit_graph(dgl_g, graph.nodes.nodes_per_img)
+            graph.nodes.nodes_per_img = edited_nodes_per_img
 
         # get node features and pool to get graph feats
         node_feats = dgl_g.ndata['feats'] + dgl_g.ndata['orig_feats'] # skip connection
@@ -271,8 +277,10 @@ class STDSHead(DSHead):
                 img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training).mean(1, keepdims=True)
 
             img_feats = self.img_feat_projector(img_feats)
-            #final_feats = img_feats + graph_feats.view(B, T, -1)
-            final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
+            if self.img_feats_only:
+                final_feats = img_feats
+            else:
+                final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
 
         else:
             final_feats = graph_feats.view(B, T, -1)
@@ -382,18 +390,18 @@ class STDSHead(DSHead):
             return batched_graph, nodes_per_img
 
         # split graph into clip graphs
-        node_labels = batched_graph.ndata['labels'][:, 1:].argmax(-1)
-        node_features = batched_graph.ndata['node_feats']
+        node_labels = batched_graph.ndata['labels']
+        node_features = batched_graph.ndata['feats']
         nodes_per_clip = batched_graph.batch_num_nodes()
         edges_per_clip = batched_graph.batch_num_edges()
         edge_flats = torch.stack(batched_graph.edges(), -1)
         clip_graphs = dgl.unbatch(batched_graph)
 
         # compute node degrees and split by frame
-        node_degrees_frame = [(g.in_degrees() + g.out_degrees()).split(npi) for g, npi in zip(clip_graphs, nodes_per_img)]
+        node_degrees_frame = [(g.in_degrees() + g.out_degrees()).split(npi.int().tolist()) for g, npi in zip(clip_graphs, nodes_per_img)]
 
         # split labels, node_degrees by frame
-        node_labels_frame = [g.split(npi) for g, npi in zip(node_labels.long().split(nodes_per_clip.tolist()), nodes_per_img)]
+        node_labels_frame = [g.split(npi.int().tolist()) for g, npi in zip(node_labels.long().split(nodes_per_clip.tolist()), nodes_per_img)]
 
         # compute the instance of each class that has max degree in each frame
         max_degree_inds = [[scatter_max(d, l)[1] for d, l in zip(ndf, nlf)] for ndf, nlf in zip(node_degrees_frame, node_labels_frame)]
@@ -403,7 +411,7 @@ class STDSHead(DSHead):
 
         # if we want to keep all instances of an object class, set that
         keep_instance_inds = (node_labels.unsqueeze(-1) == (torch.tensor(self.keep_all_instances).to(node_labels) - 1)).any(-1)
-        keep_instance_inds_frame = [x.split(npi) for x, npi in zip(keep_instance_inds.split(
+        keep_instance_inds_frame = [x.split(npi.int().tolist()) for x, npi in zip(keep_instance_inds.split(
             nodes_per_clip.tolist()), nodes_per_img)]
 
         # get the indices where the actual degree matches the max degree
@@ -412,8 +420,8 @@ class STDSHead(DSHead):
                     node_labels_frame, keep_instance_inds_frame, max_degree_inds)]
 
         # inds_to_keep_frame -> inds_to_keep
-        frame_offsets = [torch.tensor([0] + npi[:-1]).cumsum(0) for npi in nodes_per_img]
-        clip_offsets = torch.tensor([0] + [sum(x) for x in nodes_per_img[:-1]]).cumsum(0)
+        frame_offsets = [torch.tensor([0] + npi.int()[:-1].tolist()).cumsum(0) for npi in nodes_per_img]
+        clip_offsets = torch.tensor([0] + [sum(npi.int()) for npi in nodes_per_img[:-1]]).cumsum(0)
         inds_to_keep = [[i + o + co for i, o in zip(clip_inds, fo)] for clip_inds, fo, co in zip(
             inds_to_keep_frame, frame_offsets, clip_offsets)]
 
@@ -425,7 +433,7 @@ class STDSHead(DSHead):
             # use node reassignment map to combine node features, set in batched graph
             updated_node_features = scatter_mean(node_features, node_reassignment_map,
                     dim=0, dim_size=node_features.shape[0])
-            batched_graph.ndata['node_features'] = updated_node_features
+            batched_graph.ndata['feats'] = updated_node_features
 
         reassign_edges = False
         if self.reassign_edges and (not self.training or random.random() > 0.5): # always edit in eval, random in train
@@ -445,9 +453,6 @@ class STDSHead(DSHead):
             # get remaining edge data, filter with unique_inds
             updated_edge_data = {}
             for k in batched_graph.edata.keys():
-                if not 'edge' in k:
-                    continue
-
                 updated_edge_data.update({k: batched_graph.edata[k][unique_inds]})
 
             # add edges to graph
@@ -456,11 +461,11 @@ class STDSHead(DSHead):
 
             # remove self loops that may have been added
             batched_graph = batched_graph.remove_self_loop()
-            if self.add_self_loops:
-                batched_graph = batched_graph.add_self_loop()
+            if self.gnn_cfg.add_self_loops:
+                batched_graph = batched_graph.add_self_loops()
 
         # now only keep inds_to_keep in batched_graph, recompute nodes_per_img
-        edited_nodes_per_img = [[len(x) for x in i] for i in inds_to_keep]
+        edited_nodes_per_img = [Tensor([len(x) for x in i]) for i in inds_to_keep]
         inds_to_keep_tensor = torch.cat([torch.cat(i) for i in inds_to_keep])
         edited_batched_graph = batched_graph.subgraph(inds_to_keep_tensor)
 

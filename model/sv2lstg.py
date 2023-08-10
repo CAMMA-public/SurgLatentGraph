@@ -22,7 +22,7 @@ class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType,
             viz_feat_size=256, sem_feat_size=256, sim_embedder_feat_size=256,
             num_frame_edge_classes=4, use_spat_graph: bool = True,
-            use_viz_graph: bool = True, learn_sim_graph: bool = True,
+            use_viz_graph: bool = True, learn_sim_graph: bool = False,
             semantic_feat_projector_layers: int = 3, pred_per_frame: bool = False,
             num_sim_topk: int = 2, temporal_edge_ranges: str = 'exp',
             edge_max_temporal_range: int = -1, use_max_iou_only: bool = True,
