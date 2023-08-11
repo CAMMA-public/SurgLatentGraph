@@ -30,8 +30,8 @@ ds_head['causal'] = True
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 ds_head['use_temporal_model'] = True
 ds_head['temporal_arch'] = 'tcn'
-ds_head['final_viz_feat_size'] = 128
-ds_head['final_sem_feat_size'] = 128
+ds_head['final_viz_feat_size'] = 256
+ds_head['final_sem_feat_size'] = 256
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor

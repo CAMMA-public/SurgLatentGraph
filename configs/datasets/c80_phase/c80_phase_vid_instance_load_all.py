@@ -30,7 +30,7 @@ eval_pipeline = [
     dict(
         type='TransformBroadcaster',
         transforms=[
-            dict(type='LoadLG', saved_graph_dir='latent_graphs/c80_phase_faster_rcnn',
+            dict(type='LoadLG', saved_graph_dir='',
                 skip_keys=['boxesA', 'boxesB'], load_keyframes_only=True),
             dict(type='LoadTrackAnnotationsWithDS', with_mask=False),
         ],
