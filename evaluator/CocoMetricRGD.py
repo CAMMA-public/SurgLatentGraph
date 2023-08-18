@@ -62,8 +62,9 @@ class CocoMetricRGD(CocoMetric):
                 for data_sample in data_samples:
                     result = dict()
                     result['img_id'] = data_sample['img_id']
-                    result['bboxes'] = data_sample['pred_instances']['bboxes']
-                    result['labels'] = data_sample['pred_instances']['labels']
+                    if 'pred_instances' in data_sample:
+                        result['bboxes'] = data_sample['pred_instances']['bboxes']
+                        result['labels'] = data_sample['pred_instances']['labels']
 
                     # parse gt
                     gt = dict()
