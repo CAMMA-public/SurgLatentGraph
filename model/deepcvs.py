@@ -88,7 +88,7 @@ class DeepCVS(BaseDetector):
 
             mask_layout = pad_sequence(mask_layouts, batch_first=True)
 
-            # to construct layout, one hot encode mask_layout, sum across instance dim
+            # to construct layout, one hot encode mask_layout, max across instance dim
             mask_ohl = F.one_hot(mask_layout, self.detector_num_classes + 1)
             if mask_ohl.shape[1] == 0:
                 layout = torch.zeros(*mask_ohl.transpose(1, -1).shape[:-1]).to(mask_ohl.device).float()
@@ -196,7 +196,7 @@ class DeepCVS(BaseDetector):
         # extract quantities (resize)
         detections_size = results[0].ori_shape
         img_size = results[0].batch_input_shape
-        scale_factor = (Tensor(img_size) / Tensor(detections_size)).flip(0).to(batch_inputs.device)
+        scale_factor = (Tensor(img_size) / Tensor(detections_size)).to(batch_inputs.device)
 
         if self.use_gt_dets:
             classes = [r.gt_instances.labels for r in results]
@@ -215,7 +215,7 @@ class DeepCVS(BaseDetector):
                 _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
 
             else:
-                layout, _, _  = self._construct_layout(img_size, classes, boxes)
+                _, layout, _  = self._construct_layout(img_size, classes, boxes)
 
         else:
             classes = [r.pred_instances.labels for r in results]
@@ -232,7 +232,7 @@ class DeepCVS(BaseDetector):
                 _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
 
             else:
-                layout, _, _  = self._construct_layout(img_size, classes, boxes)
+                _, layout, _  = self._construct_layout(img_size, classes, boxes)
 
         # make sure we only store pure bg pixels with a 0 in channel 0
         layout[:, 0] = 1 - layout[:, 1:].max(1).values
