@@ -30,16 +30,16 @@ dc_model = dict(
     decoder_backbone=dict(
         type='ResNet',
         in_channels=4+len(_base_.metainfo.classes), # 3 channels + detector_num_classes + 1 (bg)
-        depth=18,
+        depth=50,
         num_stages=4,
-        out_indices=(3,),
+        out_indices=(0, 1, 2, 3),
         frozen_stages=-1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='torchvision://resnet18'
+            checkpoint='torchvision://resnet50'
         ),
     ),
     loss=dict(
@@ -85,21 +85,21 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
