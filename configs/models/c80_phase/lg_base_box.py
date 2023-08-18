@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/c80_phase_instance.py',
+    '../datasets/c80_phase/c80_phase_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -54,33 +54,28 @@ lg_model=dict(
 )
 
 # metric
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=data_root,
-        data_prefix=val_data_prefix,
-        ann_file=os.path.join(data_root, 'val_phase/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-    )
-]
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=data_root,
+    data_prefix=val_data_prefix,
+    ann_file=os.path.join(data_root, 'val_phase/annotation_coco.json'),
+    metric=['bbox'],
+    additional_metrics=['reconstruction'],
+    use_pred_boxes_recon=False,
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=data_root,
-        data_prefix=test_data_prefix,
-        ann_file=os.path.join(data_root, 'test_phase/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_preds/test',
-        save_graphs=True,
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=data_root,
+    data_prefix=test_data_prefix,
+    ann_file=os.path.join(data_root, 'test_phase/annotation_coco.json'),
+    metric=['bbox'],
+    additional_metrics=['reconstruction'],
+    use_pred_boxes_recon=False,
+    outfile_prefix='./results/c80_preds/test',
+)
 
 # Running settings
 train_cfg = dict(

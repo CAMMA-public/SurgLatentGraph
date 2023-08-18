@@ -1,10 +1,12 @@
 from mmdet.registry import HOOKS
 from mmengine.hooks import Hook
+from prettytable import PrettyTable
+import torch
 
 @HOOKS.register_module()
 class FreezeDetectorHook(Hook):
-    def __init__(self, freeze_graph_head=False):
-        self.freeze_graph_head = freeze_graph_head
+    def __init__(self, train_ds_only=False):
+        self.train_ds_only = train_ds_only
 
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
@@ -15,36 +17,88 @@ class FreezeDetectorHook(Hook):
 
         model.detector.eval()
 
-        # also freeze graph head (but not edge_sem_feat_projector) if it exists
-        if self.freeze_graph_head:
-            try:
-                for name, p in model.graph_head.named_parameters():
-                    if not 'edge_semantic_feat_projector' in name:
-                        p.requires_grad = False
-                for name, m in model.graph_head.named_modules():
-                    if not 'edge_semantic_feat_projector' in name:
-                        m.eval()
+        # if only training ds, freeze everything but ds_head
+        if self.train_ds_only:
+            for name, p in model.named_parameters():
+                if 'ds_head' in name:
+                    continue
 
-            except AttributeError as e:
-                print(e)
+                p.requires_grad = False
+
+            for name, m in model.graph_head.named_modules():
+                if 'ds_head' in name:
+                    continue
+
+                m.eval()
+
+@HOOKS.register_module()
+class CountTrainableParameters(Hook):
+    def before_train(self, runner) -> None:
+        self.count_parameters(runner.model)
+
+    def count_parameters(self, model):
+        table = PrettyTable(["Modules", "Parameters"])
+        total_params = 0
+        for name, parameter in model.named_parameters():
+            if not parameter.requires_grad: continue
+            params = parameter.numel()
+            table.add_row([name, params])
+            total_params += params
+
+        print(table)
+        print(f"Total Trainable Params: {total_params}")
+
+@HOOKS.register_module()
+class FreezeLGDetector(Hook):
+    def __init__(self, finetune_backbone=False):
+        self.finetune_backbone = finetune_backbone
+
+    def before_train_iter(self, runner, **kwargs):
+        model = runner.model
+        if self.finetune_backbone:
+            # only freeze detector in lg detector
+            for p in model.lg_detector.detector.parameters():
+                p.requires_grad = False
+            for m in model.lg_detector.detector.modules():
+                m.eval()
+
+            model.lg_detector.detector.eval()
+
+        else:
+            for p in model.lg_detector.parameters():
+                p.requires_grad = False
+            for m in model.lg_detector.modules():
+                m.eval()
+
+        model.lg_detector.eval()
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):
+    def __init__(self, temporal=False):
+        self.temporal = temporal
+
     def before_train(self, runner) -> None:
         # copy weights for backbone, neck if it exists
         if not runner._resume and runner.model.training:
-            if 'DeformableDETR' in type(runner.model.detector).__name__:
+            if self.temporal:
+                det = runner.model.lg_detector.detector
+                lg_model = runner.model.lg_detector
+            else:
+                det = runner.model.detector
+                lg_model = runner.model
+
+            if 'DeformableDETR' in type(det).__name__:
                 try:
-                    runner.model.trainable_backbone.load_state_dict(runner.model.detector.state_dict())
+                    lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
                     print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
                     print()
                 except AttributeError as e:
                     print(e)
 
-            elif 'Mask2Former' in type(runner.model.detector).__name__:
+            elif 'Mask2Former' in type(det).__name__:
                 try:
-                    runner.model.trainable_backbone.load_state_dict(runner.model.detector.state_dict())
+                    lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
                     print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
                     print()
@@ -53,9 +107,9 @@ class CopyDetectorBackbone(Hook):
 
             else:
                 try:
-                    runner.model.trainable_backbone.backbone.load_state_dict(runner.model.detector.backbone.state_dict())
+                    lg_model.trainable_backbone.backbone.load_state_dict(det.backbone.state_dict())
                     try:
-                        runner.model.trainable_backbone.neck.load_state_dict(runner.model.detector.neck.state_dict())
+                        lg_model.trainable_backbone.neck.load_state_dict(det.neck.state_dict())
                     except RuntimeError as re:
                         print("SKIPPING LOADING OF NECK WEIGHTS")
 
@@ -64,3 +118,14 @@ class CopyDetectorBackbone(Hook):
                     print()
                 except AttributeError as e:
                     print(e)
+
+@HOOKS.register_module()
+class ClearGPUMem(Hook):
+    def after_train_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()
+
+    def after_val_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()
+
+    def after_test_iter(self, runner, **kwargs) -> None:
+        torch.cuda.empty_cache()

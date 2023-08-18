@@ -19,7 +19,7 @@ save_graphs = False
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
-lg_model.graph_head.compute_gt_eval = False
+lg_model.graph_head.compute_gt_eval = save_graphs
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=7,
@@ -43,7 +43,7 @@ lg_model.ds_head = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=False,
-        class_weight=[1.61803561, 0.18816378, 1, 0.24091337, 1.85450955, 0.98427673, 2.12283346]
+        class_weight=[1.9209686, 0.19571111, 0.98499113, 0.2993076, 1.9426803, 1,  2.20292951],
     ),
     num_predictor_layers=3,
 )
@@ -87,51 +87,46 @@ train_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='train_phase/annotation_phase_coco.json',
+        ann_file='train_phase/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='val_phase/annotation_phase_coco.json',
+        ann_file='val_phase/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='test_phase/annotation_phase_coco.json',
+        ann_file='test_phase/annotation_ds_coco.json',
     ),
 )
 
 # metric (in case we need to change dataset)
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=_base_.data_root,
-        data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_phase_coco.json'),
-        use_pred_boxes_recon=True,
-        metric=[],
-    )
-]
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=_base_.data_root,
+    data_prefix=_base_.val_data_prefix,
+    ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='c80_phase',
-        data_root=_base_.data_root,
-        data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_phase_coco.json'),
-        metric=[],
-        #additional_metrics = ['reconstruction'],
-        use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_phase_preds/test',
-        save_graphs=save_graphs,
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='c80_phase',
+    data_root=_base_.data_root,
+    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
+    metric=[],
+    #additional_metrics = ['reconstruction'],
+    use_pred_boxes_recon=True,
+    outfile_prefix='./results/c80_phase_preds/test',
+)
 
 # optimizer
 del _base_.param_scheduler

@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/endoscapes_instance.py',
+    '../datasets/endoscapes/endoscapes_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -48,21 +48,21 @@ train_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='train/annotation_cvs_coco.json',
+        ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='val/annotation_cvs_coco.json',
+        ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
     num_workers=4,
     dataset=dict(
-        ann_file='test/annotation_cvs_coco.json',
+        ann_file='test/annotation_ds_coco.json',
     ),
 )
 
@@ -73,7 +73,7 @@ val_evaluator = [
         prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
     )
@@ -85,7 +85,7 @@ test_evaluator = [
         prefix='endoscapes',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,

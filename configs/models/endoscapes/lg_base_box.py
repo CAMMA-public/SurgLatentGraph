@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/endoscapes_instance.py',
+    '../datasets/endoscapes/endoscapes_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -54,33 +54,28 @@ lg_model=dict(
 )
 
 # metric
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='endoscapes',
-        data_root=data_root,
-        data_prefix=val_data_prefix,
-        ann_file=os.path.join(data_root, 'val/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-    )
-]
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='endoscapes',
+    data_root=data_root,
+    data_prefix=val_data_prefix,
+    ann_file=os.path.join(data_root, 'val/annotation_coco.json'),
+    metric=['bbox'],
+    additional_metrics=['reconstruction'],
+    use_pred_boxes_recon=False,
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='endoscapes',
-        data_root=data_root,
-        data_prefix=test_data_prefix,
-        ann_file=os.path.join(data_root, 'test/annotation_coco.json'),
-        metric=['bbox'],
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
-        save_graphs=True,
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='endoscapes',
+    data_root=data_root,
+    data_prefix=test_data_prefix,
+    ann_file=os.path.join(data_root, 'test/annotation_coco.json'),
+    metric=['bbox'],
+    additional_metrics=['reconstruction'],
+    use_pred_boxes_recon=False,
+    outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+)
 
 # learning rate
 param_scheduler = [

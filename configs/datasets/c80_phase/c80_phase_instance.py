@@ -91,6 +91,7 @@ train_dataloader = dict(
         metainfo=metainfo,
         ann_file='train_phase/annotation_coco.json',
         data_prefix=dict(img='train_phase/'),
+        filter_cfg=dict(filter_empty_gt=False),
         pipeline=train_pipeline))
 
 val_dataloader = dict(
@@ -101,6 +102,7 @@ val_dataloader = dict(
         metainfo=metainfo,
         ann_file='val_phase/annotation_coco.json',
         data_prefix=dict(img='val_phase/'),
+        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 test_dataloader = dict(
@@ -111,6 +113,7 @@ test_dataloader = dict(
         metainfo=metainfo,
         ann_file='test_phase/annotation_coco.json',
         data_prefix=dict(img='test_phase/'),
+        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 # metric

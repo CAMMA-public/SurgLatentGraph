@@ -1,1 +1,1 @@
-c80/faster_rcnn.sh
+endoscapes_temp/faster_rcnn.sh

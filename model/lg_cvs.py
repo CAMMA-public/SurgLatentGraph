@@ -40,7 +40,7 @@ class LGDetector(BaseDetector):
             use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
             graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
-            trainable_detector_cfg: OptConfigType = None,
+            use_gt_dets: bool = False, trainable_detector_cfg: OptConfigType = None,
             trainable_backbone_cfg: OptConfigType = None,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
@@ -48,7 +48,8 @@ class LGDetector(BaseDetector):
         self.num_classes = num_classes
         self.detector = MODELS.build(detector)
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
-        self.perturb_factor = perturb_factor
+        self.use_gt_dets = use_gt_dets
+        self.perturb_factor = perturb_factor if not use_gt_dets else 0
 
         # if trainable detector cfg is defined, that is used for trainable backbone
         if trainable_detector_cfg is not None:
@@ -99,31 +100,9 @@ class LGDetector(BaseDetector):
         else:
             losses = {}
 
-        # now run detector predict fn, we will pass the output of that to reconstructor
-        with torch.no_grad():
-            detector_is_training = self.detector.training
-            self.detector.training = False
-            results = self.detector.predict(batch_inputs, batch_data_samples)
-            detached_results = self.detach_results(results)
-            self.detector.training = detector_is_training
-
-        # get bb and fpn features
-        feats = self.extract_feat(batch_inputs, detached_results)
-
-        # run graph head
-        if self.graph_head is not None:
-            if self.detector.training:
-                # train graph with gt boxes (only when detector is training)
-                graph_losses, feats, graph = self.graph_head.loss_and_predict(
-                        detached_results, feats)
-                losses.update(graph_losses)
-            else:
-                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
-
-                ## train graph with pred boxes
-                #graph_losses, feats, graph = self.graph_head.loss_and_predict(
-                #        detached_results, feats, use_pred_instances=True)
-                #losses.update(graph_losses)
+        # extract LG
+        feats, graph, detached_results, _, _, losses = self.extract_lg(batch_inputs,
+                batch_data_samples, losses=losses)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -152,34 +131,64 @@ class LGDetector(BaseDetector):
         return losses
 
     def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
-        # run detector to get detections
-        results = self.detector.predict(batch_inputs, batch_data_samples)
-        detached_results = copy.deepcopy(self.detach_results(results))
+        # extract LG
+        feats, graph, detached_results, results, gt_edges, _ = self.extract_lg(batch_inputs,
+                batch_data_samples)
 
-        # get bb and fpn features
-        feats = self.extract_feat(batch_inputs, detached_results)
+        if gt_edges is not None:
+            # add graph to result
+            for ind, r in enumerate(results):
+                # GT
+                r.gt_edges = InstanceData()
+                r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
+                r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
+                r.gt_edges.relations = gt_edges.edge_relations[ind]
 
-        # run graph head
-        if self.graph_head is not None:
-            feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                # PRED
+                r.pred_edges = InstanceData()
 
-            if gt_edges is not None:
+                # select correct batch
+                batch_inds = graph.edges.edge_flats[:, 0] == ind
+                r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
+                r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
+                r.pred_edges.relations = graph.edges.class_logits[batch_inds]
+
+        # LATENT GRAPH
+        if graph is not None:
+            for ind, r in enumerate(results):
+                # extract graph for frame i, add to result
+                g_i = BaseDataElement()
+                g_i.nodes = BaseDataElement()
+                g_i.edges = BaseDataElement()
+                g_i.nodes.feats = graph.nodes.feats[ind]
+                g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
+                g_i.nodes.bboxes = r.pred_instances.bboxes
+                g_i.nodes.scores = r.pred_instances.scores
+                g_i.nodes.labels = r.pred_instances.labels
+
+                # split edge quantities and add
+                epi = graph.edges.edges_per_img.tolist()
+                for k in graph.edges.keys():
+                    if k in ['batch_index', 'presence_logits', 'edges_per_img']:
+                        continue
+
+                    elif k == 'edge_flats':
+                        val = graph.edges.get(k).split(epi)[ind][:, 1:]
+
+                    elif not isinstance(graph.edges.get(k), Tensor):
+                        # no need to split, just index
+                        val = graph.edges.get(k)[ind]
+
+                    else:
+                        val = graph.edges.get(k).split(epi)[ind]
+
+                    g_i.edges.set_data({k: val})
+
+                # pool img feats and add to graph
+                g_i.img_feats = F.adaptive_avg_pool2d(feats.bb_feats[-1][ind], 1).squeeze()
+
                 # add graph to result
-                for ind, r in enumerate(results):
-                    # GT
-                    r.gt_edges = InstanceData()
-                    r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
-                    r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
-                    r.gt_edges.relations = gt_edges.edge_relations[ind]
-
-                    # PRED
-                    r.pred_edges = InstanceData()
-
-                    # select correct batch
-                    batch_inds = graph.edges.edge_flats[:, 0] == ind
-                    r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
-                    r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
-                    r.pred_edges.relations = graph.edges.class_logits[batch_inds]
+                r.lg = g_i
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -203,6 +212,33 @@ class LGDetector(BaseDetector):
 
         return results
 
+    def extract_lg(self, batch_inputs: Tensor, batch_data_samples: SampleList,
+            force_perturb: bool = False, losses: dict = None) -> Tuple[BaseDataElement]:
+        # run detector to get detections
+        with torch.no_grad():
+            detector_is_training = self.detector.training
+            self.detector.training = False
+            results = self.detector.predict(batch_inputs, batch_data_samples)
+            detached_results = self.detach_results(results)
+            self.detector.training = detector_is_training
+
+        # get bb and fpn features
+        feats = self.extract_feat(batch_inputs, detached_results, force_perturb=force_perturb)
+
+        # run graph head
+        if self.graph_head is not None:
+            if self.detector.training:
+                # train graph with gt boxes (only when detector is training)
+                graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                        detached_results, feats)
+                losses.update(graph_losses)
+                gt_edges = None
+
+            else:
+                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+
+        return feats, graph, detached_results, results, gt_edges, losses
+
     def detach_results(self, results: SampleList) -> SampleList:
         for i in range(len(results)):
             results[i].pred_instances.bboxes = results[i].pred_instances.bboxes.detach()
@@ -210,14 +246,19 @@ class LGDetector(BaseDetector):
 
         return results
 
-    def extract_feat(self, batch_inputs: Tensor, results: SampleList) -> BaseDataElement:
+    def extract_feat(self, batch_inputs: Tensor, results: SampleList, force_perturb: bool = False) -> BaseDataElement:
         feats = BaseDataElement()
-        boxes = [r.pred_instances.bboxes for r in results]
-        classes = [r.pred_instances.labels for r in results]
-        scores = [r.pred_instances.scores for r in results]
+        if self.use_gt_dets:
+            boxes = [r.gt_instances.bboxes.to(batch_inputs.device) for r in results]
+            classes = [r.gt_instances.labels.to(batch_inputs.device) for r in results]
+            scores = [torch.ones_like(c) for c in classes]
+        else:
+            boxes = [r.pred_instances.bboxes for r in results]
+            classes = [r.pred_instances.labels for r in results]
+            scores = [r.pred_instances.scores for r in results]
 
         # apply box perturbation
-        if self.training and self.perturb_factor > 0:
+        if (self.training or force_perturb) and self.perturb_factor > 0:
             boxes = self.box_perturbation(boxes, results[0].img_shape)
 
         # run bbox feat extractor and add instance feats to feats

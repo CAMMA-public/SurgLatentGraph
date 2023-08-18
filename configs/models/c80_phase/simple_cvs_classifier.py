@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/c80_phase_instance.py',
+    '../datasets/c80_phase/c80_phase_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -33,7 +33,7 @@ model = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=False,
-        class_weight=[1.61803561, 0.18816378, 1, 0.24091337, 1.85450955, 0.98427673, 2.12283346]
+        class_weight=[1.9209686, 0.19571111, 0.98499113, 0.2993076, 1.9426803, 1,  2.20292951],
     )
     num_classes=7,
     data_preprocessor=dict(
