@@ -9,7 +9,6 @@ _base_=['../lg_base_box.py',
 detector = copy.deepcopy(_base_.model)
 detector.roi_head.bbox_head.num_classes = _base_.num_classes
 detector.test_cfg.rcnn.max_per_img = _base_.num_nodes
-#detector.test_cfg.rcnn.nms.iou_threshold = 0.3
 
 dp = copy.deepcopy(_base_.model.data_preprocessor)
 dp.pad_size_divisor = 1
