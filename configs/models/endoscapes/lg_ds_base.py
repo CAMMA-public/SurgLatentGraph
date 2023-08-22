@@ -86,6 +86,7 @@ train_dataloader = dict(
     batch_size=32,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
+        filter_cfg=dict(filter_empty_gt=False),
     ),
 )
 val_dataloader = dict(
@@ -125,8 +126,6 @@ test_evaluator = [
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
-        save_graphs=False,
-        gt_graph_use_pred_instances=gt_graph_use_pred_detections,
     ),
 ]
 

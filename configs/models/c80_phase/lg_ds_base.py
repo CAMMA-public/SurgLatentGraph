@@ -88,6 +88,7 @@ train_dataloader = dict(
     num_workers=4,
     dataset=dict(
         ann_file='train_phase/annotation_ds_coco.json',
+        filter_cfg=dict(filter_empty_gt=False),
     ),
 )
 val_dataloader = dict(
