@@ -67,10 +67,11 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.img_feat_projector = torch.nn.Linear(img_feat_size, self.graph_feat_projected_dim)
 
         # predictor, loss params
-        if self.use_img_feats and not self.img_feats_only:
-            predictor_dim = gnn_cfg.input_dim_node * 2
-        else:
-            predictor_dim = gnn_cfg.input_dim_node
+        #if self.use_img_feats and not self.img_feats_only:
+        #    predictor_dim = gnn_cfg.input_dim_node * 2
+        #else:
+        #    predictor_dim = gnn_cfg.input_dim_node
+        predictor_dim = gnn_cfg.input_dim_node
 
         if isinstance(loss, list):
             # losses
@@ -132,8 +133,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
             img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
                 1).squeeze(-1).squeeze(-1))
-            final_feats = torch.cat([img_feats, graph_feats], -1)
-            #final_feats = img_feats + graph_feats
+            final_feats = img_feats + graph_feats
         else:
             final_feats = graph_feats
 
@@ -280,7 +280,8 @@ class STDSHead(DSHead):
             if self.img_feats_only:
                 final_feats = img_feats
             else:
-                final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
+                #final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
+                final_feats = img_feats + graph_feats.view(B, T, -1)
 
         else:
             final_feats = graph_feats.view(B, T, -1)

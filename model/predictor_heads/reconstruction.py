@@ -143,6 +143,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         feature_layout = torch.sum(one_hot_layout.unsqueeze(2)[:, :node_features.shape[1]] * \
                 node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
 
+        # TODO(adit98) add img features here to feature layout here
+
         # white out GT img using gt_layout, add predicted scene layout, process with convolution
         processed_bg_img = self._whiteout(images, gt_layouts, layouts)
 
