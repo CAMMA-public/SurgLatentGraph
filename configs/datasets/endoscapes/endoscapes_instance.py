@@ -96,7 +96,6 @@ val_dataloader = dict(
         metainfo=metainfo,
         ann_file='val/annotation_coco.json',
         data_prefix=dict(img='val/'),
-        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 test_dataloader = dict(
@@ -107,7 +106,6 @@ test_dataloader = dict(
         metainfo=metainfo,
         ann_file='test/annotation_coco.json',
         data_prefix=dict(img='test/'),
-        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 # metric

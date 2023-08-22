@@ -90,7 +90,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
             # predictor
             dim_list = [predictor_dim] * num_predictor_layers + [num_classes]
-            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False, batch_norm='batch')
+            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
 
         self.loss_weight = loss_weight
         self.loss_consensus = loss_consensus
