@@ -119,4 +119,4 @@ default_hooks = dict(
 
 # visualizer
 visualization = _base_.default_hooks.visualization
-visualization.update(dict(draw=True, show=False, score_thr=0.2))
+visualization.update(dict(draw=False, show=False, score_thr=0.2))
