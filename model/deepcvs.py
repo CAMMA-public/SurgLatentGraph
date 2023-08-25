@@ -196,7 +196,7 @@ class DeepCVS(BaseDetector):
         # extract quantities (resize)
         detections_size = results[0].ori_shape
         img_size = results[0].batch_input_shape
-        scale_factor = (Tensor(img_size) / Tensor(detections_size)).to(batch_inputs.device)
+        scale_factor = (Tensor(img_size) / Tensor(detections_size)).flip(0).to(batch_inputs.device)
 
         if self.use_gt_dets:
             classes = [r.gt_instances.labels for r in results]
@@ -209,8 +209,6 @@ class DeepCVS(BaseDetector):
                     else:
                         masks.append(torch.from_numpy(r.gt_instances.masks.resize(
                             img_size).masks).to(batch_inputs.device))
-                        #masks.append(TF.resize(torch.from_numpy(r.gt_instances.masks.masks).to(
-                        #    batch_inputs.device), img_size, interpolation=InterpolationMode.NEAREST))
 
                 _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
 
