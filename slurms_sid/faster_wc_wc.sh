@@ -8,7 +8,7 @@
 #SBATCH --error faster_wc_wc_error.log
 #SBATCH --output faster_wc_wc.log
 #SBATCH -A lbw@v100
-
+#SBATCH -C v100-32g
 
 module purge
 module load anaconda-py3/2019.03

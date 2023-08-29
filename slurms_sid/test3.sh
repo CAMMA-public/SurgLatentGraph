@@ -3,10 +3,10 @@
 #SBATCH --cpus-per-task 4
 #SBATCH --gres=gpu:1
 #SBATCH --time=15:00:00
-#SBATCH -p gpu_p2
-#SBATCH -J test
-#SBATCH --error test_error.log
-#SBATCH --output test.log
+#SBATCH -p gpu_p13
+#SBATCH -J test3
+#SBATCH --error test3_error.log
+#SBATCH --output test3.log
 #SBATCH -A lbw@v100
 
 
@@ -17,4 +17,3 @@ python ${MMDETECTION}/tools/test.py ${cfg_dir}/lg_mask_no_recon.py weights/wc/lg
         # test on wc
 
 wait
-

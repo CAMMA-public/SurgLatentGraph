@@ -3,12 +3,12 @@
 #SBATCH --cpus-per-task 10
 #SBATCH --gres=gpu:4
 #SBATCH --time=15:00:00
-#SBATCH -p gpu_p13
-#SBATCH -J mask_wc_endo
-#SBATCH --error mask_wc_endo_error.log
-#SBATCH --output mask_wc_endo.log
+#SBATCH -p gpu_p2
+#SBATCH -J p2_faster_endo_wc
+#SBATCH --error p2_faster_endo_wc_error.log
+#SBATCH --output p2_faster_endo_wc.log
 #SBATCH -A lbw@v100
-#SBATCH -C v100-32g
+
 
 module purge
 module load anaconda-py3/2019.03
@@ -23,4 +23,5 @@ cd $SCRATCH/sid/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms_sid/run_all_mgpu.sh mask_rcnn wc endoscapes
+./slurms_sid/run_all_mgpu.sh faster_rcnn endoscapes wc
+

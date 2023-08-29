@@ -3,10 +3,10 @@
 #SBATCH --cpus-per-task 10
 #SBATCH --gres=gpu:4
 #SBATCH --time=15:00:00
-#SBATCH -p gpu_p13
-#SBATCH -J faster_wc_endo
-#SBATCH --error faster_wc_endo_error.log
-#SBATCH --output faster_wc_endo.log
+#SBATCH -p gpu_p2
+#SBATCH -J p2_faster_wc_wc
+#SBATCH --error p2_faster_wc_wc_error.log
+#SBATCH --output p2_faster_wc_wc.log
 #SBATCH -A lbw@v100
 
 module purge
@@ -22,4 +22,4 @@ cd $SCRATCH/sid/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
-./slurms_sid/run_all_mgpu.sh faster_rcnn wc endoscapes
+./slurms_sid/run_all_mgpu.sh faster_rcnn wc wc
