@@ -43,7 +43,7 @@ val_evaluator = [
         prefix='wc',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
     )
@@ -55,7 +55,7 @@ test_evaluator = [
         prefix='wc',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,

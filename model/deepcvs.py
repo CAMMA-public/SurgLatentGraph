@@ -213,7 +213,7 @@ class DeepCVS(BaseDetector):
                 _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
 
             else:
-                _, layout, _  = self._construct_layout(img_size, classes, boxes)
+                layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
         else:
             classes = [r.pred_instances.labels for r in results]
@@ -230,7 +230,7 @@ class DeepCVS(BaseDetector):
                 _, layout, _ = self._construct_layout(img_size, classes, boxes, masks)
 
             else:
-                _, layout, _  = self._construct_layout(img_size, classes, boxes)
+                layout, _, _  = self._construct_layout(img_size, classes, boxes)
 
         # make sure we only store pure bg pixels with a 0 in channel 0
         layout[:, 0] = 1 - layout[:, 1:].max(1).values
