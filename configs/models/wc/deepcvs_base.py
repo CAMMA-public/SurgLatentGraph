@@ -30,7 +30,7 @@ dc_model = dict(
     decoder_backbone=dict(
         type='ResNet',
         in_channels=4+len(_base_.metainfo.classes), # 3 channels + detector_num_classes + 1 (bg)
-        depth=50,
+        depth=18,
         num_stages=4,
         #out_indices=(0, 1, 2, 3),
         out_indices=(3,),
@@ -40,7 +40,7 @@ dc_model = dict(
         style='pytorch',
         init_cfg=dict(
             type='Pretrained',
-            checkpoint='torchvision://resnet50'
+            checkpoint='torchvision://resnet18'
         ),
     ),
     loss=dict(
