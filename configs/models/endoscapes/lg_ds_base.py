@@ -134,12 +134,12 @@ del _base_.optim_wrapper
 optim_wrapper = dict(
     optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
-    paramwise_cfg=dict(
-        custom_keys={
-            'semantic_feat_projector': dict(lr_mult=10),
-            'reconstruction_head': dict(lr_mult=10),
-        }
-    ),
+#    paramwise_cfg=dict(
+#        custom_keys={
+#            'semantic_feat_projector': dict(lr_mult=10),
+#            'reconstruction_head': dict(lr_mult=10),
+#        }
+#    ),
 )
 auto_scale_lr = dict(enable=False)
 

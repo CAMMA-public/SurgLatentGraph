@@ -13,7 +13,7 @@
 cd ../configs/models/ && \
 ./select_dataset.sh wc && \
 cd ../.. && \
-python ${MMDETECTION}/tools/test.py ${cfg_dir}/lg_mask_no_recon.py weights/wc/lg_mask_rcnn_no_recon --work-dir work_dirs/test && \
+python ${MMDETECTION}/tools/test.py ${cfg_dir}/lg_mask_n.py weights/wc/lg_mask_rcnn_no_recon --work-dir work_dirs/test && \
         # test on wc
 
 wait
