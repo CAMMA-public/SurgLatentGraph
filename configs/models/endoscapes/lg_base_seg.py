@@ -24,6 +24,7 @@ test_evaluator = dict(
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+    classwise = True,
 )
 
 default_hooks = dict(

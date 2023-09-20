@@ -52,8 +52,6 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         boxes = [r.pred_instances.bboxes for r in results]
         viz_feats = feats.instance_feats
         semantic_feats = feats.semantic_feats
-        img_feats = feats.bb_feats
-
         if 'gt_instances' in results[0]:
             gt_classes = [r.gt_instances.labels for r in results]
             gt_boxes = [r.gt_instances.bboxes for r in results]
@@ -75,14 +73,10 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         # node features is (f, s)
         node_features = torch.cat([viz_feats, semantic_feats], dim=-1) if semantic_feats is not None else viz_feats
-        print(len(img_feats))
-        print(len(img_feats[0]))
-        print(len(img_feats[0][0]))
-        img_feats_tensor =  torch.cat(img_feats, dim=-1)
 
         # build input to img decoder using input image, layout
         reconstruction_input = self._construct_reconstruction_input(imgs,
-                node_features, layouts, gt_layouts, img_feats_tensor)
+                node_features, layouts, gt_layouts)
 
         # finally, reconstruct img
         reconstructed_imgs = self.img_decoder(reconstruction_input)
@@ -137,7 +131,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         return box_layout, layout, one_hot_layout
 
     def _construct_reconstruction_input(self, images, node_features, layouts,
-            gt_layouts, img_feats_tensor):
+            gt_layouts):
 
         f = self.bottleneck(node_features[..., :self.obj_viz_feat_size])
         node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
@@ -150,17 +144,12 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                 node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
 
         # TODO(adit98) add img features here to feature layout here
-        #print(type(img_feats),":qwerty")
-        #print(img_feats)
-        #img_feats1 = torch.tensor(img_feats)
-        #print(type(img_feats1))
-        #print(img_feats1.shape)
-        #print(img_feats1.size())
+
         # white out GT img using gt_layout, add predicted scene layout, process with convolution
         processed_bg_img = self._whiteout(images, gt_layouts, layouts)
 
         # combine processed_bg_img, layout_with_features, semantics
-        input_feat = torch.cat([img_feats_tensor, feature_layout, processed_bg_img], dim=1)
+        input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
 
         return input_feat
 
@@ -274,3 +263,4 @@ class DecoderNetwork(torch.nn.Module):
         out = self.output_conv(feats)
 
         return out
+

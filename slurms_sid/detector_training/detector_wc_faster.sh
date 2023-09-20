@@ -19,12 +19,12 @@ export MMDETECTION=${WORK}/mmdet_files
 export PYTHONPATH=${PYTHONPATH}:/gpfsscratch/rech/lbw/uou65jw/sid/latentgraph
 
 
-cd $SCRATCH/sid/latentgraph_new
+cd $SCRATCH/sid/latentgraph
 source $(conda info --base)/bin/activate
 conda activate camma
 
 cd ./configs/models/ && \
         ./select_dataset.sh wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/train.py ./configs/models/faster_rcnn/lg_faster_rcnn.py --work-dir wc/lg_faster_rcnn &
+        python ${MMDETECTION}/tools/train.py configs/models/faster_rcnn/lg_faster_rcnn.py --work-dir wc/lg_faster_rcnn &
 wait

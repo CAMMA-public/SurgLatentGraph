@@ -4,9 +4,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --time=15:00:00
 #SBATCH -p gpu_p13
-#SBATCH -J detector_wc_mask
-#SBATCH --error detector_wc_mask_error.log
-#SBATCH --output detector_wc_mask.log
+#SBATCH -J test_wc_mask
+#SBATCH --error test_wc_mask_error.log
+#SBATCH --output test_wc_mask.log
 #SBATCH -A lbw@v100
 #SBATCH -C v100-32g
 
@@ -26,5 +26,7 @@ conda activate camma
 cd ./configs/models/ && \
         ./select_dataset.sh wc && \
         cd ../.. && \
-	python ${MMDETECTION}/tools/train.py configs/models/mask_rcnn/lg_mask_rcnn.py --work-dir wc/lg_mask_rcnn &
+        python ${MMDETECTION}/tools/test.py configs/models/mask_rcnn/lg_mask_rcnn.py wc/lg_mask_rcnn/best_wc_segm_mAP_epoch_20.pth  --work-dir lg_mask_rcnn/wc &
+
+
 wait
