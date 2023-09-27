@@ -214,7 +214,7 @@ class CocoMetricRGD(CocoMetric):
                 eval_results['ds_f1'] = ds_f1
 
             else:
-                if self.prefix == 'endoscapes' or self.prefix == 'wc' :
+                if self.prefix == 'endoscapes' or self.prefix == 'wc' or self.prefix == 'italy' :
                     torch_ap = AP(task='multilabel', num_labels=3, average='none')
                     ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                     ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
