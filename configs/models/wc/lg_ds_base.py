@@ -41,7 +41,8 @@ lg_model.ds_head = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[153.7875, 90.46323529, 62.13636364],
+        #class_weight=[69.43, 55.544, 51.42962963],
+        class_weight=[153.7875, 90.46323529, 62.13636364]
     ),
     loss_weight=1.0,
     num_predictor_layers=3,

@@ -109,6 +109,73 @@ export CUDA_VISIBLE_DEVICES=2 && \
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
+################################################################################################################################################################################################################################################################
+elif [[ "$model" = "simple" ]]; then
+## RUN MT WITH RECON
+cd configs/models/
+./select_dataset.sh ${dataset2}
+cd ../..
+wait
+
+#RUN 1
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
+        ## test on endoscapes
+        cd configs/models/ && \
+        ./select_dataset.sh endoscapes && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
+        ## test on wc
+        cd configs/models/ && \
+        ./select_dataset.sh wc && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/wc && \
+       #copy everything back
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 &
+
+
+#RUN 2
+export CUDA_VISIBLE_DEVICES=1 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
+        ## test on endoscapes
+        cd configs/models/ && \
+        ./select_dataset.sh endoscapes && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
+        ## test on wc
+        cd configs/models/ && \
+        ./select_dataset.sh wc && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/wc && \
+       #copy everything back
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 &
+
+
+
+#RUN 3
+export CUDA_VISIBLE_DEVICES=2 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
+        ## test on endoscapes
+        cd configs/models/ && \
+        ./select_dataset.sh endoscapes && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
+        ## test on wc
+        cd configs/models/ && \
+        ./select_dataset.sh wc && \
+        cd ../.. && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/wc && \
+       #copy everything back
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
+
+################################################################################################################################################################################################################################################################
+################################################################################################################################################################################################################################################################
+################################################################################################################################################################################################################################################################
+################################################################################################################################################################################################################################################################
+################################################################################################################################################################################################################################################################
+
+
+
 else
 
 ################################################################################################################################################################################################################################################################

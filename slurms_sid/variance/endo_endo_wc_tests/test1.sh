@@ -8,7 +8,7 @@ cfg_dir=${base_cfg_dir}/${detector}
 
 ##Make working directory
 cd $SCRATCH/sid/latentgraph/work_dirs
-mkdir ${model}_${detector}_${dataset}_${dataset2}
+mkdir test_${model}_${detector}_${dataset}_${dataset2}
 
 
 
@@ -16,6 +16,7 @@ mkdir ${model}_${detector}_${dataset}_${dataset2}
 cd $JOBSCRATCH
 echo $JOBSCRATCH
 cp -r $SCRATCH/sid/latentgraph  $JOBSCRATCH
+cp -r $SCRATCH/sid/variance_no_recon/${model}_${detector}_${dataset}_${dataset2} latentgraph/work_dirs
 cd latentgraph
 
 
@@ -55,8 +56,7 @@ cd configs/models/
 cd ../..
 ##RUN1
 export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
-        ## test on endoscapes
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
@@ -67,11 +67,10 @@ export CUDA_VISIBLE_DEVICES=0 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run1 &
 
 ##RUN2
 export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
         ## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
@@ -83,11 +82,10 @@ export CUDA_VISIBLE_DEVICES=1 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run2 &
 
 #RUN3
 export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
         ## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
@@ -99,72 +97,12 @@ export CUDA_VISIBLE_DEVICES=2 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run3 &
 
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
-
-elif [[ "$model" = "simple" ]]; then
-## RUN SIMPLECVS (WITH/WITHOUT RECON IN PARALLEL)
-#
-cd configs/models/
-./select_dataset.sh ${dataset2}
-cd ../..
-##RUN1
-export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 && \
-        ## test on endoscapes
-        cd configs/models/ && \
-        ./select_dataset.sh endoscapes && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
-        ## test on wc
-        cd configs/models/ && \
-        ./select_dataset.sh wc && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/wc && \
-       #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
-
-##RUN2
-export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 && \
-        ## test on endoscapes
-        cd configs/models/ && \
-        ./select_dataset.sh endoscapes && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
-        ## test on wc
-        cd configs/models/ && \
-        ./select_dataset.sh wc && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/wc && \
-       #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
-
-#RUN3
-export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 && \
-        ## test on endoscapes
-        cd configs/models/ && \
-        ./select_dataset.sh endoscapes && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
-        ## test on wc
-        cd configs/models/ && \
-        ./select_dataset.sh wc && \
-        cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/wc && \
-       #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 &
-
-################################################################################################################################################################################################################################################################
-################################################################################################################################################################################################################################################################
-################################################################################################################################################################################################################################################################
-################################################################################################################################################################################################################################################################
-
 else
 
 ################################################################################################################################################################################################################################################################
@@ -176,7 +114,6 @@ cd configs/models/
 cd ../..
 wait
 export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}_no_recon.py --work-dir  work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
         # test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
@@ -188,11 +125,10 @@ export CUDA_VISIBLE_DEVICES=0 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}_no_recon.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run1 &
 
 ##RUN 2
 export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}_no_recon.py --work-dir  work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
         # test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
@@ -204,11 +140,10 @@ export CUDA_VISIBLE_DEVICES=1 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}_no_recon.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
+	cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run2 &
 
 ##RUN 3
 export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}_no_recon.py --work-dir  work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
         # test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
@@ -220,7 +155,7 @@ export CUDA_VISIBLE_DEVICES=2 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}_no_recon.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3/wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/test_${model}_${detector}_${dataset}_${dataset2}/run3 &
 ################################################################################################################################################################################################################################################################
 fi
 ################################################################################################################################################################################################################################################################
