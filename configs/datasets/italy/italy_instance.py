@@ -5,7 +5,7 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Modify dataset related settings
 
-data_root=os.path.expandvars('data/italy')
+data_root=os.path.expandvars('$SCRATCH/data/italy')
 metainfo = {
     'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
         'gallbladder', 'tool'),
