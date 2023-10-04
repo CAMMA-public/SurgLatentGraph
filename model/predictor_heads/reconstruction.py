@@ -7,6 +7,7 @@ from mmdet.structures import SampleList
 from mmdet.structures.bbox import scale_boxes
 from typing import List, Tuple, Union
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
@@ -52,6 +53,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         boxes = [r.pred_instances.bboxes for r in results]
         viz_feats = feats.instance_feats
         semantic_feats = feats.semantic_feats
+        img_feats = feats.bb_feats
+
         if 'gt_instances' in results[0]:
             gt_classes = [r.gt_instances.labels for r in results]
             gt_boxes = [r.gt_instances.bboxes for r in results]
@@ -76,7 +79,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         # build input to img decoder using input image, layout
         reconstruction_input = self._construct_reconstruction_input(imgs,
-                node_features, layouts, gt_layouts)
+                node_features, layouts, gt_layouts, img_feats)
 
         # finally, reconstruct img
         reconstructed_imgs = self.img_decoder(reconstruction_input)
@@ -131,7 +134,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         return box_layout, layout, one_hot_layout
 
     def _construct_reconstruction_input(self, images, node_features, layouts,
-            gt_layouts):
+            gt_layouts, img_feats):
 
         f = self.bottleneck(node_features[..., :self.obj_viz_feat_size])
         node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
@@ -144,14 +147,33 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                 node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
 
         # TODO(adit98) add img features here to feature layout here
+        # if img_feats[0].shape != torch.Size([16, 256, 56, 100]):
+        #     breakpoint()
+        feats1 = img_feats[3]
+        device = torch.device("cuda:0")
+
+        new_height, new_width = 64, 96
+        output_tensor_2048 = F.interpolate(feats1, size=(new_height, new_width), mode='bilinear', align_corners=False)# Upsample using bilinear interpolation, size is now (_, 2048, 64,96) from (_, 2048, 7, 13)
+
+
+
+
+        # Define a convolutional layer to reduce the number of channels to 256
+        downsample_conv = nn.Conv2d(2048, 256, kernel_size=1).to(device)
+        output_tensor_256 = downsample_conv(output_tensor_2048) # size is now (_, 256, 64, 96) from (_, 2048, 64,96)
+
 
         # white out GT img using gt_layout, add predicted scene layout, process with convolution
         processed_bg_img = self._whiteout(images, gt_layouts, layouts)
 
         # combine processed_bg_img, layout_with_features, semantics
-        input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
+        input_feat_608 = torch.cat([feature_layout, processed_bg_img, output_tensor_256], dim=1) #input feats of size (_, 608, 64, 96)
+        # input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
 
-        return input_feat
+        downsample_conv1 = nn.Conv2d(608, 352, kernel_size=1).to(device)
+        input_feat_352 = downsample_conv1(input_feat_608) # size is now (_, 352, 64, 96) from (_, 608, 64, 96)
+        
+        return input_feat_352
 
     def _whiteout(self, images, gt_layouts, layouts):
         # resize GT
@@ -175,7 +197,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         else:
             processed_bg_img = self.img_conv(torch.cat([whited_out_images,
                 box_layout], dim=1))
-
+  
         return processed_bg_img
 
     def _rescale_results(self, results: SampleList) -> SampleList:
@@ -263,4 +285,6 @@ class DecoderNetwork(torch.nn.Module):
         out = self.output_conv(feats)
 
         return out
+
+
 
