@@ -25,6 +25,9 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
     """
     def __init__(self, decoder_cfg: ConfigType, aspect_ratio: Union[Tuple, List],
             obj_viz_feat_size: int, bottleneck_feat_size: int, num_classes: int,
+            bool_visual: bool,
+            bool_semantics: bool,
+            bool_img: bool,
             use_seg_recon: bool = False, num_nodes: int = 8,
             use_pred_boxes_whiteout: bool = False, layout_noise_dim: int = 32,
             init_cfg: OptMultiConfig = None) -> None:
@@ -43,6 +46,9 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             torch.nn.ReLU(),
         )
         self.use_pred_boxes_whiteout = use_pred_boxes_whiteout
+        self.bool_visual=bool_visual
+        self.bool_semantics=bool_semantics
+        self.bool_img=bool_img
 
     def predict(self, results: Tuple, feats: BaseDataElement, imgs: Tensor) -> Tensor:
         # first, rescale results
@@ -136,8 +142,35 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
     def _construct_reconstruction_input(self, images, node_features, layouts,
             gt_layouts, img_feats):
 
+        bool_visual = self.bool_visual
+        bool_semantics = self.bool_semantics
+        bool_img = self.bool_img
+
+
+        device = torch.device("cuda:0")
+
         f = self.bottleneck(node_features[..., :self.obj_viz_feat_size])
-        node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
+        # node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
+
+        if bool_visual and bool_semantics:
+            node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
+            
+
+        elif not(bool_visual) and bool_semantics:
+            node_features = node_features[..., self.obj_viz_feat_size:]
+            upsample_conv = nn.Conv2d(node_features.shape[2], 320, kernel_size=1).to(device)
+            node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
+
+        
+        elif bool_visual and not(bool_semantics):
+            node_features = node_features[..., :self.obj_viz_feat_size]
+            upsample_conv = nn.Conv2d(node_features.shape[2], 320, kernel_size=1).to(device)
+            node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
+        
+        else:
+            node_features=[]
+
+
 
         # convert one-hot layout over proposals to class-wise segmentation mask "layout"
         _, _, one_hot_layout = layouts
@@ -147,33 +180,50 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                 node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
 
         # TODO(adit98) add img features here to feature layout here
-        # if img_feats[0].shape != torch.Size([16, 256, 56, 100]):
-        #     breakpoint()
         feats1 = img_feats[3]
-        device = torch.device("cuda:0")
-
         new_height, new_width = 64, 96
         output_tensor_2048 = F.interpolate(feats1, size=(new_height, new_width), mode='bilinear', align_corners=False)# Upsample using bilinear interpolation, size is now (_, 2048, 64,96) from (_, 2048, 7, 13)
-
-
-
-
-        # Define a convolutional layer to reduce the number of channels to 256
-        downsample_conv = nn.Conv2d(2048, 256, kernel_size=1).to(device)
-        output_tensor_256 = downsample_conv(output_tensor_2048) # size is now (_, 256, 64, 96) from (_, 2048, 64,96)
+        downsample_conv = nn.Conv2d(2048, 320, kernel_size=1).to(device)# Define a convolutional layer to reduce the number of channels to 256
+        img_feats_320 = downsample_conv(output_tensor_2048) # size is now (_, 320, 64, 96) from (_, 2048, 64,96)
 
 
         # white out GT img using gt_layout, add predicted scene layout, process with convolution
         processed_bg_img = self._whiteout(images, gt_layouts, layouts)
 
-        # combine processed_bg_img, layout_with_features, semantics
-        input_feat_608 = torch.cat([feature_layout, processed_bg_img, output_tensor_256], dim=1) #input feats of size (_, 608, 64, 96)
-        # input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
-
-        downsample_conv1 = nn.Conv2d(608, 352, kernel_size=1).to(device)
-        input_feat_352 = downsample_conv1(input_feat_608) # size is now (_, 352, 64, 96) from (_, 608, 64, 96)
+        if bool_visual and bool_semantics and bool_img: #ALL together, new recon objective
+            input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
+            downsample_conv1 = nn.Conv2d(672, 352, kernel_size=1).to(device)
+            input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
+            print('condition 1')
+            return input_feat_352
         
-        return input_feat_352
+        elif bool_visual and bool_semantics and not(bool_img): #ORIGINAL RECON OBJECTIVE
+            input_feat_352 = torch.cat([feature_layout, processed_bg_img], dim=1) #input feats of size (_, 672, 64, 96)
+            print('condition 2')
+            return input_feat_352
+        
+        elif not(bool_visual) and bool_semantics and bool_img: # ONLY semantics and img visual features, no graph visual
+            input_feat_352 = torch.cat([processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
+            print('condition 3')
+            return input_feat_352
+        
+        elif bool_visual and not(bool_semantics) and bool_img: #ONLY visual features (graph and image), no semantics
+            input_feat_640 = torch.cat([feature_layout, img_feats_320], dim=1) #input feats of size (_, 640, 64, 96)
+            downsample_conv1 = nn.Conv2d(640, 352, kernel_size=1).to(device)
+            input_feat_352 = downsample_conv1(input_feat_640) # size is now (_, 352, 64, 96) from (_, 640, 64, 96)
+            print('condition 4')
+            return input_feat_352
+        
+        elif not(bool_visual) and bool_semantics and not(bool_img): #ONLY semantic features
+            input_feat_32 = torch.cat([processed_bg_img], dim=1) #input feats of size (_, 32, 64, 96)
+            downsample_conv1 = nn.Conv2d(32, 352, kernel_size=1).to(device)
+            input_feat_352 = downsample_conv1(input_feat_32) # size is now (_, 352, 64, 96) from (_, 32, 64, 96)
+            print('condition 5')
+            return input_feat_352
+        
+        else:
+            print('condition LAST')
+            return 0
 
     def _whiteout(self, images, gt_layouts, layouts):
         # resize GT
@@ -285,6 +335,5 @@ class DecoderNetwork(torch.nn.Module):
         out = self.output_conv(feats)
 
         return out
-
 
 

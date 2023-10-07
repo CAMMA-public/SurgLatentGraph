@@ -3,12 +3,12 @@
 #SBATCH --cpus-per-task 10 
 #SBATCH --gres=gpu:3 
 #SBATCH --time=10:00:00 
-#SBATCH -p gpu_p2
-#SBATCH -J recon_lg_ds_no_viz_mask_small_wc_small_wc 
-#SBATCH --error recon_lg_ds_no_viz_mask_small_wc_small_wc_error.log 
-#SBATCH --output recon_lg_ds_no_viz_mask_small_wc_small_wc.log  
+#SBATCH -p gpu_p13
+#SBATCH -J p13_recon_lg_ds_no_viz_mask_small_wc_small_wc 
+#SBATCH --error p13_recon_lg_ds_no_viz_mask_small_wc_small_wc_error.log 
+#SBATCH --output p13_recon_lg_ds_no_viz_mask_small_wc_small_wc.log  
 #SBATCH -A lbw@v100 
-
+#SBATCH -C v100-32g
 
 module purge 
 module load anaconda-py3/2019.03 

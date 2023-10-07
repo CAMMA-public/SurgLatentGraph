@@ -35,4 +35,9 @@ del _base_.lg_model
 # modify load_from
 load_from = _base_.load_from.replace('base', 'faster_rcnn')
 
+#remove semantic features from graph
 model.ds_head.final_sem_feat_size = 0
+
+#remove semantic features from recon objective
+model.bool_semantic=False
+

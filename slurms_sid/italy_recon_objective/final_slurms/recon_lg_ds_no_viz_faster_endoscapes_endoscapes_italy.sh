@@ -1,13 +1,14 @@
 #!/bin/bash 
-#SBATCH -N 3 
+#SBATCH -N 1 
 #SBATCH --cpus-per-task 10 
-#SBATCH --gres=gpu:3 
+#SBATCH --gres=gpu:1 
 #SBATCH --time=10:00:00 
-#SBATCH -p gpu_p2
-#SBATCH -J recon_lg_ds_mask_endoscapes_endoscapes 
-#SBATCH --error recon_lg_ds_mask_endoscapes_endoscapes_error.log 
-#SBATCH --output recon_lg_ds_mask_endoscapes_endoscapes.log  
+#SBATCH -p gpu_p2 
+#SBATCH -J recon_lg_ds_no_viz_faster_endoscapes_endoscapes_italy 
+#SBATCH --error recon_lg_ds_no_viz_faster_endoscapes_endoscapes_italy_error.log 
+#SBATCH --output recon_lg_ds_no_viz_faster_endoscapes_endoscapes_italy.log 
 #SBATCH -A lbw@v100 
+
 
 
 module purge 
@@ -23,4 +24,4 @@ cd $SCRATCH/sid/latentgraph
 source $(conda info --base)/bin/activate 
 conda activate camma 
 
-./slurms_sid/small_wc_recon_objective/run_test_recon.sh lg_ds mask_rcnn endoscapes endoscapes 
+./slurms_sid/italy_recon_objective/run_test_recon.sh lg_ds_no_viz faster_rcnn endoscapes endoscapes 

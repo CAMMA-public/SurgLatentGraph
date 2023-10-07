@@ -35,5 +35,11 @@ del _base_.lg_model
 # modify load_from
 load_from = _base_.load_from.replace('base', 'faster_rcnn')
 
+#remove visual features from graph
 model.ds_head.final_viz_feat_size = 0
 model.ds_head.use_img_feats = False
+
+#remove graph visual and img features from recon objective
+model.bool_visual=False
+model.bool_img=False
+
