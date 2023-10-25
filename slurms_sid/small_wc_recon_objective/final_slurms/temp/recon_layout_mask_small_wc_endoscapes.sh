@@ -8,7 +8,7 @@
 #SBATCH --error recon_layout_mask_small_wc_endoscapes_error.log 
 #SBATCH --output recon_layout_mask_small_wc_endoscapes.log  
 #SBATCH -A lbw@v100 
-#SBATCH -C v100-32g 
+#SBATCH -C v100-32g  
 
 
 module purge 

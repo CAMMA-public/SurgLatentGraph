@@ -8,7 +8,7 @@
 #SBATCH --error recon_mt_faster_endoscapes_small_wc_error.log 
 #SBATCH --output recon_mt_faster_endoscapes_small_wc.log  
 #SBATCH -A lbw@v100 
-#SBATCH -C v100-32g 
+#SBATCH -C v100-32g  
 
 
 module purge 

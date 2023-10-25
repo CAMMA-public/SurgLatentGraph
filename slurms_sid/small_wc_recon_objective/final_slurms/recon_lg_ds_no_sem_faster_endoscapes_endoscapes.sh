@@ -3,11 +3,12 @@
 #SBATCH --cpus-per-task 10 
 #SBATCH --gres=gpu:3 
 #SBATCH --time=10:00:00 
-#SBATCH -p gpu_p2
+#SBATCH -p gpu_p13 
 #SBATCH -J recon_lg_ds_no_sem_faster_endoscapes_endoscapes 
 #SBATCH --error recon_lg_ds_no_sem_faster_endoscapes_endoscapes_error.log 
 #SBATCH --output recon_lg_ds_no_sem_faster_endoscapes_endoscapes.log  
 #SBATCH -A lbw@v100 
+#SBATCH -C v100-32g  
 
 
 module purge 

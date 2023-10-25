@@ -67,10 +67,10 @@ export CUDA_VISIBLE_DEVICES=0 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/ && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 ##RUN2
-export CUDA_VISIBLE_DEVICES=1 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
         ## test on endoscapes
         cd configs/models/ && \
@@ -83,10 +83,10 @@ export CUDA_VISIBLE_DEVICES=1 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 #RUN3
-export CUDA_VISIBLE_DEVICES=2 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
         ## test on endoscapes
         cd configs/models/ && \
@@ -126,10 +126,10 @@ export CUDA_VISIBLE_DEVICES=0 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 ##RUN2
-export CUDA_VISIBLE_DEVICES=1 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 && \
         ## test on endoscapes
         cd configs/models/ && \
@@ -142,10 +142,10 @@ export CUDA_VISIBLE_DEVICES=1 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 #RUN3
-export CUDA_VISIBLE_DEVICES=2 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier.py --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 && \
         ## test on endoscapes
         cd configs/models/ && \
@@ -188,10 +188,10 @@ export CUDA_VISIBLE_DEVICES=0 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}_no_recon.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 ##RUN 2
-export CUDA_VISIBLE_DEVICES=1 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}_no_recon.py --work-dir  work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
         # test on endoscapes
         cd configs/models/ && \
@@ -204,10 +204,10 @@ export CUDA_VISIBLE_DEVICES=1 && \
         cd ../.. && \
         python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}_no_recon.py $(ls work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 ##RUN 3
-export CUDA_VISIBLE_DEVICES=2 && \
+export CUDA_VISIBLE_DEVICES=0 && \
         python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}_no_recon.py --work-dir  work_dirs/${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
         # test on endoscapes
         cd configs/models/ && \

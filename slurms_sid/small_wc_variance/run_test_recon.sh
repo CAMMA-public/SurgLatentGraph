@@ -7,7 +7,9 @@ cfg_dir=${base_cfg_dir}/${detector}
 
 
 ##Make working directory
-cd $SCRATCH/sid/latentgraph/work_dirs
+cd $SCRATCH/sid/latentgraph
+mkdir epoch_80
+cd epoch_80
 mkdir recon_${model}_${detector}_${dataset}_${dataset2}
 
 
@@ -26,7 +28,7 @@ cd latentgraph
 #cd ../..
 
 #export CUDA_VISIBLE_DEVICES=0 && python ${MMDETECTION}/tools/train.py ${cfg_dir}/lg_${detector}.py --work-dir lg_${detector}_${dataset}
-#best_model_path=$(ls work_dirs/lg_${detector}_${dataset}/best_${dataset}* | tail -1)
+#best_model_path=$(ls epoch_80/lg_${detector}_${dataset}/best_${dataset}* | tail -1)
 #echo $best_model_path
 #
 ## copy checkpoint to weights
@@ -56,54 +58,72 @@ wait
 
 #RUN 1
 export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
-        ## test on endoscapes
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
+ 
+ 	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 
 #RUN 2
-export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
-        ## test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
+
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 
 
 #RUN 3
-export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
-        ## test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon_bb.pth && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
+
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
 
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
@@ -119,54 +139,72 @@ wait
 
 #RUN 1
 export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
-        ## test on endoscapes
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
+
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 
 #RUN 2
-export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
-        ## test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
+
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 
 
 #RUN 3
-export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
-        ## test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
+
+	## test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
         ## test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
        #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
 
 ################################################################################################################################################################################################################################################################
 ################################################################################################################################################################################################################################################################
@@ -183,58 +221,77 @@ else
 ##RUN 1
 cd configs/models/
 ./select_dataset.sh ${dataset2}
+echo ${dataset2}
 cd ../..
 wait
 
 
 
 export CUDA_VISIBLE_DEVICES=0 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
-        # test on endoscapes
+        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
+
+	# test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/endoscapes && \
         # test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/small_wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run1 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run1 && \
 
 ##RUN 2
-export CUDA_VISIBLE_DEVICES=1 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
-        # test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
+
+	# test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/endoscapes && \
         # test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/small_wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run2 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run2 && \
 
 
 ##RUN 3
-export CUDA_VISIBLE_DEVICES=2 && \
-        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
-        # test on endoscapes
+cd configs/models/
+./select_dataset.sh ${dataset2}
+echo ${dataset2}
+cd ../..
+wait
+
+export CUDA_VISIBLE_DEVICES=0 && \
+        python ${MMDETECTION}/tools/train.py ${cfg_dir}/${model}_${detector}.py --work-dir  epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 --cfg-options load_from=weights/${dataset}/lg_${detector}_no_recon.pth  && \
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 && \
+
+	# test on endoscapes
         cd configs/models/ && \
         ./select_dataset.sh endoscapes && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/endoscapes && \
         # test on small_wc
         cd configs/models/ && \
         ./select_dataset.sh small_wc && \
         cd ../.. && \
-        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
+        python ${MMDETECTION}/tools/test.py ${cfg_dir}/${model}_${detector}.py $(ls epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/best_${dataset2}* | tail -1) --work-dir epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/small_wc && \
         #copy everything back
-        cp -r $JOBSCRATCH/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 $SCRATCH/sid/latentgraph/work_dirs/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
+        cp -r $JOBSCRATCH/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3/* $SCRATCH/sid/latentgraph/epoch_80/recon_${model}_${detector}_${dataset}_${dataset2}/run3 &
 
 
 ################################################################################################################################################################################################################################################################

@@ -8,7 +8,7 @@
 #SBATCH --error lg_ds_faster_endoscapes_endoscapes_error.log 
 #SBATCH --output lg_ds_faster_endoscapes_endoscapes.log 
 #SBATCH -A lbw@v100 
-#SBATCH -C v100-32g 
+#SBATCH -C v100-32g  
 
 
 module purge 

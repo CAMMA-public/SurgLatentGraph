@@ -8,7 +8,7 @@
 #SBATCH --error layout_faster_small_wc_small_wc_error.log 
 #SBATCH --output layout_faster_small_wc_small_wc.log 
 #SBATCH -A lbw@v100 
-#SBATCH -C v100-32g 
+#SBATCH -C v100-32g  
 
 
 module purge 
