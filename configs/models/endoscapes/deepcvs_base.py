@@ -13,7 +13,7 @@ test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMetricRGD',
-    'hooks.custom_hooks', 'model.predictor_heads.reconstruction', 'model.predictor_heads.modules.loss'],
+    'hooks.custom_hooks', 'model.predictor_heads.original_reconstruction', 'model.predictor_heads.modules.loss'],
     allow_failed_imports=False)
 
 # additional params
@@ -21,6 +21,7 @@ num_nodes = 16
 layout_noise_dim = 32
 bottleneck_feat_size = 1024
 recon_input_dim = bottleneck_feat_size + layout_noise_dim
+
 
 dc_model = dict(
     type='DeepCVS',
@@ -145,7 +146,7 @@ auto_scale_lr = dict(enable=False)
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=20,
+    max_epochs=1,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')

@@ -45,21 +45,21 @@ model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     num_workers=4,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
@@ -104,7 +104,7 @@ auto_scale_lr = dict(enable=False)
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=20,
+    max_epochs=1,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
