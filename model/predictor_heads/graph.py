@@ -84,20 +84,18 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _predict_edge_presence(self, node_features, nodes_per_img):
         # EDGE PREDICTION
-        projector_input = node_features.flatten(end_dim=1)
-        if projector_input.shape[0] == 1:
-            sbj_feats = self.edge_mlp_sbj(torch.cat([projector_input, projector_input]))[0]
+        mlp_input = node_features.flatten(end_dim=1)
+        if mlp_input.shape[0] == 1:
+            sbj_feats = self.edge_mlp_sbj(torch.cat([mlp_input, mlp_input]))[0]
         else:
-            sbj_feats = self.edge_mlp_sbj(projector_input)
+            sbj_feats = self.edge_mlp_sbj(mlp_input)
+        if mlp_input.shape[0] == 1:
+            obj_feats = self.edge_mlp_obj(torch.cat([mlp_input, mlp_input]))[0]
+        else:
+            obj_feats = self.edge_mlp_obj(mlp_input)
 
         sbj_feats = sbj_feats.view(len(node_features), -1,
                 sbj_feats.size(-1)) # B x N x F, where F is feature dimension
-
-        if projector_input.shape[0] == 1:
-            obj_feats = self.edge_mlp_obj(torch.cat([projector_input, projector_input]))[0]
-        else:
-            obj_feats = self.edge_mlp_obj(projector_input)
-
         obj_feats = obj_feats.view(len(node_features), -1,
                 obj_feats.size(-1)) # B x N x F, where F is feature dimension
 
@@ -122,7 +120,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         scale_factor = results[0].scale_factor
         boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
         boxes_per_img = [len(r.pred_instances.bboxes) for r in results]
-        rescaled_boxes = scale_boxes(boxes, scale_factor)
+        rescaled_boxes = scale_boxes(boxes.float(), scale_factor)
 
         # compute all box_unions
         edge_boxes = self.box_union(rescaled_boxes, rescaled_boxes)
@@ -139,7 +137,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         else:
             # define edges to keep
             edges_per_img = torch.tensor([b*b for b in boxes_per_img])
-            edge_offsets = torch.cat([torch.zeros(1), torch.cumsum(edges_per_img, 0)[:-1]]).repeat_interleave(edges_per_img)
+
+            # offset is max of edges_per_img * index of img in batch
+            edge_offsets = (torch.arange(len(edges_per_img)) * edges_per_img.max()).repeat_interleave(edges_per_img)
             edges_to_keep = (torch.cat([torch.arange(e) for e in edges_per_img]) + edge_offsets).to(boxes.device)
 
             # densely add object queries to get edge feats, select edges with edges_to_keep
@@ -293,7 +293,11 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
     def _build_gt_edges(self, results: SampleList) -> BaseDataElement:
         boxes_per_img = [len(r.gt_instances.bboxes) for r in results]
         if self.gt_use_pred_detections:
-            bounding_boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
+            # get boxes, rescale
+            scale_factor = results[0].scale_factor
+            boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
+            bounding_boxes = scale_boxes(boxes.float(), scale_factor)
+
         else:
             bounding_boxes = pad_sequence([r.gt_instances.bboxes for r in results], batch_first=True)
 
@@ -549,51 +553,6 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                 overlaps_AB = bbox_overlaps(p_A, g_B)
                 overlaps_BA = bbox_overlaps(p_B, g_A)
                 overlaps = torch.max(torch.min(overlaps_AA, overlaps_BB), torch.min(overlaps_AB, overlaps_BA))
-
-            max_overlaps, argmax_overlaps = overlaps.max(dim=1)
-
-            matched_indices = torch.nonzero(max_overlaps >= iou_threshold, as_tuple=False).squeeze()
-            unmatched_indices = torch.nonzero(max_overlaps < iou_lower_bound, as_tuple=False).squeeze()
-
-            # sample
-            sampled_matched_inds, sampled_unmatched_inds = self.sample_indices(
-                    matched_indices, unmatched_indices, num, pos_fraction)
-
-            pred_matched_indices.append(sampled_matched_inds)
-            pred_unmatched_indices.append(sampled_unmatched_inds)
-            gt_matched_indices.append(argmax_overlaps[sampled_matched_inds])
-
-        return pred_matched_indices, pred_unmatched_indices, gt_matched_indices
-
-    def match_boxes_old(self, predicted_boxes, gt_boxes, iou_threshold=0.5, iou_lower_bound=0.5, num=100, pos_fraction=0.5):
-        # predicted_boxes: List of tensors of length B, where each tensor has shape (N, 4) representing predicted bounding boxes in (x1, y1, x2, y2) format
-        # gt_boxes: List of tensors of length B, where each tensor has shape (M, 4) representing ground truth bounding boxes in (x1, y1, x2, y2) format
-        # iou_threshold: IoU threshold for matching
-        # iou_lower_bound: Lower bound on IoU for returning unmatched boxes
-
-        B = len(predicted_boxes)
-
-        pred_matched_indices = []
-        pred_unmatched_indices = []
-        gt_matched_indices = []
-
-        for b in range(B):
-            p = predicted_boxes[b]
-            g = gt_boxes[b]
-
-            N, _ = p.shape
-            M, _ = g.shape
-
-            # compute overlaps, handle no GT boxes
-            if M == 0:
-                overlaps = torch.zeros(N, 1).to(p.device)
-            elif N == 0:
-                pred_matched_indices.append(torch.tensor([], dtype=torch.int64, device=p.device))
-                pred_unmatched_indices.append(torch.tensor([], dtype=torch.int64, device=p.device))
-                gt_matched_indices.append(torch.tensor([], dtype=torch.int64, device=p.device))
-                continue
-            else:
-                overlaps = bbox_overlaps(p, g)
 
             max_overlaps, argmax_overlaps = overlaps.max(dim=1)
 
