@@ -8,3 +8,5 @@ data
 **/*.log
 configs/models/*.py
 latent_graphs/
+slurms/
+slurms_sid/

@@ -40,6 +40,8 @@ load_from = _base_.load_from.replace('base', 'mask_rcnn')
 #remove semantic features
 model.ds_head.final_sem_feat_size = 0
 
-#remove semantic features from recon objective
-model.bool_semantic=False
 
+#remove semantic features from recon objective
+#model.bool_semantics=False
+
+#model.sem_feat_use_bboxes=False

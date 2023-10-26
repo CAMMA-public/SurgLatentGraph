@@ -84,10 +84,20 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _predict_edge_presence(self, node_features, nodes_per_img):
         # EDGE PREDICTION
-        sbj_feats = self.edge_mlp_sbj(node_features.flatten(end_dim=1))
+        projector_input = node_features.flatten(end_dim=1)
+        if projector_input.shape[0] == 1:
+            sbj_feats = self.edge_mlp_sbj(torch.cat([projector_input, projector_input]))[0]
+        else:
+            sbj_feats = self.edge_mlp_sbj(projector_input)
+
         sbj_feats = sbj_feats.view(len(node_features), -1,
                 sbj_feats.size(-1)) # B x N x F, where F is feature dimension
-        obj_feats = self.edge_mlp_obj(node_features.flatten(end_dim=1))
+
+        if projector_input.shape[0] == 1:
+            obj_feats = self.edge_mlp_obj(torch.cat([projector_input, projector_input]))[0]
+        else:
+            obj_feats = self.edge_mlp_obj(projector_input)
+
         obj_feats = obj_feats.view(len(node_features), -1,
                 obj_feats.size(-1)) # B x N x F, where F is feature dimension
 

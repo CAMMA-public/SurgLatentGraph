@@ -155,18 +155,13 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         elif not(bool_visual) and bool_semantics:
             node_features = node_features[..., self.obj_viz_feat_size:]
-            upsample_conv = nn.Conv2d(node_features.shape[-1], 320, kernel_size=1).to(device)
-            if node_features.shape[0]!=0 or node_features.shape[1]!=0 or node_features.shape[2]!=0:
-                qw=1
-            else:
-                node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
-        
-            # if node_features.shape[0] != 16 or node_features.shape[1] != 16 or node_features.shape[2] != 256:
-            #     # breakpoint()
-            #     padding = (0, 256 - node_features.shape[2], 0, 16 - node_features.shape[1], 0, 16 - node_features.shape[0])
-            #     node_features = torch.nn.functional.pad(node_features, padding, "constant", 0)
+            upsample_conv = nn.Conv2d(node_features.shape[2], 320, kernel_size=1).to(device)
+            if node_features.shape[0] != 16 or node_features.shape[1] != 16 or node_features.shape[2] != 256:
+                # breakpoint()
+                padding = (0, 256 - node_features.shape[2], 0, 16 - node_features.shape[1], 0, 16 - node_features.shape[0])
+                node_features = torch.nn.functional.pad(node_features, padding, "constant", 0)
                 
-            # node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
+            node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
 
         
         elif bool_visual and not(bool_semantics):
@@ -204,7 +199,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         if bool_visual and bool_semantics and bool_img: #ALL together, new recon objective
             input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
-            downsample_conv1 = nn.Conv2d(input_feat_672.shape[1], 352, kernel_size=1).to(device)
+            downsample_conv1 = nn.Conv2d(672, 352, kernel_size=1).to(device)
             input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
             print('condition 1')
             return input_feat_352
@@ -222,11 +217,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             return input_feat_352
         
         elif not(bool_visual) and bool_semantics and bool_img: #ONLY graph semantic and image features, no graph visual features
-            
-            # if feature_layout.shape[0]!=16 or processed_bg_img.shape[0]!=16 or img_feats_320.shape[0]!=16:
-            #     breakpoint()
             input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
-            downsample_conv1 = nn.Conv2d(input_feat_672.shape[1], 352, kernel_size=1).to(device)
+            downsample_conv1 = nn.Conv2d(672, 352, kernel_size=1).to(device)
             input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
             print('condition 4')
             return input_feat_352

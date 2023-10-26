@@ -110,10 +110,17 @@ class ReconstructionLoss(nn.Module):
                     else:
                         box_l1_loss.append(torch.zeros(1).squeeze().to(orig_imgs.device))
 
-            box_ssim_loss = sum(box_ssim_loss) / (len(box_ssim_loss) + 1e-5)
-            box_l1_loss = sum(box_l1_loss) / (len(box_l1_loss) + 1e-5)
-            total_box_loss = self.ssim_weight * box_ssim_loss + \
-                    self.l1_weight * box_l1_loss
+            if len(box_ssim_loss) == 0:
+                box_ssim_loss = sum(box_ssim_loss) / (len(box_ssim_loss) + 1e-5)
+            else:
+                box_ssim_loss = torch.zeros(1).to(orig_imgs.device)
+
+            if len(box_l1_loss) == 0:
+                box_l1_loss = sum(box_l1_loss) / (len(box_l1_loss) + 1e-5)
+            else:
+                box_l1_loss = torch.zeros(1).to(orig_imgs.device)
+
+            total_box_loss = (self.ssim_weight * box_ssim_loss + self.l1_weight * box_l1_loss).to(orig_imgs.device)
 
         else:
             box_ssim_loss = torch.zeros(1).to(orig_imgs.device).squeeze()
@@ -136,12 +143,12 @@ class ReconstructionLoss(nn.Module):
             # iterate through content, style and compute weighted mean
             box_deep_loss = []
             deep_loss = []
-            if boxes is not None:
+            if boxes is not None and len(fixed_boxes) > 0:
                 # construct fg_mask for deep loss based on boxes
                 fg_masks = torch.stack([self.boxes_to_mask(b, reconstructed_imgs.shape[-2:]) for b in fixed_boxes])
 
             for c, s in zip(content_loss, style_loss):
-                if boxes is not None:
+                if boxes is not None and len(fixed_boxes) > 0:
                     new_shape = c.shape[-2:]
 
                     # resize masks
@@ -152,7 +159,7 @@ class ReconstructionLoss(nn.Module):
                 overall_loss = torch.zeros(1).squeeze().to(orig_imgs.device)
 
                 if c is not None:
-                    if boxes is not None and len(torch.cat(boxes)) > 0:
+                    if boxes is not None and len(boxes) > 0 and len(torch.cat(boxes)) > 0:
                         denom = resized_masks.flatten(start_dim=1).sum(1) + 1e-3
                         overall_box_loss += ((c.mean(dim=1, keepdims=True) * resized_masks).flatten(start_dim=1).sum(1) / denom).mean()
 

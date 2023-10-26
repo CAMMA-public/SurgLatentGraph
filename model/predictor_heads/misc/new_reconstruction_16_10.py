@@ -141,13 +141,16 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
     def _construct_reconstruction_input(self, images, node_features, layouts,
             gt_layouts, img_feats):
-        
+
         bool_visual = self.bool_visual
         bool_semantics = self.bool_semantics
         bool_img = self.bool_img
+
+
         device = torch.device("cuda:0")
 
         f = self.bottleneck(node_features[..., :self.obj_viz_feat_size])
+        # node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
 
         if bool_visual and bool_semantics:
             node_features = torch.cat([f, node_features[..., self.obj_viz_feat_size:]], -1)
@@ -155,42 +158,41 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         elif not(bool_visual) and bool_semantics:
             node_features = node_features[..., self.obj_viz_feat_size:]
-            upsample_conv = nn.Conv2d(node_features.shape[-1], 320, kernel_size=1).to(device)
-            if node_features.shape[0]!=0 or node_features.shape[1]!=0 or node_features.shape[2]!=0:
-                qw=1
-            else:
-                node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
-        
-            # if node_features.shape[0] != 16 or node_features.shape[1] != 16 or node_features.shape[2] != 256:
-            #     # breakpoint()
-            #     padding = (0, 256 - node_features.shape[2], 0, 16 - node_features.shape[1], 0, 16 - node_features.shape[0])
-            #     node_features = torch.nn.functional.pad(node_features, padding, "constant", 0)
+            upsample_conv = nn.Conv2d(node_features.shape[2], 320, kernel_size=1).to(device)
+            if node_features.shape[0] != 16 or node_features.shape[1] != 16 or node_features.shape[2] != 256:
+                # breakpoint()
+                padding = (0, 256 - node_features.shape[2], 0, 16 - node_features.shape[1], 0, 16 - node_features.shape[0])
+                node_features = torch.nn.functional.pad(node_features, padding, "constant", 0)
                 
-            # node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
+            node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
 
         
         elif bool_visual and not(bool_semantics):
             node_features = node_features[..., :self.obj_viz_feat_size]
-            upsample_conv = nn.Conv2d(node_features.shape[-1], 320, kernel_size=1).to(device)
-            if node_features.shape[0]!=0 or node_features.shape[1]!=0 or node_features.shape[2]!=0:
-                qw=1
-            else:
-                node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
+            upsample_conv = nn.Conv2d(node_features.shape[2], 320, kernel_size=1).to(device)
+            node_features = upsample_conv(node_features.permute(2, 0, 1).unsqueeze(0)).permute(2, 3, 1, 0).squeeze()
         
         else:
             node_features=[]
-            print("ERROR in else")
 
-        
+
 
         # convert one-hot layout over proposals to class-wise segmentation mask "layout"
         _, _, one_hot_layout = layouts
         denom = one_hot_layout.sum(1)
         denom[denom == 0] = 1
-        feature_layout = torch.sum(one_hot_layout.unsqueeze(2)[:, :node_features.shape[1]] * \
+        if one_hot_layout.unsqueeze(2)[:, :node_features.shape[1]].shape[0]!=16:
+            input_tensor = one_hot_layout.unsqueeze(2)[:, :node_features.shape[1]]
+            padding = [0, 96 - input_tensor.shape[4], 0, 64 - input_tensor.shape[3],0, 1 - input_tensor.shape[2], 0, 16 - input_tensor.shape[1], 0, 16 - input_tensor.shape[0]]
+            output_tensor = F.pad(input_tensor, padding).to(device)
+            padding = [0, 96-denom.shape[2], 0, 64 - denom.shape[1], 0, 16-denom.shape[0]]
+            denom = F.pad(denom, padding).to(device)
+            feature_layout = torch.sum(output_tensor * node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
+            
+        else:
+            feature_layout = torch.sum(one_hot_layout.unsqueeze(2)[:, :node_features.shape[1]] * \
                 node_features.unsqueeze(-1).unsqueeze(-1), dim=1) / denom.unsqueeze(1)
 
-        
         # TODO(adit98) add img features here to feature layout here
         feats1 = img_feats[3]
         new_height, new_width = 64, 96
@@ -204,7 +206,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         if bool_visual and bool_semantics and bool_img: #ALL together, new recon objective
             input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
-            downsample_conv1 = nn.Conv2d(input_feat_672.shape[1], 352, kernel_size=1).to(device)
+            downsample_conv1 = nn.Conv2d(672, 352, kernel_size=1).to(device)
             input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
             print('condition 1')
             return input_feat_352
@@ -214,30 +216,28 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             print('condition 2')
             return input_feat_352
         
-        elif bool_visual and not(bool_semantics) and bool_img: #ONLY visual features (graph and image), no semantics
-            input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
-            downsample_conv1 = nn.Conv2d(input_feat_672.shape[1], 352, kernel_size=1).to(device)
-            input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
+        elif not(bool_visual) and bool_semantics and bool_img: # ONLY semantics and img visual features, no graph visual
+            input_feat_352 = torch.cat([processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
             print('condition 3')
             return input_feat_352
         
-        elif not(bool_visual) and bool_semantics and bool_img: #ONLY graph semantic and image features, no graph visual features
-            
-            # if feature_layout.shape[0]!=16 or processed_bg_img.shape[0]!=16 or img_feats_320.shape[0]!=16:
-            #     breakpoint()
-            input_feat_672 = torch.cat([feature_layout, processed_bg_img, img_feats_320], dim=1) #input feats of size (_, 672, 64, 96)
-            downsample_conv1 = nn.Conv2d(input_feat_672.shape[1], 352, kernel_size=1).to(device)
-            input_feat_352 = downsample_conv1(input_feat_672) # size is now (_, 352, 64, 96) from (_, 672, 64, 96)
+        elif bool_visual and not(bool_semantics) and bool_img: #ONLY visual features (graph and image), no semantics
+            input_feat_640 = torch.cat([feature_layout, img_feats_320], dim=1) #input feats of size (_, 640, 64, 96)
+            downsample_conv1 = nn.Conv2d(640, 352, kernel_size=1).to(device)
+            input_feat_352 = downsample_conv1(input_feat_640) # size is now (_, 352, 64, 96) from (_, 640, 64, 96)
             print('condition 4')
             return input_feat_352
         
+        elif not(bool_visual) and bool_semantics and not(bool_img): #ONLY semantic features
+            input_feat_32 = torch.cat([processed_bg_img], dim=1) #input feats of size (_, 32, 64, 96)
+            downsample_conv1 = nn.Conv2d(32, 352, kernel_size=1).to(device)
+            input_feat_352 = downsample_conv1(input_feat_32) # size is now (_, 352, 64, 96) from (_, 32, 64, 96)
+            print('condition 5')
+            return input_feat_352
+        
         else:
-            return []
-
-        # combine processed_bg_img, layout_with_features, semantics
-        input_feat = torch.cat([feature_layout, processed_bg_img], dim=1)
-
-        return []
+            print('condition LAST')
+            return 0
 
     def _whiteout(self, images, gt_layouts, layouts):
         # resize GT
@@ -261,7 +261,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         else:
             processed_bg_img = self.img_conv(torch.cat([whited_out_images,
                 box_layout], dim=1))
-
+  
         return processed_bg_img
 
     def _rescale_results(self, results: SampleList) -> SampleList:
@@ -349,5 +349,6 @@ class DecoderNetwork(torch.nn.Module):
         out = self.output_conv(feats)
 
         return out
+
 
 

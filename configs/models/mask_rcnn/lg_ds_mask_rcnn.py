@@ -36,3 +36,5 @@ del _base_.lg_model
 
 # modify load_from
 load_from = _base_.load_from.replace('base', 'mask_rcnn')
+
+#model.sem_feat_use_bboxes=False
