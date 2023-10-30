@@ -50,6 +50,6 @@ optim_wrapper = dict(
     )
 )
 
-train_dataloader = dict(batch_size=16)
-val_dataloader = dict(batch_size=16)
-test_dataloader = dict(batch_size=16)
+train_dataloader = dict(batch_size=32)
+val_dataloader = dict(batch_size=32)
+test_dataloader = dict(batch_size=32)

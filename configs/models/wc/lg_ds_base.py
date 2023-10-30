@@ -88,19 +88,19 @@ trainable_backbone_frozen_stages = 1
 
 # dataset
 train_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=16,
+    batch_size=32,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
     ),
