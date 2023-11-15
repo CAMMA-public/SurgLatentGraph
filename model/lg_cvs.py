@@ -319,18 +319,16 @@ class LGDetector(BaseDetector):
         c = pad_sequence(classes, batch_first=True)
         b = pad_sequence(boxes, batch_first=True)
         s = pad_sequence(scores, batch_first=True)
-        b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
+        b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
         c_one_hot = F.one_hot(c, num_classes=self.num_classes)
-       
-       # HACK to ensure 1 detection per batch doesn't break things
+
+        # HACK to ensure 1 detection per batch doesn't break things
         sem_projector_input = torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1).flatten(end_dim=1)
-        if sem_projector_input.shape[0] == 0:
-            s = torch.zeros(0, 256).to(s.device) # TODO don't hardcode this
-        elif sem_projector_input.shape[0] == 1:
-            s = self.semantic_feat_projector(torch.cat([sem_projector_input, sem_projector_input]))[0]
+        if sem_projector_input.shape[0] == 1:
+            s = self.semantic_feat_projector(sem_projector_input.repeat(2, 1))[0]
         else:
             s = self.semantic_feat_projector(sem_projector_input)
-            
+
         #s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1).flatten(end_dim=1))
         feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
 
