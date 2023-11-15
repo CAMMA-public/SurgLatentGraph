@@ -45,7 +45,7 @@ class LGDetector(BaseDetector):
             reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
             graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
             use_gt_dets: bool = False, trainable_detector_cfg: OptConfigType = None,
-            trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool=False,
+            trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool = False,
             sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
             sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
             mask_augment: bool = True, use_semantic_queries: bool = False,
@@ -121,7 +121,7 @@ class LGDetector(BaseDetector):
             if self.use_semantic_queries:
                 self.sem_feat_hidden_dim = sem_feat_hidden_dim
                 self.point_pos_embed_size = 128 # pos embed dim per point
-                sem_input_dim = 1 # for scores
+                sem_input_dim = 1 # for scores/bg_prob
                 if self.sem_feat_use_bboxes:
                     if semantic_feat_size % 2 != 0:
                         raise ValueError("Semantic Feat Size must be a multiple of 2 when using bounding boxes")
@@ -154,8 +154,8 @@ class LGDetector(BaseDetector):
 
             else:
                 # compute sem_input_dim
-                sem_input_dim = 1
-                edge_sem_input_dim = 1
+                sem_input_dim = 1 # scores
+                edge_sem_input_dim = 1 # bg prob
                 if self.sem_feat_use_bboxes:
                     # boxes and score
                     sem_input_dim += 4
@@ -164,7 +164,7 @@ class LGDetector(BaseDetector):
                 if self.sem_feat_use_class_logits:
                     # class logits
                     sem_input_dim += num_classes
-                    edge_sem_input_dim += self.num_edge_classes + 1 # bg + num classes
+                    edge_sem_input_dim += self.num_edge_classes
 
                 if self.sem_feat_use_masks:
                     sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord

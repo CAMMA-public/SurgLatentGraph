@@ -259,7 +259,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # update node viz feats (leave semantic feats the same, add to original feats)
         updated_node_feats = pad_sequence(dgl_g.ndata['viz_feats'].split(graph.nodes.nodes_per_img),
                 batch_first=True)
-        graph.nodes.viz_feats = updated_node_feats
+        graph.nodes.gnn_viz_feats = updated_node_feats
 
         # update graph structure
         graph.edges.edges_per_img = dgl_g.batch_num_edges()

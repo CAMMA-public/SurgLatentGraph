@@ -29,7 +29,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
     def __init__(self, num_layers: int, arch: str, add_self_loops: bool, use_reverse_edges: bool,
             norm: str, skip_connect: bool, input_dim_node: int, input_dim_edge: int,
             causal: bool = False, hidden_dim: int = 512, dropout: float = 0.0,
-            init_cfg: OptMultiConfig = None) -> None:
+            feat_key: str = 'viz_feats', init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
         self.add_self_loops = add_self_loops
         self.use_reverse_edges = use_reverse_edges
@@ -41,17 +41,18 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
         else:
             raise NotImplementedError
 
+        # which feature from graph structure to apply gnn on
+        self.feat_key = feat_key
+
     def __call__(self, graph: BaseDataElement) -> BaseDataElement:
         # construct dgl graph, deal with reverse edges, self loops
         dgl_g = self._create_dgl_graph(graph)
 
         # apply gnn
-        node_feats, edge_feats = self.gnn_head(dgl_g.ndata['viz_feats'],
-                dgl_g.edata['viz_feats'], torch.stack(dgl_g.edges(), 1), dgl_g)
+        node_feats, edge_feats = self.gnn_head(dgl_g.ndata[self.feat_key],
+                dgl_g.edata[self.feat_key], torch.stack(dgl_g.edges(), 1), dgl_g)
 
-        dgl_g.ndata['orig_feats'] = dgl_g.ndata['viz_feats']
         dgl_g.ndata['gnn_feats'] = node_feats
-        dgl_g.edata['orig_feats'] = dgl_g.edata['viz_feats']
         dgl_g.edata['gnn_feats'] = edge_feats
 
         return dgl_g

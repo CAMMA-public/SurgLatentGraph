@@ -36,7 +36,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
             loss: Union[List, ConfigType], use_img_feats=True, img_feats_only: bool = False,
-            loss_consensus: str = 'mode', num_predictor_layers: int = 2,
+            use_gnn_feats: bool = True, loss_consensus: str = 'mode', num_predictor_layers: int = 2,
             loss_weight: float = 1.0, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
@@ -46,6 +46,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.final_sem_feat_size = final_sem_feat_size
         self.final_viz_feat_size = final_viz_feat_size
         self.img_feat_size = img_feat_size
+        self.use_gnn_feats = use_gnn_feats
 
         self.node_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
         self.edge_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
@@ -58,6 +59,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         # construct gnn
         gnn_cfg.input_dim_node = self.graph_feat_projected_dim
         gnn_cfg.input_dim_edge = self.graph_feat_projected_dim
+        gnn_cfg.feat_key = 'feats' # use overall feats for gnn
         self.gnn = MODELS.build(gnn_cfg)
 
         # img feat params
@@ -100,14 +102,20 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         node_feats = []
         edge_feats = []
         if self.final_viz_feat_size > 0:
-            node_viz_feats = self.node_viz_feat_projector(graph.nodes.feats[..., :self.input_viz_feat_size])
-            edge_viz_feats = self.edge_viz_feat_projector(graph.edges.feats[..., :self.input_viz_feat_size])
+            input_node_viz_feats = feats.instance_feats
+            input_edge_viz_feats = graph.edges.viz_feats
+            if self.use_gnn_feats:
+                input_node_viz_feats = input_node_viz_feats + graph.nodes.gnn_viz_feats
+                input_edge_viz_feats = input_edge_viz_feats + graph.edges.gnn_viz_feats
+
+            node_viz_feats = self.node_viz_feat_projector(input_node_viz_feats)
+            edge_viz_feats = self.edge_viz_feat_projector(input_edge_viz_feats)
             node_feats.append(node_viz_feats)
             edge_feats.append(edge_viz_feats)
 
         if self.final_sem_feat_size > 0:
-            node_sem_feats = self.node_sem_feat_projector(graph.nodes.feats[..., -self.input_sem_feat_size:])
-            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.feats[..., -self.input_sem_feat_size:])
+            node_sem_feats = self.node_sem_feat_projector(feats.semantic_feats)
+            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.semantic_feats)
             node_feats.append(node_sem_feats)
             edge_feats.append(edge_sem_feats)
 
