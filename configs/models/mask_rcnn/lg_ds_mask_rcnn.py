@@ -32,9 +32,24 @@ model.trainable_backbone_cfg.frozen_stages = _base_.trainable_backbone_frozen_st
 if 'neck' in detector:
     model.trainable_neck_cfg=copy.deepcopy(detector.neck)
 
+# perturbation
+model.ds_head.perturb_feats = False
+model.ds_head.perturbed_loss_weight = 0.5
+model.ds_head.add_noise = False
+#drop_viz_prob = 0.7
+
+# optimizer
+optim_wrapper = dict(
+    optimizer=dict(lr=0.00001),
+    #paramwise_cfg=dict(
+    #    custom_keys={
+    #        # decrease lr of trainable backbone
+    #        'trainable_backbone': dict(lr_mult=0.1),
+    #    }
+    #),
+)
+
 del _base_.lg_model
 
 # modify load_from
 load_from = _base_.load_from.replace('base', 'mask_rcnn')
-
-#model.sem_feat_use_bboxes=False

@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/wc/wc_instance.py',
+    '../datasets/small_wc/small_wc_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -45,7 +45,7 @@ dc_model = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[3.15625, 4.32857143, 2.66960352],
+        class_weight=[23.76262626, 18.23643411, 16.92446043],
     ),
     use_pred_boxes_recon_loss=True,
     reconstruction_head=dict(
@@ -85,22 +85,22 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=32,
-    num_workers=2,
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='train/annotation_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=32,
-    num_workers=2,
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='val/annotation_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=32,
-    num_workers=2,
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='test/annotation_coco.json',
     ),
@@ -110,26 +110,28 @@ test_dataloader = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='wc',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='wc',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/wc_preds/test/deepcvs'
+        outfile_prefix='./results/small_wc_preds/test/deepcvs'
     ),
 ]
 
@@ -152,8 +154,8 @@ test_cfg = dict(type='TestLoop')
 # hooks
 custom_hooks = [dict(type="FreezeDetectorHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='wc/ds_average_precision'),
+    checkpoint=dict(save_best='small_wc/ds_average_precision'),
 )
 
 # loading
-load_from = 'weights/wc/lg_base_no_recon.pth'
+load_from = 'weights/small_wc/lg_base_no_recon.pth'

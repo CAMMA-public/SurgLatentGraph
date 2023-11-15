@@ -1,4 +1,5 @@
 import os
+import copy
 
 _base_ = [os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')]
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
@@ -120,6 +121,25 @@ val_dataloader=dict(
         filter_cfg=dict(filter_empty_gt=False),
         metainfo=metainfo,
     )
+)
+
+train_eval_dataloader = copy.deepcopy(_base_.val_dataloader)
+train_eval_dataloader.update(dict(
+        batch_size=10,
+        num_workers=4,
+        persistent_workers=True,
+    )
+)
+train_eval_dataloader['sampler'] = dict(type='TrackCustomKeyframeSampler')
+train_eval_dataloader['dataset'] = dict(
+    type=dataset_type,
+    data_root=data_root,
+    ann_file='train/annotation_coco_vid.json',
+    data_prefix=dict(img_path=train_data_prefix),
+    test_mode=True,
+    pipeline=eval_pipeline,
+    filter_cfg=dict(filter_empty_gt=False),
+    metainfo=metainfo,
 )
 
 test_dataloader=dict(

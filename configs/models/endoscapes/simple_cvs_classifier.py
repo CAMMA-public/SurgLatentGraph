@@ -39,34 +39,55 @@ model = dict(
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=True,
         pad_mask=True,
-        pad_size_divisor=32,
+        pad_size_divisor=1,
     ),
 )
 
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
+    dataset=dict(
+        ann_file='train/annotation_ds_coco.json',
+    ),
+)
+train_eval_dataloader = dict(
+    batch_size=32,
+    num_workers=4,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
     ),
 )
 
 # evaluators
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='endoscapes',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        use_pred_boxes_recon=True,
+        metric=[],
+        num_classes=3,
+        outfile_prefix='./results/endoscapes_preds/train/r50'
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
@@ -76,6 +97,8 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
+        outfile_prefix='./results/endoscapes_preds/val/r50'
     )
 ]
 
@@ -87,6 +110,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/endoscapes_preds/test/r50'

@@ -39,28 +39,28 @@ model = dict(
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=True,
         pad_mask=True,
-        pad_size_divisor=32,
+        pad_size_divisor=1,
     ),
 )
 
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
     ),
@@ -76,6 +76,7 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -87,6 +88,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/small_wc_preds/test/r50'
@@ -104,7 +106,7 @@ auto_scale_lr = dict(enable=False)
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=80,
+    max_epochs=20,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')

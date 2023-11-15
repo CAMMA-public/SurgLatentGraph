@@ -1,11 +1,12 @@
 import os
+import copy
 
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/coco_instance.py')
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
 
 # Modify dataset related settings
 
-data_root=os.path.expandvars('data/mmdet_datasets/endoscapes_mmdet')
+data_root='data/mmdet_datasets/endoscapes_mmdet'
 metainfo = {
     'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
         'gallbladder', 'tool'),
@@ -58,7 +59,7 @@ train_pipeline = [
         dict(type='FilterAnnotations', min_gt_bbox_wh=(1e-2, 1e-2)),
         dict(type='PackDetInputs',
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
-                'flip', 'flip_direction', 'homography_matrix', 'ds')
+                'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe')
         ),
 ]
 
@@ -97,6 +98,17 @@ val_dataloader = dict(
         ann_file='val/annotation_coco.json',
         data_prefix=dict(img='val/'),
         pipeline=eval_pipeline))
+
+train_eval_dataloader = copy.deepcopy(_base_.val_dataloader)
+train_eval_dataloader['dataset'].update(dict(
+        type='CocoDatasetWithDS',
+        data_root=data_root,
+        metainfo=metainfo,
+        ann_file='train/annotation_coco.json',
+        data_prefix=dict(img='train/'),
+        pipeline=eval_pipeline,
+    )
+)
 
 test_dataloader = dict(
     batch_size=8,

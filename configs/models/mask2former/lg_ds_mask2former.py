@@ -9,6 +9,7 @@ _base_ = [
 
 custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.mask2former_with_queries'],
         allow_failed_imports=False)
+
 # extract detector, data preprocessor config from base
 num_things_classes = _base_.num_classes
 num_stuff_classes = 0
@@ -67,6 +68,6 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=0.01, norm_type=2),
 )
 
-train_dataloader = dict(batch_size=32)
-val_dataloader = dict(batch_size=32)
-test_dataloader = dict(batch_size=32)
+train_dataloader = dict(batch_size=16)
+val_dataloader = dict(batch_size=16)
+test_dataloader = dict(batch_size=16)

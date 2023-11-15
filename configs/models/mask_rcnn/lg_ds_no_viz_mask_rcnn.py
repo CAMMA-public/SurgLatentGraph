@@ -3,8 +3,7 @@ import copy
 
 # modify base for different detectors
 _base_ = [
-    '../lg_ds_base.py',
-    os.path.expandvars('$MMDETECTION/configs/_base_/models/mask-rcnn_r50_fpn.py'),
+    '../lg_ds_base.py', os.path.expandvars('$MMDETECTION/configs/_base_/models/mask-rcnn_r50_fpn.py'),
 ]
 
 # extract detector, data preprocessor config from base
@@ -27,26 +26,35 @@ model.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.roi_extractor.roi_layer.output_size = 1
 
 # trainable bb, neck
-model.trainable_backbone_cfg=copy.deepcopy(detector.backbone)
-model.trainable_backbone_cfg.frozen_stages = _base_.trainable_backbone_frozen_stages
-if 'neck' in detector:
-    model.trainable_neck_cfg=copy.deepcopy(detector.neck)
+model.trainable_backbone_cfg = None
 
 del _base_.lg_model
 
 # modify load_from
 load_from = _base_.load_from.replace('base', 'mask_rcnn')
 
-#remove visual features
+# remove visual features
 model.ds_head.final_viz_feat_size = 0
 model.ds_head.use_img_feats = False
 
+# semantic modifications
+#model.semantic_feat_size = 512
+#model.graph_head.semantic_feat_size = 512
+#model.ds_head.input_sem_feat_size = 512
+#model.ds_head.final_sem_feat_size = 512
+#model.use_semantic_queries = True
+
+# train graph head since we are changing semantic feat projector arch, use pred detections rather than gt
+#model.force_train_graph_head = True
+#model.graph_head.presence_loss_weight = 1
+#model.graph_head.classifier_loss_weight = 1
+
+# optimizer
 optim_wrapper = dict(
-    optimizer=dict(lr=0.00001),
+    optimizer=dict(lr=0.0001),
 )
 
-#remove graph visual and img features from recon objective
-#model.bool_visual=False
-#model.bool_img=False
-
-#model.sem_feat_use_bboxes=False
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=30,
+    val_interval=1)

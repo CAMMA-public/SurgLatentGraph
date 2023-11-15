@@ -43,9 +43,10 @@ val_evaluator = [
         prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -55,8 +56,9 @@ test_evaluator = [
         prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/c80_cvs_preds/test'

@@ -27,8 +27,11 @@ class LoadAnnotationsWithDS(LoadAnnotations):
         Args:
             results (dict): Result dict from :obj:``mmengine.BaseDataset``.
         """
-        gt_ds = results.get('ds')
-        results['ds'] = np.array(gt_ds)
+        try:
+            gt_ds = results.get('ds')
+            results['ds'] = np.array(gt_ds)
+        except KeyError:
+            pass
 
     def transform(self, results: dict) -> dict:
         results = super().transform(results)
@@ -47,6 +50,7 @@ class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
         results['ds'] = np.array(gt_ds)
 
     def transform(self, results: dict) -> dict:
+        results = super().transform(results)
         self._load_ds(results)
         return results
 
@@ -92,6 +96,9 @@ class CocoDatasetWithDS(CocoDataset):
         # get ds labels
         if 'ds' in raw_data_info['raw_img_info']:
             data_info['ds'] = raw_data_info['raw_img_info']['ds']
+
+        if 'is_det_keyframe' in raw_data_info['raw_img_info']:
+            data_info['is_det_keyframe'] = raw_data_info['raw_img_info']['is_det_keyframe']
 
         return data_info
 

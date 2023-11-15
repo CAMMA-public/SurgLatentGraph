@@ -94,24 +94,24 @@ trainable_backbone_frozen_stages = 1
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
-        ann_file='train_cvs/annotation_cvs_coco.json',
+        ann_file='train_cvs/annotation_ds_coco.json',
         filter_cfg=dict(filter_empty_gt=False),
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
-        ann_file='val_cvs/annotation_cvs_coco.json',
+        ann_file='val_cvs/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
-        ann_file='test_cvs/annotation_cvs_coco.json',
+        ann_file='test_cvs/annotation_ds_coco.json',
     ),
 )
 
@@ -122,9 +122,10 @@ val_evaluator = [
         prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val_cvs/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -134,8 +135,9 @@ test_evaluator = [
         prefix='c80_cvs',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_cvs_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test_cvs/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/c80_cvs_preds/test_cvs'
@@ -148,12 +150,12 @@ del _base_.optim_wrapper
 optim_wrapper = dict(
     optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
-    paramwise_cfg=dict(
-        custom_keys={
-            'semantic_feat_projector': dict(lr_mult=10),
-            'reconstruction_head': dict(lr_mult=10),
-        }
-    ),
+    #paramwise_cfg=dict(
+    #    custom_keys={
+    #        'semantic_feat_projector': dict(lr_mult=10),
+    #        'reconstruction_head': dict(lr_mult=10),
+    #    }
+    #),
 )
 auto_scale_lr = dict(enable=False)
 

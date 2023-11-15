@@ -1,4 +1,5 @@
 import os
+import copy
 
 _base_ = 'endoscapes_vid_instance_15.py'
 num_temp_frames = _base_.num_temp_frames
@@ -60,6 +61,16 @@ val_dataloader=dict(
     dataset=dict(
         pipeline=eval_pipeline,
     ),
+)
+
+train_eval_dataloader = copy.deepcopy(_base_.val_dataloader)
+train_eval_dataloader['dataset'].update(dict(
+        data_root=data_root,
+        metainfo=metainfo,
+        ann_file='train/annotation_coco_vid.json',
+        data_prefix=dict(img='train/'),
+        pipeline=eval_pipeline,
+    )
 )
 
 test_dataloader=dict(

@@ -44,11 +44,11 @@ lg_model=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
         ),
-        presence_loss_weight=0.4,
+        presence_loss_weight=1.0,
         classifier_loss_cfg=dict(
             type='CrossEntropyLoss',
         ),
-        classifier_loss_weight=0.25,
+        classifier_loss_weight=1.0,
         num_edge_classes=3,
     ),
 )
@@ -63,6 +63,7 @@ val_evaluator = dict(
     metric=['bbox'],
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
+    num_classes=-1, # ds_num_classes
 )
 
 test_evaluator = dict(
@@ -74,8 +75,9 @@ test_evaluator = dict(
     metric=['bbox'],
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
+    num_classes=-1, # ds num classes
     outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
-    classwise = True,
+    classwise=True,
 )
 
 # learning rate

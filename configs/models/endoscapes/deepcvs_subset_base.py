@@ -85,28 +85,50 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=32,
-    num_workers=2,
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='train/annotation_coco.json',
     ),
 )
-val_dataloader = dict(
+train_eval_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
+    dataset=dict(
+        ann_file='train/annotation_ds_coco.json',
+        test_mode=True,
+    ),
+    drop_last=False,
+)
+val_dataloader = dict(
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='val/annotation_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=32,
-    num_workers=2,
+    batch_size=16,
+    num_workers=4,
     dataset=dict(
         ann_file='test/annotation_coco.json',
     ),
 )
 
 # evaluators
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='endoscapes',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_coco.json'),
+        use_pred_boxes_recon=True,
+        metric=[],
+        num_classes=3,
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
@@ -116,6 +138,7 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -127,6 +150,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/endoscapes_preds/test/deepcvs'

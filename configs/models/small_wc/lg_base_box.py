@@ -63,6 +63,7 @@ val_evaluator = dict(
     metric=['bbox'],
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
+    num_classes=-1, # ds num classes
 )
 
 test_evaluator = dict(
@@ -75,26 +76,27 @@ test_evaluator = dict(
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     outfile_prefix='./results/small_wc_preds/test/lg_cvs',
-    classwise = True,
+    classwise=True,
+    num_classes=-1, # ds num classes
 )
 
 # learning rate
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
+        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=2500),
     dict(
         type='MultiStepLR',
         begin=0,
-        end=20,
+        end=100,
         by_epoch=True,
-        milestones=[8, 16],
+        milestones=[40, 80],
         gamma=0.1)
 ]
 
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=80,
+    max_epochs=100,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')

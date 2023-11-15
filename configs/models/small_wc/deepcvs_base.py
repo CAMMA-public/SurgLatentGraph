@@ -13,7 +13,7 @@ test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMetricRGD',
-    'hooks.custom_hooks', 'model.predictor_heads.original_reconstruction', 'model.predictor_heads.modules.loss'],
+    'hooks.custom_hooks', 'model.predictor_heads.reconstruction', 'model.predictor_heads.modules.loss'],
     allow_failed_imports=False)
 
 # additional params
@@ -21,7 +21,6 @@ num_nodes = 16
 layout_noise_dim = 32
 bottleneck_feat_size = 1024
 recon_input_dim = bottleneck_feat_size + layout_noise_dim
-
 
 dc_model = dict(
     type='DeepCVS',
@@ -33,8 +32,7 @@ dc_model = dict(
         in_channels=4+len(_base_.metainfo.classes), # 3 channels + detector_num_classes + 1 (bg)
         depth=18,
         num_stages=4,
-        #out_indices=(0, 1, 2, 3),
-        out_indices=(3,),
+        out_indices=(0, 1, 2, 3),
         frozen_stages=-1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
@@ -88,21 +86,21 @@ dc_model = dict(
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=2,
+    num_workers=4,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
     ),
@@ -118,6 +116,7 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -129,6 +128,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/small_wc_preds/test/deepcvs'
@@ -146,7 +146,7 @@ auto_scale_lr = dict(enable=False)
 # Running settings
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=80,
+    max_epochs=20,
     val_interval=1)
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')

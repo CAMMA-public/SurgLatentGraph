@@ -18,7 +18,6 @@ lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
 lg_model.graph_head.gt_use_pred_detections = gt_graph_use_pred_detections
-
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
@@ -112,6 +111,7 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -123,6 +123,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/small_wc_preds/test/lg_cvs',
@@ -135,12 +136,12 @@ del _base_.optim_wrapper
 optim_wrapper = dict(
     optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
-#    paramwise_cfg=dict(
-#        custom_keys={
-#            'semantic_feat_projector': dict(lr_mult=10),
-#            'reconstruction_head': dict(lr_mult=10),
-#        }
-#    ),
+    #paramwise_cfg=dict(
+    #    custom_keys={
+    #        'semantic_feat_projector': dict(lr_mult=10),
+    #        'reconstruction_head': dict(lr_mult=10),
+    #    }
+    #),
 )
 auto_scale_lr = dict(enable=False)
 
@@ -149,6 +150,13 @@ custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook
 default_hooks = dict(
     checkpoint=dict(save_best='small_wc/ds_average_precision'),
     visualization=dict(draw=False),
+)
+
+# train cfg
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=60,
+    val_interval=1
 )
 
 # loading

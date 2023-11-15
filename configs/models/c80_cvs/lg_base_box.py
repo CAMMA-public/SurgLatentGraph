@@ -64,6 +64,7 @@ val_evaluator = [
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        num_classes=-1, # ds_num_classes
     )
 ]
 
@@ -77,6 +78,7 @@ test_evaluator = [
         metric=['bbox'],
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        num_classes=-1, # ds num classes
         outfile_prefix='./results/c80_cvs_preds/test',
         save_graphs=True,
     ),
