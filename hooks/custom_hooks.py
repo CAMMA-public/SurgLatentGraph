@@ -8,6 +8,9 @@ class FreezeDetectorHook(Hook):
     def __init__(self, train_ds_only=False):
         self.train_ds_only = train_ds_only
 
+    def before_train(self, runner):
+        self.before_train_iter(runner)
+
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
         for p in model.detector.parameters():

@@ -3,8 +3,6 @@ dataset=$2
 base_cfg_dir=configs/models
 cfg_dir=${base_cfg_dir}/${detector}
 
-# MOVE ALL FILES TO $JOBSCRATCH AND CHANGE DIR
-
 ## RUN LG PRETRAINING (TRAINING OF DETECTOR)
 #export CUDA_VISIBLE_DEVICES=0 && python ${MMDETECTION}/tools/train.py ${cfg_dir}/lg_${detector}.py
 #best_model_path=$(ls work_dirs/lg_${detector}/best_${dataset}* | tail -1)
@@ -66,5 +64,3 @@ wait
 #export CUDA_VISIBLE_DEVICES=0 && python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier.py $(ls work_dirs/mt_${detector}/best_${dataset}* | tail -1) --work-dir ./work_dirs/mt_${detector} &
 #export CUDA_VISIBLE_DEVICES=1 && python ${MMDETECTION}/tools/test.py ${base_cfg_dir}/simple_cvs_classifier_with_recon.py $(ls work_dirs/mt_${detector}_with_recon/best_${dataset}* | tail -1) --work-dir ./work_dirs/mt_${detector}_with_recon &
 #wait
-
-# MOVE ALL CHECKPOINTS BACK TO $SCRATCH/sid/latentgraph/work_dirs

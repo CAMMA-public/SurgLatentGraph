@@ -4,6 +4,7 @@ from mmdet.structures.bbox import scale_boxes
 from mmengine.structures import BaseDataElement
 from mmengine.logging import MMLogger
 from typing import Dict, Sequence
+import torchmetrics.functional as MF
 from torchmetrics.functional import multiscale_structural_similarity_index_measure as ms_ssim, structural_similarity_index_measure as ssim
 import torch
 from torch import Tensor
@@ -22,9 +23,9 @@ from typing import List
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
     def __init__(self, data_root: str, data_prefix: str, use_pred_boxes_recon: bool,
-            additional_metrics: List = [], clip_eval: bool = False,
-            pred_per_frame: bool = False, save_lg: bool = False,
-            **kwargs):
+            num_classes: int, additional_metrics: List = [], clip_eval: bool = False,
+            pred_per_frame: bool = False, save_lg: bool = False, num_thresholds: int = 10,
+            task_type: str = 'multilabel', **kwargs):
 
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
@@ -35,6 +36,9 @@ class CocoMetricRGD(CocoMetric):
         self.clip_eval = clip_eval # whether results and gts are clips
         self.pred_per_frame = pred_per_frame # whether we want to keep predictions for each frame
         self.save_lg = save_lg
+        self.task_type = task_type
+        self.num_classes = num_classes
+        self.num_thresholds = num_thresholds
 
         # fonts
         try:
@@ -214,8 +218,8 @@ class CocoMetricRGD(CocoMetric):
                 eval_results['ds_f1'] = ds_f1
 
             else:
-                if self.prefix == 'endoscapes' or self.prefix == 'wc' or self.prefix == 'italy' or self.prefix=='small_wc':
-                    torch_ap = AP(task='multilabel', num_labels=3, average='none')
+                if self.task_type == 'multilabel':
+                    torch_ap = AP(task='multilabel', num_labels=self.num_classes, average='none')
                     ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                     ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
                     ds_ap = torch_ap(ds_preds, ds_gt)
@@ -229,15 +233,15 @@ class CocoMetricRGD(CocoMetric):
                         logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
                         eval_results['ds_average_precision_C{}'.format(ind+1)] = i
 
-                else:
+                elif self.task_type == 'multiclass':
                     # get preds and gt
                     ds_preds = torch.stack([p['ds'] for p in preds]).argmax(-1).view(-1)
                     ds_gt = torch.stack([Tensor(g['ds'].astype(float)).view(-1) for g in gts]).long().view(-1)
 
                     # define
-                    torch_prec = Precision(task='multiclass', average='macro', num_classes=7)
-                    torch_rec = Recall(task='multiclass', average='macro', num_classes=7)
-                    torch_f1 = F1Score(task='multiclass', average='macro', num_classes=7)
+                    torch_prec = Precision(task='multiclass', average='macro', num_classes=self.num_classes)
+                    torch_rec = Recall(task='multiclass', average='macro', num_classes=self.num_classes)
+                    torch_f1 = F1Score(task='multiclass', average='macro', num_classes=self.num_classes)
 
                     # compute
                     ds_prec = torch_prec(ds_preds, ds_gt)
@@ -251,6 +255,9 @@ class CocoMetricRGD(CocoMetric):
                     eval_results['ds_precision'] = ds_prec
                     eval_results['ds_recall'] = ds_rec
                     eval_results['ds_f1'] = ds_f1
+
+                else:
+                    raise NotImplementedError("Metrics not defined for task type {}".format(self.task_type))
 
         logger.info(' '.join(logger_info))
         return eval_results
@@ -303,7 +310,29 @@ class CocoMetricRGD(CocoMetric):
                 gt_outname = os.path.join(outfile_prefix, 'gt_ds.txt')
                 np.savetxt(gt_outname, gt_ds)
 
+                # calibration only supported for single ds task
+                if pred_ds.ndim == 2:
+                    # calibrate thresholds and save
+                    threshs = self.calibrate_thresholds(pred_ds, torch.from_numpy(gt_ds))
+                    thresh_outname = os.path.join(outfile_prefix, 'threshs.txt')
+                    np.savetxt(thresh_outname, threshs)
+
         return result_files
+
+    def calibrate_thresholds(self, pred_ds: torch.Tensor, gt_ds: torch.Tensor):
+        threshs = torch.linspace(0, 1, self.num_thresholds)
+        selected_threshs = []
+        for c in range(pred_ds.shape[1]):
+            gts = gt_ds[:, c].int()
+            metric_vals = []
+            for t in threshs:
+                preds = (pred_ds[:, c] > t).int()
+                metric_vals.append(MF.classification.accuracy(preds, gts, task='multiclass',
+                        num_classes=2, average='macro').detach().cpu().item())
+
+            selected_threshs.append(threshs[metric_vals.index(max(metric_vals))])
+
+        return np.array(selected_threshs)
 
 class SSIM_RoI:
     def __init__(self, data_range, size_average, channel):
