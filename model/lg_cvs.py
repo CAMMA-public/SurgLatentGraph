@@ -108,71 +108,73 @@ class LGDetector(BaseDetector):
         # use pred boxes or gt boxes for recon loss
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
 
-        # build semantic feat projector (input feat size is classes+box coords+score)
-        self.sem_feat_use_bboxes = sem_feat_use_bboxes
-        self.sem_feat_use_class_logits = sem_feat_use_class_logits
-        self.sem_feat_use_masks = sem_feat_use_masks
-        self.mask_augment = mask_augment
-        self.mask_polygon_num_points = mask_polygon_num_points
-        self.use_semantic_queries = use_semantic_queries
-        self.semantic_feat_size = semantic_feat_size
-        if self.use_semantic_queries:
-            self.sem_feat_hidden_dim = sem_feat_hidden_dim
-            self.point_pos_embed_size = 128 # pos embed dim per point
-            sem_input_dim = 1 # for scores
-            if self.sem_feat_use_bboxes:
-                if semantic_feat_size % 2 != 0:
-                    raise ValueError("Semantic Feat Size must be a multiple of 2 when using bounding boxes")
-                self.bbox_pos_embed_projector = build_mlp([self.point_pos_embed_size * 2,
-                    self.point_pos_embed_size, self.point_pos_embed_size])#, batch_norm='batch')
+        self.encode_semantics = self.ds_head is not None or self.reconstruction_head is not None
+        if self.encode_semantics:
+            # build semantic feat projector (input feat size is classes+box coords+score)
+            self.sem_feat_use_bboxes = sem_feat_use_bboxes
+            self.sem_feat_use_class_logits = sem_feat_use_class_logits
+            self.sem_feat_use_masks = sem_feat_use_masks
+            self.mask_augment = mask_augment
+            self.mask_polygon_num_points = mask_polygon_num_points
+            self.use_semantic_queries = use_semantic_queries
+            self.semantic_feat_size = semantic_feat_size
+            if self.use_semantic_queries:
+                self.sem_feat_hidden_dim = sem_feat_hidden_dim
+                self.point_pos_embed_size = 128 # pos embed dim per point
+                sem_input_dim = 1 # for scores
+                if self.sem_feat_use_bboxes:
+                    if semantic_feat_size % 2 != 0:
+                        raise ValueError("Semantic Feat Size must be a multiple of 2 when using bounding boxes")
+                    self.bbox_pos_embed_projector = build_mlp([self.point_pos_embed_size * 2,
+                        self.point_pos_embed_size, self.point_pos_embed_size])#, batch_norm='batch')
 
-                sem_input_dim += self.point_pos_embed_size
-                #sem_input_dim += self.point_pos_embed_size
+                    sem_input_dim += self.point_pos_embed_size
+                    #sem_input_dim += self.point_pos_embed_size
 
-            if self.sem_feat_use_class_logits:
-                self.class_embedding = Embedding(num_classes, self.point_pos_embed_size)#, scale_grad_by_freq=True)
-                #self.class_embedding_projector = build_mlp([self.point_pos_embed_size,
-                #    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
-                self.class_embedding_projector = build_mlp([num_classes,
-                    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
-                sem_input_dim += self.point_pos_embed_size
+                if self.sem_feat_use_class_logits:
+                    self.class_embedding = Embedding(num_classes, self.point_pos_embed_size)#, scale_grad_by_freq=True)
+                    #self.class_embedding_projector = build_mlp([self.point_pos_embed_size,
+                    #    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
+                    self.class_embedding_projector = build_mlp([num_classes,
+                        self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
+                    sem_input_dim += self.point_pos_embed_size
 
-            if self.sem_feat_use_masks:
-                if semantic_feat_size % 2 != 0:
-                    raise ValueError("Semantic Feat Size must be a multiple of 2 when using masks")
-                self.mask_pos_embed_projector = build_mlp([self.point_pos_embed_size * \
-                        self.mask_polygon_num_points, self.point_pos_embed_size,
-                        self.point_pos_embed_size])#, batch_norm='batch')
+                if self.sem_feat_use_masks:
+                    if semantic_feat_size % 2 != 0:
+                        raise ValueError("Semantic Feat Size must be a multiple of 2 when using masks")
+                    self.mask_pos_embed_projector = build_mlp([self.point_pos_embed_size * \
+                            self.mask_polygon_num_points, self.point_pos_embed_size,
+                            self.point_pos_embed_size])#, batch_norm='batch')
 
-                #sem_input_dim += sem_feat_hidden_dim
-                sem_input_dim += self.point_pos_embed_size
+                    #sem_input_dim += sem_feat_hidden_dim
+                    sem_input_dim += self.point_pos_embed_size
 
-            dim_list = [self.point_pos_embed_size] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-            self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+                dim_list = [self.point_pos_embed_size] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+                self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
 
-        else:
-            # compute sem_input_dim
-            sem_input_dim = 1
-            edge_sem_input_dim = 1
-            if self.sem_feat_use_bboxes:
-                # boxes and score
-                sem_input_dim += 4
-                edge_sem_input_dim += 4
+            else:
+                # compute sem_input_dim
+                sem_input_dim = 1
+                edge_sem_input_dim = 1
+                if self.sem_feat_use_bboxes:
+                    # boxes and score
+                    sem_input_dim += 4
+                    edge_sem_input_dim += 4
 
-            if self.sem_feat_use_class_logits:
-                # class logits
-                sem_input_dim += num_classes
-                edge_sem_input_dim += self.num_edge_classes
+                if self.sem_feat_use_class_logits:
+                    # class logits
+                    sem_input_dim += num_classes
+                    edge_sem_input_dim += self.num_edge_classes + 1 # bg + num classes
 
-            if self.sem_feat_use_masks:
-                sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
+                if self.sem_feat_use_masks:
+                    sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
 
-            self.semantic_feat_projector_arch = semantic_feat_projector_arch
-            dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-            self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+                self.semantic_feat_projector_arch = semantic_feat_projector_arch
+                dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+                self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
 
-            edge_dim_list = [edge_sem_input_dim] + dim_list[1:]
-            self.edge_semantic_feat_projector = build_mlp(edge_dim_list, batch_norm='batch')
+                edge_dim_list = [edge_sem_input_dim] + dim_list[1:]
+                self.edge_semantic_feat_projector = build_mlp(edge_dim_list, batch_norm='batch')
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         if self.detector.training:
@@ -331,8 +333,9 @@ class LGDetector(BaseDetector):
         else:
             graph = None
 
-        # compute semantic feats
-        self.compute_semantic_feat(detached_results, feats, graph)
+        if self.encode_semantics:
+            # compute semantic feats
+            self.compute_semantic_feat(detached_results, feats, graph)
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
