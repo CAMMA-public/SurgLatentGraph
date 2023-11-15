@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import torch
 from torch import Tensor
+from torch.nn import Embedding
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 from torchvision.transforms import InterpolationMode
@@ -22,7 +23,9 @@ from .predictor_heads.modules.loss import ReconstructionLoss
 from .predictor_heads.modules.layers import build_mlp
 from .predictor_heads.graph import GraphHead
 from .predictor_heads.ds import DSHead
+from .predictor_heads.modules.utils import dense_mask_to_polygon_mask
 from .roi_extractors.sg_single_level_roi_extractor import SgSingleRoIExtractor
+from mmdet.models.layers.transformer.utils import coordinate_to_encoding
 
 @MODELS.register_module()
 class LGDetector(BaseDetector):
@@ -36,15 +39,16 @@ class LGDetector(BaseDetector):
     """
 
     def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            bool_visual: bool,
-            bool_semantics: bool,
-            bool_img: bool,
-            semantic_feat_projector_layers: int = 3, perturb_factor: float = 0.0,
+            sem_feat_hidden_dim: int = 2048, semantic_feat_projector_layers: int = 3,
+            semantic_feat_projector_arch: str = 'mlp', perturb_factor: float = 0.0,
             use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
             graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
             use_gt_dets: bool = False, trainable_detector_cfg: OptConfigType = None,
-            trainable_backbone_cfg: OptConfigType = None,
+            trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool=False,
+            sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
+            sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
+            mask_augment: bool = True, use_semantic_queries: bool = False,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
@@ -78,9 +82,6 @@ class LGDetector(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.bool_visual=bool_visual
-            reconstruction_head.bool_semantics=bool_semantics
-            reconstruction_head.bool_img=bool_img
             reconstruction_head.obj_viz_feat_size = graph_head.viz_feat_size
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
@@ -90,15 +91,82 @@ class LGDetector(BaseDetector):
         self.reconstruction_img_stats = reconstruction_img_stats if reconstruction_img_stats is not None else None
 
         # add roi extractor to graph head
-        graph_head.roi_extractor = self.roi_extractor
-        self.graph_head = MODELS.build(graph_head) if graph_head is not None else None
+        if graph_head is not None:
+            graph_head.roi_extractor = self.roi_extractor
+            #graph_head.sem_feat_hidden_dim = sem_feat_hidden_dim
+            #graph_head.sem_feat_use_bboxes = sem_feat_use_bboxes # set for edge sem feat projector
+            #graph_head.semantic_feat_projector_layers = semantic_feat_projector_layers
+            self.graph_head = MODELS.build(graph_head)
+        else:
+            self.graph_head = None
+
         self.ds_head = MODELS.build(ds_head) if ds_head is not None else None
 
-        # build semantic feat projector (input feat size is classes+box coords+score)
-        dim_list = [num_classes + 5] + [512] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-        self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+        # whether to force graph head training when detector is frozen
+        self.force_train_graph_head = force_train_graph_head
 
+        # use pred boxes or gt boxes for recon loss
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
+
+        # build semantic feat projector (input feat size is classes+box coords+score)
+        self.sem_feat_use_bboxes = sem_feat_use_bboxes
+        self.sem_feat_use_class_logits = sem_feat_use_class_logits
+        self.sem_feat_use_masks = sem_feat_use_masks
+        self.mask_augment = mask_augment
+        self.mask_polygon_num_points = mask_polygon_num_points
+        self.use_semantic_queries = use_semantic_queries
+        self.semantic_feat_size = semantic_feat_size
+        if self.use_semantic_queries:
+            self.sem_feat_hidden_dim = sem_feat_hidden_dim
+            self.point_pos_embed_size = 128 # pos embed dim per point
+            sem_input_dim = 1 # for scores
+            if self.sem_feat_use_bboxes:
+                if semantic_feat_size % 2 != 0:
+                    raise ValueError("Semantic Feat Size must be a multiple of 2 when using bounding boxes")
+                self.bbox_pos_embed_projector = build_mlp([self.point_pos_embed_size * 2,
+                    self.point_pos_embed_size, self.point_pos_embed_size])#, batch_norm='batch')
+
+                sem_input_dim += self.point_pos_embed_size
+                #sem_input_dim += self.point_pos_embed_size
+
+            if self.sem_feat_use_class_logits:
+                self.class_embedding = Embedding(num_classes, self.point_pos_embed_size)#, scale_grad_by_freq=True)
+                #self.class_embedding_projector = build_mlp([self.point_pos_embed_size,
+                #    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
+                self.class_embedding_projector = build_mlp([num_classes,
+                    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
+                sem_input_dim += self.point_pos_embed_size
+
+            if self.sem_feat_use_masks:
+                if semantic_feat_size % 2 != 0:
+                    raise ValueError("Semantic Feat Size must be a multiple of 2 when using masks")
+                self.mask_pos_embed_projector = build_mlp([self.point_pos_embed_size * \
+                        self.mask_polygon_num_points, self.point_pos_embed_size,
+                        self.point_pos_embed_size])#, batch_norm='batch')
+
+                #sem_input_dim += sem_feat_hidden_dim
+                sem_input_dim += self.point_pos_embed_size
+
+            dim_list = [self.point_pos_embed_size] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+            self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+
+        else:
+            # compute sem_input_dim
+            sem_input_dim = 1
+            if self.sem_feat_use_bboxes:
+                # boxes and score
+                sem_input_dim += 4
+
+            if self.sem_feat_use_class_logits:
+                # class logits
+                sem_input_dim += num_classes
+
+            if self.sem_feat_use_masks:
+                sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
+
+            self.semantic_feat_projector_arch = semantic_feat_projector_arch
+            dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+            self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         if self.detector.training:
@@ -113,8 +181,9 @@ class LGDetector(BaseDetector):
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
             reconstructed_imgs, img_targets, rescaled_results = self.reconstruction_head.predict(
-                    detached_results, feats, batch_inputs)
+                    detached_results, feats, batch_inputs) # TODO also pass graph
 
+            # TODO use gt when available
             if self.use_pred_boxes_recon_loss:
                 recon_boxes = [r.pred_instances.bboxes for r in rescaled_results]
             else:
@@ -231,6 +300,10 @@ class LGDetector(BaseDetector):
         # get bb and fpn features
         feats = self.extract_feat(batch_inputs, detached_results, force_perturb=force_perturb)
 
+        # update feat of each pred instance
+        for ind, r in enumerate(results):
+            r.pred_instances.feats = feats.instance_feats[ind][:r.pred_instances.bboxes.shape[0]]
+
         # run graph head
         if self.graph_head is not None:
             if self.detector.training:
@@ -241,7 +314,18 @@ class LGDetector(BaseDetector):
                 gt_edges = None
 
             else:
-                feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                if self.force_train_graph_head and self.training:
+                    graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                            detached_results, feats)
+                    losses.update(graph_losses)
+                    gt_edges = None
+
+                else:
+                    feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+
+        # update feat of each pred instance
+        for ind, r in enumerate(results):
+            r.pred_instances.graph_feats = graph.nodes.feats[ind][:r.pred_instances.feats.shape[0]]
 
         return feats, graph, detached_results, results, gt_edges, losses
 
@@ -258,10 +342,17 @@ class LGDetector(BaseDetector):
             boxes = [r.gt_instances.bboxes.to(batch_inputs.device) for r in results]
             classes = [r.gt_instances.labels.to(batch_inputs.device) for r in results]
             scores = [torch.ones_like(c) for c in classes]
+            masks = None
+            if 'masks' in results[0].gt_instances:
+                masks = [r.gt_instances.masks.to(batch_inputs.device) for r in results]
+
         else:
             boxes = [r.pred_instances.bboxes for r in results]
             classes = [r.pred_instances.labels for r in results]
             scores = [r.pred_instances.scores for r in results]
+            masks = None
+            if 'masks' in results[0].pred_instances:
+                masks = [r.pred_instances.masks.to(batch_inputs.device) for r in results]
 
         # apply box perturbation
         if (self.training or force_perturb) and self.perturb_factor > 0:
@@ -285,13 +376,12 @@ class LGDetector(BaseDetector):
             # rescale bboxes, convert to rois
             boxes_per_img = [len(b) for b in boxes]
             scale_factor = results[0].scale_factor
-            rescaled_boxes = scale_boxes(torch.cat(boxes), scale_factor).split(boxes_per_img)
+            rescaled_boxes = scale_boxes(torch.cat(boxes).float(), scale_factor).split(boxes_per_img)
             rois = bbox2roi(rescaled_boxes)
 
             # extract roi feats
             roi_input_feats = feats.neck_feats if feats.neck_feats is not None else feats.bb_feats
             if isinstance(self.roi_extractor, SgSingleRoIExtractor) and 'masks' in results[0].pred_instances:
-                masks = torch.cat([r.pred_instances.masks for r in results])
                 roi_feats = self.roi_extractor(
                     roi_input_feats[:self.roi_extractor.num_inputs], rois, masks=masks,
                 )
@@ -302,37 +392,171 @@ class LGDetector(BaseDetector):
                 )
 
             # pool feats and split into list
-            # TODO(adit98) experiment with multiplying by instance mask before mean/sum
             feats.instance_feats = pad_sequence(roi_feats.squeeze(-1).squeeze(-1).split(boxes_per_img),
                     batch_first=True)
 
         else:
             # instance feats are just queries (run detector.get_queries to get)
             if self.trainable_backbone is not None:
-                feats.bb_feats, feats.neck_feats, feats.instance_feats = \
-                        self.trainable_backbone.get_queries(batch_inputs, results)
+                if 'SAM' in type(self.trainable_backbone).__name__:
+                    ## trainable bb to get img feats
+                    #feats.bb_feats, _ = self.trainable_backbone.extract_feat(batch_inputs, results)
+                    #feats.neck_feats = feats.bb_feats
+
+                    ## frozen bb for instance feats
+                    #feats.instance_feats = pad_sequence([r.pred_instances['feats'].sum(1) \
+                    #        for r in results], batch_first=True)
+
+                    # extract selected indices from results
+                    selected_inds = [r.pred_instances['instance_ids'] for r in results]
+
+                    # use trainable backbone to get both img and instance feats
+                    feats.bb_feats, instance_feats = self.trainable_backbone.extract_feat(
+                            batch_inputs, results, compute_instance_feats=True,
+                            selected_inds=selected_inds)
+                    feats.neck_feats = feats.bb_feats
+                    feats.instance_feats = pad_sequence([i[:, 0] for i in instance_feats],
+                            batch_first=True)
+
+                else:
+                    feats.bb_feats, feats.neck_feats, feats.instance_feats = \
+                            self.trainable_backbone.get_queries(batch_inputs, results)
+
             else:
-                feats.bb_feats, feats.neck_feats, feats.instance_feats = \
-                        self.detector.get_queries(batch_inputs, results)
+                if 'SAM' in type(self.detector).__name__:
+                    if 'img_feats' in results[0]:
+                        feats.bb_feats = torch.cat([r.img_feats for r in results])
+                    else:
+                        feats.bb_feats, _ = self.detector.extract_feat(batch_inputs, results)
 
-        # compute semantic feat
-        c = pad_sequence(classes, batch_first=True)
-        b = pad_sequence(boxes, batch_first=True)
-        s = pad_sequence(scores, batch_first=True)
-        b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
-        c_one_hot = F.one_hot(c, num_classes=self.num_classes)
+                    feats.neck_feats = feats.bb_feats
+                    feats.instance_feats = pad_sequence([r.pred_instances['feats'] \
+                            for r in results], batch_first=True)
 
-        # HACK to ensure 1 detection per batch doesn't break things
-        sem_projector_input = torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1).flatten(end_dim=1)
-        if sem_projector_input.shape[0] == 1:
-            s = self.semantic_feat_projector(sem_projector_input.repeat(2, 1))[0]
-        else:
-            s = self.semantic_feat_projector(sem_projector_input)
+                else:
+                    feats.bb_feats, feats.neck_feats, feats.instance_feats = \
+                            self.detector.get_queries(batch_inputs, results)
 
-        #s = self.semantic_feat_projector(torch.cat([b_norm, c_one_hot, s.unsqueeze(-1)], -1).flatten(end_dim=1))
-        feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
+
+        feats.semantic_feats = self.compute_semantic_feat(boxes, classes, scores,
+                masks, results[0].ori_shape, results[0].img_shape)
 
         return feats
+
+    def compute_semantic_feat(self, boxes, classes, scores, masks, ori_shape, final_shape):
+        # compute semantic feat
+        if self.use_semantic_queries:
+            #sem_feat_input = []
+            sem_feat_input = 0
+            if self.sem_feat_use_class_logits:
+                c = pad_sequence([self.class_embedding(i) for i in classes], batch_first=True)
+                c_one_hot = F.one_hot(pad_sequence(classes, batch_first=True),
+                        num_classes=self.num_classes).float()
+                c = self.class_embedding_projector(c_one_hot.flatten(end_dim=1)).view(c_one_hot.shape[0],
+                        c_one_hot.shape[1], self.point_pos_embed_size)
+                #class_embed_size = self.point_pos_embed_size
+                #sem_feat_input.append(self.class_embedding_projector(c_one_hot.flatten(end_dim=1)).view(
+                #    c_one_hot.shape[0], c_one_hot.shape[1], class_embed_size))
+                #sem_feat_input.append(self.class_embedding_projector(c.flatten(end_dim=1)).view(
+                #    c.shape[0], c.shape[1], class_embed_size))
+                sem_feat_input += c
+                #sem_feat_input.append(c)
+
+            if self.sem_feat_use_bboxes:
+                b = pad_sequence(boxes, batch_first=True)
+                b_norm = b / Tensor(final_shape).flip(0).repeat(2).to(b.device)
+                b_enc = coordinate_to_encoding(b_norm,
+                        num_feats=self.point_pos_embed_size / 2)
+
+                #norm_boxes = [b / Tensor(ori_shape).flip(0).repeat(2).to(b.device) for b in boxes]
+                b_enc = self.bbox_pos_embed_projector(b_enc)#.view(b_enc.shape[0], b_enc.shape[1], self.point_pos_embed_size)
+                sem_feat_input += b_enc
+
+            if self.sem_feat_use_masks:
+                # iterate through masks and convert to polygon mask
+                polygon_masks = self.masks_to_polygons(masks)
+
+                # process masks
+                polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
+                polygon_masks_norm = polygon_masks / Tensor(ori_shape).flip(0).to(polygon_masks.device)
+
+                #norm_masks = [m / Tensor(ori_shape).flip(0).to(m.device) for m in polygon_masks]
+                m_enc = coordinate_to_encoding(polygon_masks_norm, num_feats=self.point_pos_embed_size / 2)
+                m_enc = self.mask_pos_embed_projector(m_enc)#.view(m_enc.shape[0], m_enc.shape[1], self.point_pos_embed_size)
+                sem_feat_input += m_enc
+
+            s = pad_sequence(scores, batch_first=True) # B x N x 1
+            B, N = s.shape
+
+            #sem_feat_input.append(s.unsqueeze(-1))
+            #sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
+            sem_feat_input = sem_feat_input.flatten(end_dim=1)
+
+            if sem_feat_input.shape[0] == 1:
+                s = self.semantic_feat_projector(torch.cat([sem_feat_input,
+                    sem_feat_input]))[0].unsqueeze(0)
+            else:
+                s = self.semantic_feat_projector(sem_feat_input)
+
+            semantic_feats = s.view(B, N, s.shape[-1])
+
+        else:
+            c = pad_sequence(classes, batch_first=True)
+            b = pad_sequence(boxes, batch_first=True)
+            s = pad_sequence(scores, batch_first=True)
+            b_norm = b / Tensor(final_shape).flip(0).repeat(2).to(b.device)
+            c_one_hot = F.one_hot(c, num_classes=self.num_classes)
+
+            sem_feat_input = []
+            if self.sem_feat_use_bboxes:
+                sem_feat_input.append(b_norm)
+
+            if self.sem_feat_use_class_logits:
+                sem_feat_input.append(c_one_hot)
+
+            # process masks
+            if self.sem_feat_use_masks:
+                # iterate through masks and convert to polygon mask
+                polygon_masks = self.masks_to_polygons(masks)
+
+                # process masks
+                polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
+                polygon_masks_norm = polygon_masks / Tensor(ori_shape).flip(0).to(polygon_masks.device)
+
+                sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
+
+            sem_feat_input.append(s.unsqueeze(-1))
+
+            sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
+            if sem_feat_input.shape[0] == 1:
+                s = self.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
+            else:
+                s = self.semantic_feat_projector(sem_feat_input)
+
+            semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
+
+        return semantic_feats
+
+    def masks_to_polygons(self, masks: List[Tensor]) -> List[Tensor]:
+        polygon_masks = []
+        for m in masks:
+            p_m = []
+            if m.shape[0] > 0:
+                for i in m:
+                    p_m_i = dense_mask_to_polygon_mask(i, self.mask_polygon_num_points)
+                    if self.mask_augment:
+                        p_m_i = torch.roll(p_m_i, torch.randint(p_m_i.shape[0], (1,)).item(), 0)
+
+                    p_m.append(p_m_i)
+
+                p_m = torch.stack(p_m) # N x P x 2
+
+            else:
+                p_m = torch.zeros(0, self.mask_polygon_num_points, 2).to(m.device)
+
+            polygon_masks.append(p_m)
+
+        return polygon_masks
 
     def box_perturbation(self, boxes: List[Tensor], image_shape: Tuple):
         boxes_per_img = [len(b) for b in boxes]
@@ -359,3 +583,8 @@ class LGDetector(BaseDetector):
 
     def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
         raise NotImplementedError
+
+    def to(self, *args, **kwargs) -> torch.nn.Module:
+        self.detector = self.detector.to(*args, **kwargs)
+
+        return super().to(*args, **kwargs)

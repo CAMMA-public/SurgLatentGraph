@@ -41,6 +41,10 @@ load_from = _base_.load_from.replace('base', 'mask_rcnn')
 model.ds_head.final_viz_feat_size = 0
 model.ds_head.use_img_feats = False
 
+optim_wrapper = dict(
+    optimizer=dict(lr=0.00001),
+)
+
 #remove graph visual and img features from recon objective
 #model.bool_visual=False
 #model.bool_img=False

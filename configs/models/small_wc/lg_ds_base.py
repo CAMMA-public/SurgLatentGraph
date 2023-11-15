@@ -18,9 +18,6 @@ lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
 lg_model.graph_head.gt_use_pred_detections = gt_graph_use_pred_detections
-lg_model.bool_visual=True
-lg_model.bool_semantics=True
-lg_model.bool_img=False
 
 lg_model.ds_head = dict(
     type='DSHead',

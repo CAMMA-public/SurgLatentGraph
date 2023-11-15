@@ -1,5 +1,10 @@
 import torch
 from torch import nn
+import json
+import cv2
+from pycocotools import mask
+import numpy as np
+import torch.nn.functional as F
 
 def box_union(boxes1: torch.Tensor, boxes2: torch.Tensor) -> torch.Tensor:
     # calculate top-left and bottom-right
@@ -86,3 +91,27 @@ def get_sparse_mask_inds(mat, inds, N):
         raise ValueError("Invalid indices for get_sparse_mask_inds!")
 
     return sparse_inds
+
+def dense_mask_to_polygon_mask(dense_instance_mask, N):
+    contours = cv2.findContours(dense_instance_mask.detach().cpu().numpy().astype(np.uint8),
+            cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)[0]
+
+    polygon_mask = []
+    for contour in contours:
+        p_mask = contour.squeeze().ravel().astype(float).tolist()
+        polygon_mask.append(p_mask)
+
+    if len(polygon_mask) > 1:
+        # select largest polygon
+        lengths = [len(p) for p in polygon_mask]
+        largest_ind = lengths.index(max(lengths))
+        polygon_mask = polygon_mask[largest_ind]
+
+    # downsample to N points
+    polygon_mask = torch.tensor(polygon_mask).to(dense_instance_mask.device).view(-1, 2)
+    if polygon_mask.shape[0] == 0:
+        downsampled_polygon_mask = torch.zeros(N, 2).to(polygon_mask.device)
+    else:
+        downsampled_polygon_mask = F.interpolate(polygon_mask.T.unsqueeze(-1).unsqueeze(0), size=(N, 1))[0][..., 0].T
+
+    return downsampled_polygon_mask

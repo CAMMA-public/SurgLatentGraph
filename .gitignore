@@ -2,11 +2,12 @@ results
 work_dirs
 weights/**/*.pth
 weights/ssl_weights
+weights/trained_ssl
 data
 **/*.pyc
 *.zip
 **/*.log
 configs/models/*.py
+configs/models/ssl
 latent_graphs/
-slurms/
-slurms_sid/
+sam_queries/
