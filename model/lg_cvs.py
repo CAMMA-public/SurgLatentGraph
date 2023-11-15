@@ -93,12 +93,12 @@ class LGDetector(BaseDetector):
         # add roi extractor to graph head
         if graph_head is not None:
             graph_head.roi_extractor = self.roi_extractor
-            #graph_head.sem_feat_hidden_dim = sem_feat_hidden_dim
-            #graph_head.sem_feat_use_bboxes = sem_feat_use_bboxes # set for edge sem feat projector
-            #graph_head.semantic_feat_projector_layers = semantic_feat_projector_layers
             self.graph_head = MODELS.build(graph_head)
+            self.num_edge_classes = graph_head.num_edge_classes
+
         else:
             self.graph_head = None
+            self.num_edge_classes = 0
 
         self.ds_head = MODELS.build(ds_head) if ds_head is not None else None
 
@@ -153,13 +153,16 @@ class LGDetector(BaseDetector):
         else:
             # compute sem_input_dim
             sem_input_dim = 1
+            edge_sem_input_dim = 1
             if self.sem_feat_use_bboxes:
                 # boxes and score
                 sem_input_dim += 4
+                edge_sem_input_dim += 4
 
             if self.sem_feat_use_class_logits:
                 # class logits
                 sem_input_dim += num_classes
+                edge_sem_input_dim += self.num_edge_classes
 
             if self.sem_feat_use_masks:
                 sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
@@ -167,6 +170,9 @@ class LGDetector(BaseDetector):
             self.semantic_feat_projector_arch = semantic_feat_projector_arch
             dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
             self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+
+            edge_dim_list = [edge_sem_input_dim] + dim_list[1:]
+            self.edge_semantic_feat_projector = build_mlp(edge_dim_list, batch_norm='batch')
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         if self.detector.training:
@@ -235,7 +241,7 @@ class LGDetector(BaseDetector):
                 g_i = BaseDataElement()
                 g_i.nodes = BaseDataElement()
                 g_i.edges = BaseDataElement()
-                g_i.nodes.feats = graph.nodes.feats[ind]
+                g_i.nodes.viz_feats = graph.nodes.viz_feats[ind]
                 g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
                 g_i.nodes.bboxes = r.pred_instances.bboxes
                 g_i.nodes.scores = r.pred_instances.scores
@@ -308,7 +314,7 @@ class LGDetector(BaseDetector):
         if self.graph_head is not None:
             if self.detector.training:
                 # train graph with gt boxes (only when detector is training)
-                graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                graph_losses, graph = self.graph_head.loss_and_predict(
                         detached_results, feats)
                 losses.update(graph_losses)
                 gt_edges = None
@@ -321,11 +327,16 @@ class LGDetector(BaseDetector):
                     gt_edges = None
 
                 else:
-                    feats, graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                    graph, gt_edges = self.graph_head.predict(detached_results, feats)
+        else:
+            graph = None
+
+        # compute semantic feats
+        self.compute_semantic_feat(detached_results, feats, graph)
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
-            r.pred_instances.graph_feats = graph.nodes.feats[ind][:r.pred_instances.feats.shape[0]]
+            r.pred_instances.graph_feats = graph.nodes.viz_feats[ind][:r.pred_instances.feats.shape[0]]
 
         return feats, graph, detached_results, results, gt_edges, losses
 
@@ -437,13 +448,27 @@ class LGDetector(BaseDetector):
                     feats.bb_feats, feats.neck_feats, feats.instance_feats = \
                             self.detector.get_queries(batch_inputs, results)
 
-
-        feats.semantic_feats = self.compute_semantic_feat(boxes, classes, scores,
-                masks, results[0].ori_shape, results[0].img_shape)
-
         return feats
 
-    def compute_semantic_feat(self, boxes, classes, scores, masks, ori_shape, final_shape):
+    def compute_semantic_feat(self, results: SampleList, feats: BaseDataElement,
+            graph: BaseDataElement) -> Tensor:
+        device = feats.instance_feats.device
+        if self.use_gt_dets:
+            boxes = [r.gt_instances.bboxes.to(device) for r in results]
+            classes = [r.gt_instances.labels.to(device) for r in results]
+            scores = [torch.ones_like(c) for c in classes]
+            masks = None
+            if 'masks' in results[0].gt_instances:
+                masks = [r.gt_instances.masks.to(device) for r in results]
+
+        else:
+            boxes = [r.pred_instances.bboxes for r in results]
+            classes = [r.pred_instances.labels for r in results]
+            scores = [r.pred_instances.scores for r in results]
+            masks = None
+            if 'masks' in results[0].pred_instances:
+                masks = [r.pred_instances.masks for r in results]
+
         # compute semantic feat
         if self.use_semantic_queries:
             #sem_feat_input = []
@@ -468,7 +493,7 @@ class LGDetector(BaseDetector):
                 b_enc = coordinate_to_encoding(b_norm,
                         num_feats=self.point_pos_embed_size / 2)
 
-                #norm_boxes = [b / Tensor(ori_shape).flip(0).repeat(2).to(b.device) for b in boxes]
+                #norm_boxes = [b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device) for b in boxes]
                 b_enc = self.bbox_pos_embed_projector(b_enc)#.view(b_enc.shape[0], b_enc.shape[1], self.point_pos_embed_size)
                 sem_feat_input += b_enc
 
@@ -478,7 +503,7 @@ class LGDetector(BaseDetector):
 
                 # process masks
                 polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
-                polygon_masks_norm = polygon_masks / Tensor(ori_shape).flip(0).to(polygon_masks.device)
+                polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
 
                 #norm_masks = [m / Tensor(ori_shape).flip(0).to(m.device) for m in polygon_masks]
                 m_enc = coordinate_to_encoding(polygon_masks_norm, num_feats=self.point_pos_embed_size / 2)
@@ -504,7 +529,7 @@ class LGDetector(BaseDetector):
             c = pad_sequence(classes, batch_first=True)
             b = pad_sequence(boxes, batch_first=True)
             s = pad_sequence(scores, batch_first=True)
-            b_norm = b / Tensor(final_shape).flip(0).repeat(2).to(b.device)
+            b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
             c_one_hot = F.one_hot(c, num_classes=self.num_classes)
 
             sem_feat_input = []
@@ -521,7 +546,7 @@ class LGDetector(BaseDetector):
 
                 # process masks
                 polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
-                polygon_masks_norm = polygon_masks / Tensor(ori_shape).flip(0).to(polygon_masks.device)
+                polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
 
                 sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
 
@@ -535,7 +560,18 @@ class LGDetector(BaseDetector):
 
             semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
 
-        return semantic_feats
+        feats.semantic_feats = semantic_feats
+
+        if graph is not None:
+            # compute edge semantic feats
+            eb_norm = torch.cat(graph.edges.boxes) / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(graph.edges.boxes[0].device) # make 0-1
+            edge_sem_input = torch.cat([eb_norm, graph.edges.class_logits.detach()], -1) # detach class logits to prevent backprop
+            if edge_sem_input.shape[1] == 1:
+                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input)
+
+            graph.edges.semantic_feats = edge_sem_feats
 
     def masks_to_polygons(self, masks: List[Tensor]) -> List[Tensor]:
         polygon_masks = []

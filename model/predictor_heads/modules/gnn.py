@@ -46,13 +46,13 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
         dgl_g = self._create_dgl_graph(graph)
 
         # apply gnn
-        node_feats, edge_feats = self.gnn_head(dgl_g.ndata['feats'],
-                dgl_g.edata['feats'], torch.stack(dgl_g.edges(), 1), dgl_g)
+        node_feats, edge_feats = self.gnn_head(dgl_g.ndata['viz_feats'],
+                dgl_g.edata['viz_feats'], torch.stack(dgl_g.edges(), 1), dgl_g)
 
-        dgl_g.ndata['orig_feats'] = dgl_g.ndata['feats']
-        dgl_g.ndata['feats'] = node_feats
-        dgl_g.edata['orig_feats'] = dgl_g.edata['feats']
-        dgl_g.edata['feats'] = edge_feats
+        dgl_g.ndata['orig_feats'] = dgl_g.ndata['viz_feats']
+        dgl_g.ndata['gnn_feats'] = node_feats
+        dgl_g.edata['orig_feats'] = dgl_g.edata['viz_feats']
+        dgl_g.edata['gnn_feats'] = edge_feats
 
         return dgl_g
 

@@ -73,14 +73,11 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # attributes for predicting relation class
         self.num_edge_classes = num_edge_classes
         dim_list = [viz_feat_size, viz_feat_size, self.num_edge_classes + 1] # predict no edge or which class
-        self.edge_predictor = build_mlp(dim_list)
-        dim_list = [self.num_edge_classes + 5] + [sem_feat_hidden_dim] * \
-                (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-        self.edge_semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
+        self.edge_predictor = build_mlp(dim_list, batch_norm='batch', final_nonlinearity=False)
 
         # make query projector if roi_extractor is None
         if self.roi_extractor is None:
-            dim_list = [256, 256, 256] # HACK put query size in cfg
+            dim_list = [viz_feat_size] * 3
             self.edge_query_projector = build_mlp(dim_list, batch_norm='batch')
 
     def _predict_edge_presence(self, node_features, nodes_per_img):
@@ -136,11 +133,11 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                     if feats.neck_feats is not None else feats.bb_feats[:self.num_roi_feat_maps]
             edge_viz_feats = self.roi_extractor(roi_input_feats, edge_rois).squeeze(-1).squeeze(-1)
         else:
-            # define edges to keep
+            # offset is just cum sum of edges_per_img
             edges_per_img = torch.tensor([b*b for b in boxes_per_img])
+            edge_offsets = torch.cat([torch.zeros(1), torch.cumsum(edges_per_img, 0)[:-1]]).repeat_interleave(edges_per_img)
 
-            # offset is max of edges_per_img * index of img in batch
-            edge_offsets = (torch.arange(len(edges_per_img)) * edges_per_img.max()).repeat_interleave(edges_per_img)
+            # define edges to keep
             edges_to_keep = (torch.cat([torch.arange(e) for e in edges_per_img]) + edge_offsets).to(boxes.device)
 
             # densely add object queries to get edge feats, select edges with edges_to_keep
@@ -158,7 +155,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges.boxesB = torch.cat([b[:num_b].repeat(num_b, 1) for num_b, b in zip(
                 boxes_per_img, rescaled_boxes)])
         edges.edges_per_img = [num_b * num_b for num_b in boxes_per_img]
-        edges.feats = edge_viz_feats
+        edges.viz_feats = edge_viz_feats
 
         # store presence logits
         edges.presence_logits = edge_presence_masked
@@ -167,18 +164,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _predict_edge_classes(self, graph: BaseDataElement, batch_input_shape: tuple) -> BaseDataElement:
         # predict edge class
-        graph.edges.class_logits = self.edge_predictor(graph.edges.feats)
-
-        # run edge semantic feat projector, concat with viz feats, add to edges
-        eb_norm = torch.cat(graph.edges.boxes) / Tensor(batch_input_shape).flip(0).repeat(2).to(graph.edges.boxes[0].device) # make 0-1
-        edge_sem_input = torch.cat([eb_norm, graph.edges.class_logits], -1)
-        if edge_sem_input.shape[1] == 1:
-            edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input.repeat(2, 1))[0].unsqueeze(0)
-        else:
-            edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input)
-
-        # combine visual and semantic
-        graph.edges.feats = torch.cat([graph.edges.feats, edge_sem_feats], -1)
+        edge_predictor_input = graph.edges.viz_feats + graph.edges.gnn_viz_feats
+        graph.edges.class_logits = self.edge_predictor(edge_predictor_input)
 
         return graph
 
@@ -197,7 +184,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges.boxes = edges.boxes[edge_indices]
         edges.boxesA = edges.boxesA[edge_indices]
         edges.boxesB = edges.boxesB[edge_indices]
-        edges.feats = edges.feats[edge_indices]
+        edges.viz_feats = edges.viz_feats[edge_indices]
 
         return edges
 
@@ -253,11 +240,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # predict edge classes
         graph = self._predict_edge_classes(graph, results[0].batch_input_shape)
 
-        # update node viz feats (leave semantic feats the same!)
-        #feats.instance_feats = graph.nodes.feats[..., :self.viz_feat_size]
-        feats.instance_feats = graph.nodes.feats
-
-        return feats, graph, gt_edges
+        return graph, gt_edges
 
     def _construct_graph(self, feats: BaseDataElement, edges: BaseDataElement,
                 nodes_per_img: List) -> BaseDataElement:
@@ -266,8 +249,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # move result data into nodes
         nodes = BaseDataElement()
-        #nodes.feats = torch.cat([feats.instance_feats, feats.semantic_feats], -1)
-        nodes.feats = feats.instance_feats
+        nodes.viz_feats = feats.instance_feats
         nodes.nodes_per_img = nodes_per_img
         graph.nodes = nodes
 
@@ -275,10 +257,9 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _update_graph(self, graph: BaseDataElement, dgl_g: dgl.DGLGraph) -> BaseDataElement:
         # update node viz feats (leave semantic feats the same, add to original feats)
-        updated_node_feats = pad_sequence(dgl_g.ndata['feats'].split(graph.nodes.nodes_per_img),
+        updated_node_feats = pad_sequence(dgl_g.ndata['viz_feats'].split(graph.nodes.nodes_per_img),
                 batch_first=True)
-        #graph.nodes.feats[..., :self.viz_feat_size] += updated_node_feats[..., :self.viz_feat_size]
-        graph.nodes.feats = graph.nodes.feats + updated_node_feats
+        graph.nodes.viz_feats = updated_node_feats
 
         # update graph structure
         graph.edges.edges_per_img = dgl_g.batch_num_edges()
@@ -295,20 +276,33 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         graph.edges.boxes = dgl_g.edata['boxes'].split(graph.edges.edges_per_img.tolist())
         graph.edges.boxesA = dgl_g.edata['boxesA'].split(graph.edges.edges_per_img.tolist())
         graph.edges.boxesB = dgl_g.edata['boxesB'].split(graph.edges.edges_per_img.tolist())
-        graph.edges.feats = dgl_g.edata['orig_feats'] + dgl_g.edata['feats']
+        graph.edges.gnn_viz_feats = dgl_g.edata['gnn_feats']
 
         return graph
 
     def _build_gt_edges(self, results: SampleList) -> BaseDataElement:
-        boxes_per_img = [len(r.gt_instances.bboxes) for r in results]
-        if self.gt_use_pred_detections:
-            # get boxes, rescale
-            scale_factor = results[0].scale_factor
-            boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
-            bounding_boxes = scale_boxes(boxes.float(), scale_factor)
+        boxes_per_img = []
+        bounding_boxes = []
+        for r in results:
+            if r.is_det_keyframe and not self.gt_use_pred_detections:
+                boxes = r.gt_instances.bboxes
+                bounding_boxes.append(boxes)
+                boxes_per_img.append(len(boxes))
 
-        else:
-            bounding_boxes = pad_sequence([r.gt_instances.bboxes for r in results], batch_first=True)
+            else:
+                # get boxes, rescale
+                boxes = r.pred_instances.bboxes
+                scores = r.pred_instances.scores
+
+                # use score thresh 0.3 to filter boxes
+                boxes = boxes[scores > 0.3]
+
+                # convert to tensor and scale boxes
+                bounding_boxes.append(scale_boxes(boxes.float(), r.scale_factor))
+                boxes_per_img.append(len(bounding_boxes))
+
+        # convert to tensor
+        bounding_boxes = pad_sequence(bounding_boxes, batch_first=True)
 
         # compute centroids and distances for general use
         centroids = (bounding_boxes[:, :, :2] + bounding_boxes[:, :, 2:]) / 2
@@ -481,15 +475,11 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # compute edge classifier loss
         edge_classifier_loss = self.edge_classifier_loss(graph.edges, gt_edges)
 
-        # update node viz feats (leave semantic feats the same!)
-        #feats.instance_feats = graph.nodes.feats[..., :self.viz_feat_size]
-        feats.instance_feats = graph.nodes.feats
-
         # update losses
         losses.update(edge_presence_loss)
         losses.update(edge_classifier_loss)
 
-        return losses, feats, graph
+        return losses, graph
 
     def edge_presence_loss(self, presence_logits, edges, gt_edges):
         # first match edge boxes to gt edge boxes
@@ -515,7 +505,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
     def edge_classifier_loss(self, edges, gt_edges):
         # first match edge boxes to gt edge boxes
         pred_matched_inds, _, gt_matched_inds = self.match_boxes(edges.boxesA,
-                edges.boxesB, gt_edges.boxesA, gt_edges.boxesB, num=8,
+                edges.boxesB, gt_edges.boxesA, gt_edges.boxesB, num=16,
                 pos_fraction=0.875, iou_lower_bound=0.2)
 
         # assign labels (1 if matched, 0 if unmatched)
