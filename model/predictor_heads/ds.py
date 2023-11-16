@@ -12,7 +12,7 @@ import torch
 from torch import Tensor
 from torch_scatter import scatter_mean, scatter_max
 import torch.nn.functional as F
-from typing import List, Union
+from typing import List, Union, Tuple
 import torch.nn.functional as F
 import random
 import dgl
@@ -35,9 +35,12 @@ class DSHead(BaseModule, metaclass=ABCMeta):
     def __init__(self, num_classes: int, gnn_cfg: ConfigType,
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
-            loss: Union[List, ConfigType], use_img_feats=True, img_feats_only: bool = False,
-            use_gnn_feats: bool = True, loss_consensus: str = 'mode', num_predictor_layers: int = 2,
-            loss_weight: float = 1.0, init_cfg: OptMultiConfig = None) -> None:
+            loss: Union[List, ConfigType], use_img_feats: bool = True, img_feats_only: bool = False,
+            use_gnn_feats: bool = True, loss_consensus: str = 'mode', predictor_hidden_dim: int = 256,
+            num_predictor_layers: int = 2, loss_weight: float = 1.0,
+            perturb_feats: bool = False, drop_feat_modality: bool = True,
+            add_noise: bool = True, perturbed_loss_weight: float = 0.3,
+            drop_viz_prob: float = 0.5, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # set viz and sem dims for projecting node/edge feats in input graph
@@ -47,14 +50,27 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.final_viz_feat_size = final_viz_feat_size
         self.img_feat_size = img_feat_size
         self.use_gnn_feats = use_gnn_feats
+        if self.use_gnn_feats:
+            projector_dim_list = [input_viz_feat_size * 2, final_viz_feat_size]
+        else:
+            projector_dim_list = [input_viz_feat_size, final_viz_feat_size]
 
-        self.node_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
-        self.edge_viz_feat_projector = torch.nn.Linear(input_viz_feat_size, final_viz_feat_size)
+        self.node_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')#, final_nonlinearity=False)
+        self.edge_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')#, final_nonlinearity=False)
 
-        self.node_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
-        self.edge_sem_feat_projector = torch.nn.Linear(input_sem_feat_size, final_sem_feat_size)
+        self.node_sem_feat_projector = build_mlp([input_sem_feat_size, final_sem_feat_size],
+                batch_norm='batch')#, final_nonlinearity=False)
+        self.edge_sem_feat_projector = build_mlp([input_sem_feat_size, final_sem_feat_size],
+                batch_norm='batch')#, final_nonlinearity=False)
 
         self.graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
+
+        # feature perturb
+        self.perturb_feats = perturb_feats
+        self.drop_feat_modality = drop_feat_modality
+        self.add_noise = add_noise
+        self.drop_viz_prob = drop_viz_prob
+        self.perturbed_loss_weight = perturbed_loss_weight
 
         # construct gnn
         gnn_cfg.input_dim_node = self.graph_feat_projected_dim
@@ -66,33 +82,34 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.use_img_feats = use_img_feats
         self.img_feats_only = img_feats_only
         self.img_feat_key = img_feat_key
-        self.img_feat_projector = torch.nn.Linear(img_feat_size, self.graph_feat_projected_dim)
+        self.img_feat_projector = build_mlp([img_feat_size, self.graph_feat_projected_dim],
+                batch_norm='batch')#, final_nonlinearity=False)
+
+        # norm layers
+        self.img_graph_feat_fusion = build_mlp([self.graph_feat_projected_dim * 2, self.graph_feat_projected_dim],
+                batch_norm='batch')
 
         # predictor, loss params
-        #if self.use_img_feats and not self.img_feats_only:
-        #    predictor_dim = gnn_cfg.input_dim_node * 2
-        #else:
-        #    predictor_dim = gnn_cfg.input_dim_node
-        predictor_dim = gnn_cfg.input_dim_node
+        predictor_dim = self.graph_feat_projected_dim
 
         if isinstance(loss, list):
             # losses
             self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
 
             # predictors
-            dim_list = [predictor_dim] * num_predictor_layers
+            dim_list = [predictor_dim] + [predictor_hidden_dim] * (num_predictor_layers - 1)
             self.ds_predictor_head = build_mlp(dim_list)
             self.ds_predictor = torch.nn.ModuleList()
             for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(predictor_dim, num_classes))
+                self.ds_predictor.append(torch.nn.Linear(predictor_hidden_dim, num_classes))
 
         else:
             # loss
             self.loss_fn = MODELS.build(loss)
 
             # predictor
-            dim_list = [predictor_dim] * num_predictor_layers + [num_classes]
-            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False)
+            dim_list = [predictor_dim] + [predictor_hidden_dim] * (num_predictor_layers - 1) + [num_classes]
+            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False, batch_norm='batch')
 
         self.loss_weight = loss_weight
         self.loss_consensus = loss_consensus
@@ -105,23 +122,85 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             input_node_viz_feats = feats.instance_feats
             input_edge_viz_feats = graph.edges.viz_feats
             if self.use_gnn_feats:
-                input_node_viz_feats = input_node_viz_feats + graph.nodes.gnn_viz_feats
-                input_edge_viz_feats = input_edge_viz_feats + graph.edges.gnn_viz_feats
+                input_node_viz_feats = torch.cat([input_node_viz_feats, graph.nodes.gnn_viz_feats], -1)
+                input_edge_viz_feats = torch.cat([input_edge_viz_feats, graph.edges.gnn_viz_feats], -1)
 
-            node_viz_feats = self.node_viz_feat_projector(input_node_viz_feats)
-            edge_viz_feats = self.edge_viz_feat_projector(input_edge_viz_feats)
+            # project node feats
+            if input_node_viz_feats.flatten(end_dim=1).shape[0] == 1:
+                node_viz_feats = self.node_viz_feat_projector(input_node_viz_feats.flatten(end_dim=1).repeat(2, 1))[0].view(
+                        input_node_viz_feats.shape[0], input_node_viz_feats.shape[1], self.final_viz_feat_size)
+            else:
+                node_viz_feats = self.node_viz_feat_projector(input_node_viz_feats.flatten(end_dim=1)).view(
+                        input_node_viz_feats.shape[0], input_node_viz_feats.shape[1], self.final_viz_feat_size)
+
+            # project edge feats
+            if input_edge_viz_feats.shape[0] == 1:
+                edge_viz_feats = self.edge_viz_feat_projector(input_edge_viz_feats.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                edge_viz_feats = self.edge_viz_feat_projector(input_edge_viz_feats)
+
             node_feats.append(node_viz_feats)
             edge_feats.append(edge_viz_feats)
 
+        else:
+            node_feats.append(None)
+            edge_feats.append(None)
+
         if self.final_sem_feat_size > 0:
-            node_sem_feats = self.node_sem_feat_projector(feats.semantic_feats)
-            edge_sem_feats = self.edge_sem_feat_projector(graph.edges.semantic_feats)
+            input_node_sem_feats = feats.semantic_feats
+            if input_node_sem_feats.flatten(end_dim=1).shape[0] == 1:
+                node_sem_feats = self.node_sem_feat_projector(input_node_sem_feats.flatten(end_dim=1).repeat(2, 1))[0].view(
+                        input_node_sem_feats.shape[0], input_node_sem_feats.shape[1], self.final_sem_feat_size)
+            else:
+                node_sem_feats = self.node_sem_feat_projector(input_node_sem_feats.flatten(end_dim=1)).view(
+                        input_node_sem_feats.shape[0], input_node_sem_feats.shape[1], self.final_sem_feat_size)
+
+            input_edge_sem_feats = graph.edges.semantic_feats
+            if input_edge_sem_feats.shape[0] == 1:
+                edge_sem_feats = self.edge_sem_feat_projector(input_edge_sem_feats.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                edge_sem_feats = self.edge_sem_feat_projector(input_edge_sem_feats)
+
             node_feats.append(node_sem_feats)
             edge_feats.append(edge_sem_feats)
+
+        else:
+            node_feats.append(None)
+            edge_feats.append(None)
+
+        # get img feats
+        img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
+        if img_feats.shape[0] == 1:
+            img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
+                1).squeeze(-1).squeeze(-1).repeat(2, 1))[0].unsqueeze(0)
+        else:
+            img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
+                1).squeeze(-1).squeeze(-1))
+
+        if self.perturb_feats:
+            perturbed_node_feats, perturbed_edge_feats, perturbed_img_feats = \
+                    self.feature_perturbation(node_feats, edge_feats, img_feats)
+            perturbed_node_feats = [f for f in perturbed_node_feats if f is not None]
+            perturbed_edge_feats = [f for f in perturbed_edge_feats if f is not None]
+
+        # get rid of None
+        node_feats = [f for f in node_feats if f is not None]
+        edge_feats = [f for f in edge_feats if f is not None]
 
         if len(node_feats) == 0 or len(edge_feats) == 0:
             raise ValueError("Sum of final_viz_feat_size and final_sem_feat_size must be > 0")
 
+        # run forward pass with all the components to get ds preds
+        ds_preds = self.forward(graph, node_feats, edge_feats, img_feats)
+        if self.perturb_feats:
+            perturbed_ds_preds = self.forward(graph, perturbed_node_feats, perturbed_edge_feats,
+                    perturbed_img_feats)
+        else:
+            perturbed_ds_preds = None
+
+        return ds_preds, perturbed_ds_preds
+
+    def forward(self, graph, node_feats, edge_feats, img_feats):
         graph.nodes.feats = torch.cat(node_feats, -1)
         graph.edges.feats = torch.cat(edge_feats, -1)
         dgl_g = self.gnn(graph)
@@ -137,11 +216,12 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         # combine two types of feats
         if self.use_img_feats:
-            # get img feats
-            img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
-            img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
-                1).squeeze(-1).squeeze(-1))
-            final_feats = img_feats + graph_feats
+            pre_fusion_feat = torch.cat([img_feats, graph_feats], -1)
+            if pre_fusion_feat.shape[0] == 1:
+                final_feats = self.img_graph_feat_fusion(pre_fusion_feat.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                final_feats = self.img_graph_feat_fusion(pre_fusion_feat)
+
         else:
             final_feats = graph_feats
 
@@ -149,13 +229,65 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             ds_feats = self.ds_predictor_head(final_feats)
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)
         else:
-            ds_preds = self.ds_predictor(final_feats)
+            if final_feats.shape[1] == 0:
+                ds_preds = self.ds_predictor(final_feats.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                ds_preds = self.ds_predictor(final_feats)
 
         return ds_preds
 
+    def feature_perturbation(self, node_feats, edge_feats, img_feats) -> Tuple[List]:
+        # options: (1) replace viz/sem feats with random noise, (2) add random noise to viz feats
+        perturbed_node_feats = [None for x in node_feats]
+        perturbed_edge_feats = [None for x in edge_feats]
+        if self.drop_feat_modality:
+            mode_to_drop = 0 if torch.rand(1) < self.drop_viz_prob else 1 # select whether to drop viz (0) or sem (1)
+            if mode_to_drop == 0:
+                perturbed_img_feats = torch.normal(torch.zeros_like(img_feats),
+                        torch.ones_like(img_feats)).to(img_feats.device)
+            else:
+                perturbed_img_feats = img_feats
+
+            if node_feats[mode_to_drop] is not None:
+                f = node_feats[mode_to_drop]
+                perturbed_node_feats[mode_to_drop] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
+
+            if edge_feats[mode_to_drop] is not None:
+                f = edge_feats[mode_to_drop]
+                perturbed_edge_feats[mode_to_drop] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
+
+        if self.add_noise and mode_to_drop != 0: # only add noise to visual features if we didn't drop them already
+            if node_feats[0] is not None:
+                f = node_feats[mode_to_drop]
+                a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
+                b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
+                perturbed_f = f * a + b # randomly scale and add noise
+                perturbed_node_feats[0] = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+
+            if edge_feats[0] is not None:
+                f = edge_feats[mode_to_drop]
+                a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
+                b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
+                perturbed_f = f * a + b # randomly scale and add noise
+                perturbed_edge_feats[0] = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+
+            a = torch.normal(torch.ones_like(img_feats), torch.ones_like(img_feats)).to(img_feats.device)
+            b = torch.normal(torch.zeros_like(img_feats), torch.ones_like(img_feats)).to(img_feats.device)
+            perturbed_f = img_feats * a + b # randomly scale and add noise
+            perturbed_img_feats = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+
+        perturbed_node_feats = [node_feats[i] if perturbed_node_feats[i] is None \
+                else perturbed_node_feats[i] for i in range(len(node_feats))]
+        perturbed_edge_feats = [edge_feats[i] if perturbed_edge_feats[i] is None \
+                else perturbed_edge_feats[i] for i in range(len(edge_feats))]
+
+        return perturbed_node_feats, perturbed_edge_feats, perturbed_img_feats
+
     def loss(self, graph: BaseDataElement, feats: BaseDataElement,
             batch_data_samples: SampleList) -> Tensor:
-        ds_preds = self.predict(graph, feats)
+        ds_preds, perturbed_ds_preds = self.predict(graph, feats)
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(ds_preds.device)
 
         if self.loss_consensus == 'mode':
@@ -166,11 +298,18 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
             ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            if perturbed_ds_preds is not None:
+                perturbed_ds_loss = sum([self.loss_fn[i](perturbed_ds_preds[:, i],
+                    ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
+            if perturbed_ds_preds is not None:
+                perturbed_ds_loss = self.loss_fn(perturbed_ds_preds, ds_gt)
 
         loss = {'ds_loss': ds_loss * self.loss_weight}
+        if perturbed_ds_preds is not None:
+            loss.update({'perturbed_ds_loss': perturbed_ds_loss * self.perturbed_loss_weight * self.loss_weight})
 
         return loss
 

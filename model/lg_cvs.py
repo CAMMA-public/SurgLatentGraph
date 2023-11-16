@@ -48,7 +48,7 @@ class LGDetector(BaseDetector):
             trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool = False,
             sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
             sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
-            mask_augment: bool = False, use_semantic_queries: bool = False,
+            mask_augment: bool = True, use_semantic_queries: bool = False,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
@@ -286,7 +286,7 @@ class LGDetector(BaseDetector):
 
         if self.ds_head is not None:
             try:
-                ds_preds = self.ds_head.predict(graph, feats)
+                ds_preds, _ = self.ds_head.predict(graph, feats)
             except AttributeError:
                 raise NotImplementedError("Must have graph head in order to do downstream prediction")
 
@@ -323,7 +323,7 @@ class LGDetector(BaseDetector):
 
             else:
                 if self.force_train_graph_head and self.training:
-                    graph_losses, feats, graph = self.graph_head.loss_and_predict(
+                    graph_losses, graph = self.graph_head.loss_and_predict(
                             detached_results, feats)
                     losses.update(graph_losses)
                     gt_edges = None
