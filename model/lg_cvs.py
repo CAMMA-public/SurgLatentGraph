@@ -48,7 +48,7 @@ class LGDetector(BaseDetector):
             trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool = False,
             sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
             sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
-            mask_augment: bool = True, use_semantic_queries: bool = False,
+            mask_augment: bool = False, use_semantic_queries: bool = False,
             trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
