@@ -78,6 +78,8 @@ lg_model.reconstruction_loss=dict(
 )
 trainable_backbone_frozen_stages = 1
 
+lg_model.force_train_graph_head = True
+
 # dataset
 train_dataloader = dict(
     batch_size=32,

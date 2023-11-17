@@ -6,18 +6,15 @@ _base_ = ['lg_base_box.py']
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
-
 # recon params
 bottleneck_feat_size = 64
 layout_noise_dim = 32
 recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat_size
 
 # model
-gt_graph_use_pred_detections = True
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
 lg_model.use_pred_boxes_recon_loss = True
-lg_model.graph_head.gt_use_pred_detections = gt_graph_use_pred_detections
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
@@ -37,7 +34,7 @@ lg_model.ds_head = dict(
     final_sem_feat_size=256,
     final_viz_feat_size=256,
     use_img_feats=True,
-    loss_consensus='mode',
+    loss_consensus='prob',
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
@@ -81,12 +78,28 @@ lg_model.reconstruction_loss=dict(
 )
 trainable_backbone_frozen_stages = 1
 
+lg_model.force_train_graph_head = True
+#lg_model.graph_head.presence_loss_weight = 0.25
+#lg_model.graph_head.classifier_loss_weight = 0.25
+
 # dataset
 train_dataloader = dict(
     batch_size=32,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
+        filter_cfg=dict(filter_empty_gt=False),
     ),
+    batch_sampler=None,
+    drop_last=True,
+)
+train_eval_dataloader = dict(
+    batch_size=32,
+    num_workers=4,
+    dataset=dict(
+        ann_file='train/annotation_ds_coco.json',
+        test_mode=True,
+    ),
+    drop_last=False,
 )
 val_dataloader = dict(
     batch_size=32,
@@ -102,33 +115,41 @@ test_dataloader = dict(
 )
 
 # metric (in case we need to change dataset)
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='small_wc',
-        data_root=_base_.data_root,
-        data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
-        use_pred_boxes_recon=True,
-        metric=[],
-        num_classes=3,
-    )
-]
+train_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='small_wc',
+    data_root=_base_.data_root,
+    data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+    num_classes=3,
+    outfile_prefix='./results/small_wc_preds/train/lg_cvs',
+)
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='small_wc',
+    data_root=_base_.data_root,
+    data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+    num_classes=3,
+    outfile_prefix='./results/small_wc_preds/val/lg_cvs',
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='small_wc',
-        data_root=_base_.data_root,
-        data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
-        metric=[],
-        num_classes=3,
-        #additional_metrics = ['reconstruction'],
-        use_pred_boxes_recon=True,
-        outfile_prefix='./results/small_wc_preds/test/lg_cvs',
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='small_wc',
+    data_root=_base_.data_root,
+    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
+    metric=[],
+    num_classes=3,
+    #additional_metrics = ['reconstruction'],
+    use_pred_boxes_recon=True,
+    outfile_prefix='./results/small_wc_preds/test/lg_cvs',
+)
 
 # optimizer
 del _base_.param_scheduler
@@ -152,12 +173,10 @@ default_hooks = dict(
     visualization=dict(draw=False),
 )
 
-# train cfg
+# loading
+load_from = 'weights/small_wc/lg_base_no_recon.pth'
+
 train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=60,
-    val_interval=1
-)
-
-# loading
-load_from = 'weights/small_wc/lg_base_no_recon.pth'
+    val_interval=1)

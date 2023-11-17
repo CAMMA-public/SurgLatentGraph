@@ -15,6 +15,7 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
             backbone: ConfigType,
             loss: ConfigType,
             num_classes: int,
+            loss_consensus: str = 'mode',
             aspect_ratio: Union[Tuple, List] = (4, 4),
             bottleneck_feat_size: int = 64,
             img_decoder: OptConfigType = None,
@@ -48,6 +49,8 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         else:
             self.loss_fn = MODELS.build(loss)
             self.predictor = torch.nn.Linear(self.backbone.feat_dim, num_classes)
+
+        self.loss_consensus = loss_consensus
 
         self.reconstruction_loss = MODELS.build(reconstruction_loss) \
                 if reconstruction_loss is not None else None
@@ -109,8 +112,15 @@ class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
         else:
             ds_preds = self.predictor(F.adaptive_avg_pool2d(feats, 1).squeeze(-1).squeeze(-1))
 
-        ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
-                ds_preds.device).float().round().long()
+        ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(ds_preds.device)
+        if self.loss_consensus == 'mode':
+            ds_gt = ds_gt.float().round().long()
+        elif self.loss_consensus == 'prob':
+            # interpret GT as probability of 1 and randomly generate gt
+            random_probs = torch.rand_like(ds_gt) # random probability per label per example
+            ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
+        else:
+            ds_gt = ds_gt.long()
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum

@@ -31,6 +31,7 @@ class DeepCVS(BaseDetector):
             decoder_backbone: ConfigType,
             loss: Union[ConfigType, List],
             num_nodes: int,
+            loss_consensus: str = 'mode',
             layout_only: bool = False,
             use_pred_boxes_recon_loss: bool = False,
             reconstruction_head: ConfigType = None,
@@ -58,6 +59,8 @@ class DeepCVS(BaseDetector):
             self.loss_fn = MODELS.build(loss)
             self.decoder_predictor = torch.nn.Linear(self.decoder_backbone.feat_dim,
                     self.num_classes)
+
+        self.loss_consensus = loss_consensus
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
@@ -178,7 +181,15 @@ class DeepCVS(BaseDetector):
 
         # get gt
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
-                ds_preds.device).float().round().long()
+                ds_preds.device).float()
+        if self.loss_consensus == 'mode':
+            ds_gt = ds_gt.float().round().long()
+        elif self.loss_consensus == 'prob':
+            # interpret GT as probability of 1 and randomly generate gt
+            random_probs = torch.rand_like(ds_gt) # random probability per label per example
+            ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
+        else:
+            ds_gt = ds_gt.long()
 
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum

@@ -229,7 +229,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             ds_feats = self.ds_predictor_head(final_feats)
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)
         else:
-            if final_feats.shape[1] == 0:
+            if final_feats.shape[0] == 1:
                 ds_preds = self.ds_predictor(final_feats.repeat(2, 1))[0].unsqueeze(0)
             else:
                 ds_preds = self.ds_predictor(final_feats)
@@ -292,6 +292,10 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         if self.loss_consensus == 'mode':
             ds_gt = ds_gt.float().round().long()
+        elif self.loss_consensus == 'prob':
+            # interpret GT as probability of 1 and randomly generate gt
+            random_probs = torch.rand_like(ds_gt) # random probability per label per example
+            ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
         else:
             ds_gt = ds_gt.long()
 

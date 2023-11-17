@@ -165,7 +165,10 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
     def _predict_edge_classes(self, graph: BaseDataElement, batch_input_shape: tuple) -> BaseDataElement:
         # predict edge class
         edge_predictor_input = graph.edges.viz_feats + graph.edges.gnn_viz_feats
-        graph.edges.class_logits = self.edge_predictor(edge_predictor_input)
+        if edge_predictor_input.shape[0] == 1:
+            graph.edges.class_logits = self.edge_predictor(edge_predictor_input.repeat(2, 1))[0].unsqueeze(0)
+        else:
+            graph.edges.class_logits = self.edge_predictor(edge_predictor_input)
 
         return graph
 
