@@ -150,7 +150,7 @@ val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
 # hooks
-custom_hooks = [dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='wc/ds_average_precision'),
 )

@@ -4,35 +4,41 @@ from prettytable import PrettyTable
 import torch
 
 @HOOKS.register_module()
-class FreezeDetectorHook(Hook):
-    def __init__(self, train_ds_only=False):
-        self.train_ds_only = train_ds_only
+class FreezeHook(Hook):
+    def __init__(self, freeze_detector: bool = True, freeze_graph_head: bool = False,
+            freeze_projectors: bool = True):
+        self.freeze_detector = freeze_detector
+        self.freeze_graph_head = freeze_graph_head
+        self.freeze_projectors = freeze_projectors
 
     def before_train(self, runner):
         self.before_train_iter(runner)
 
     def before_train_iter(self, runner, **kwargs):
         model = runner.model
-        for p in model.detector.parameters():
-            p.requires_grad = False
-        for m in model.detector.modules():
-            m.eval()
-
-        model.detector.eval()
-
-        # if only training ds, freeze everything but ds_head
-        if self.train_ds_only:
-            for name, p in model.named_parameters():
-                if 'ds_head' in name:
-                    continue
-
+        if self.freeze_detector:
+            for p in model.detector.parameters():
                 p.requires_grad = False
-
-            for name, m in model.graph_head.named_modules():
-                if 'ds_head' in name:
-                    continue
-
+            for m in model.detector.modules():
                 m.eval()
+
+            model.detector.eval()
+
+        if self.freeze_graph_head:
+            for name, p in model.graph_head.named_parameters():
+                p.requires_grad = False
+            for name, m in model.graph_head.named_modules():
+                m.eval()
+
+            model.graph_head.eval()
+
+        if self.freeze_projectors:
+            for name, p in model.named_parameters():
+                if 'semantic_feat_projector' in name:
+                    p.requires_grad = False
+            for name, m in model.named_modules():
+                if 'semantic_feat_projector' in name:
+                    m.eval()
 
 @HOOKS.register_module()
 class CountTrainableParameters(Hook):

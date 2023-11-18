@@ -73,4 +73,4 @@ optim_wrapper = dict(
     paramwise_cfg=None,
 )
 
-custom_hooks = [dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="FreezeHook")]

@@ -51,4 +51,4 @@ test_dataloader = dict(
 visualization = _base_.default_hooks.visualization
 visualization.update(dict(draw=False))
 
-custom_hooks = [dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="FreezeHook")]

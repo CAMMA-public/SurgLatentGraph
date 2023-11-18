@@ -172,7 +172,7 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False)
 
 # hooks
-custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='cholecT50/ds_average_precision', rule='greater'),
 )

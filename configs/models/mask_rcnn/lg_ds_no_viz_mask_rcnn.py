@@ -58,3 +58,5 @@ train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=30,
     val_interval=1)
+
+custom_hooks = [dict(type="FreezeHook", freeze_graph_head=True)]

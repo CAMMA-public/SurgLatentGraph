@@ -148,7 +148,7 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False)
 
 # hooks
-custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='italy/ds_average_precision'),
     visualization=dict(draw=False),

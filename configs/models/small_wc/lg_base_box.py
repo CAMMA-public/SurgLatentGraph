@@ -83,13 +83,13 @@ test_evaluator = dict(
 # learning rate
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=2500),
+        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=1500),
     dict(
         type='MultiStepLR',
         begin=0,
-        end=100,
+        end=60,
         by_epoch=True,
-        milestones=[40, 80],
+        milestones=[24, 48],
         gamma=0.1)
 ]
 
@@ -122,4 +122,4 @@ default_hooks = dict(
 
 # visualizer
 visualization = _base_.default_hooks.visualization
-visualization.update(dict(draw=True, show=False, score_thr=0.2))
+visualization.update(dict(draw=False, show=False, score_thr=0.2))

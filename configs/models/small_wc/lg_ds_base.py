@@ -89,8 +89,6 @@ train_dataloader = dict(
         ann_file='train/annotation_ds_coco.json',
         filter_cfg=dict(filter_empty_gt=False),
     ),
-    batch_sampler=None,
-    drop_last=True,
 )
 train_eval_dataloader = dict(
     batch_size=32,
@@ -167,7 +165,7 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False)
 
 # hooks
-custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeDetectorHook")]
+custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='small_wc/ds_average_precision'),
     visualization=dict(draw=False),
