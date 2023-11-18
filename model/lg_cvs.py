@@ -583,7 +583,7 @@ class LGDetector(BaseDetector):
             if m.shape[0] > 0:
                 for i in m:
                     p_m_i = dense_mask_to_polygon_mask(i, self.mask_polygon_num_points)
-                    if self.mask_augment:
+                    if self.training and self.mask_augment: # only augment mask at train time
                         p_m_i = torch.roll(p_m_i, torch.randint(p_m_i.shape[0], (1,)).item(), 0)
 
                     p_m.append(p_m_i)
