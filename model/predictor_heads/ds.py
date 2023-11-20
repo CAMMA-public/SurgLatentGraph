@@ -54,13 +54,13 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         else:
             projector_dim_list = [input_viz_feat_size, final_viz_feat_size]
 
-        self.node_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')#, final_nonlinearity=False)
-        self.edge_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')#, final_nonlinearity=False)
+        self.node_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')
+        self.edge_viz_feat_projector = build_mlp(projector_dim_list, batch_norm='batch')
 
         self.node_sem_feat_projector = build_mlp([input_sem_feat_size, final_sem_feat_size],
-                batch_norm='batch')#, final_nonlinearity=False)
+                batch_norm='batch')
         self.edge_sem_feat_projector = build_mlp([input_sem_feat_size, final_sem_feat_size],
-                batch_norm='batch')#, final_nonlinearity=False)
+                batch_norm='batch')
 
         self.graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
 

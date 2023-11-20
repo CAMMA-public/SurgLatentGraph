@@ -84,7 +84,8 @@ class LGDetector(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_viz_feat_size = viz_feat_size
+            reconstruction_head.viz_feat_size = viz_feat_size
+            reconstruction_head.semantic_feat_size = semantic_feat_size
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None
@@ -155,13 +156,14 @@ class LGDetector(BaseDetector):
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
             reconstructed_imgs, img_targets, rescaled_results = self.reconstruction_head.predict(
-                    detached_results, feats, batch_inputs) # TODO also pass graph
+                    detached_results, feats, graph, batch_inputs)
 
-            # TODO use gt when available
-            if self.use_pred_boxes_recon_loss:
-                recon_boxes = [r.pred_instances.bboxes for r in rescaled_results]
-            else:
-                recon_boxes = [r.gt_instances.bboxes for r in rescaled_results]
+            recon_boxes = []
+            for r in rescaled_results:
+                if r.is_det_keyframe and not self.use_pred_boxes_recon_loss:
+                    recon_boxes.append(r.gt_instances.bboxes)
+                else:
+                    recon_boxes.append(r.pred_instances.bboxes)
 
             reconstruction_losses = self.reconstruction_loss(reconstructed_imgs,
                     img_targets, recon_boxes)
@@ -242,7 +244,7 @@ class LGDetector(BaseDetector):
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
             reconstructed_imgs, _, _ = self.reconstruction_head.predict(detached_results,
-                    feats, batch_inputs)
+                    feats, graph, batch_inputs)
 
             for r, r_img in zip(results, reconstructed_imgs):
                 # renormalize img
@@ -336,7 +338,7 @@ class LGDetector(BaseDetector):
 
         # apply box perturbation
         if (self.training or force_perturb) and self.perturb_factor > 0:
-            boxes = self.box_perturbation(boxes, results[0].img_shape)
+            boxes = self.box_perturbation(boxes, results[0].ori_shape)
 
         # run bbox feat extractor and add instance feats to feats
         if self.roi_extractor is not None:
@@ -442,7 +444,7 @@ class LGDetector(BaseDetector):
         c = pad_sequence(classes, batch_first=True)
         b = pad_sequence(boxes, batch_first=True)
         s = pad_sequence(scores, batch_first=True)
-        b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
+        b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
         c_one_hot = F.one_hot(c, num_classes=self.num_classes)
 
         sem_feat_input = []

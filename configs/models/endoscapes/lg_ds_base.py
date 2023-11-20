@@ -8,13 +8,12 @@ orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64
-layout_noise_dim = 32
-recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat_size
+bg_img_dim = 256
+recon_input_dim = bottleneck_feat_size + bg_img_dim
 
 # model
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
-lg_model.use_pred_boxes_recon_loss = True
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
@@ -31,8 +30,8 @@ lg_model.ds_head = dict(
     img_feat_size=2048,
     input_sem_feat_size=_base_.semantic_feat_size,
     input_viz_feat_size=_base_.viz_feat_size,
-    final_sem_feat_size=256,
-    final_viz_feat_size=256,
+    final_sem_feat_size=512,
+    final_viz_feat_size=512,
     use_img_feats=True,
     loss_consensus='mode',
     loss=dict(
@@ -45,7 +44,7 @@ lg_model.ds_head = dict(
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',
-    layout_noise_dim=layout_noise_dim,
+    bg_img_dim=bg_img_dim,
     num_classes=_base_.num_classes,
     num_nodes=_base_.num_nodes,
     bottleneck_feat_size=bottleneck_feat_size,
@@ -53,13 +52,12 @@ lg_model.reconstruction_head = dict(
         type='DecoderNetwork',
         dims=(recon_input_dim, 1024, 512, 256, 128, 64),
         spade_blocks=True,
-        source_image_dims=layout_noise_dim,
+        source_image_dims=bg_img_dim,
         normalization='batch',
         activation='leakyrelu-0.2',
     ),
     aspect_ratio=[2, 3],
     use_seg_recon=True,
-    use_pred_boxes_whiteout=True,
 )
 lg_model.reconstruction_loss=dict(
     type='ReconstructionLoss',
@@ -151,7 +149,7 @@ test_evaluator = dict(
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.00001),
+    optimizer=dict(type='AdamW', lr=0.000005),
     clip_grad=dict(max_norm=10, norm_type=2),
     #paramwise_cfg=dict(
     #    custom_keys={
