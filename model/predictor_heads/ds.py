@@ -36,11 +36,10 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feat_key: str, img_feat_size: int, input_viz_feat_size: int,
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
             loss: Union[List, ConfigType], use_img_feats: bool = True, img_feats_only: bool = False,
-            use_gnn_feats: bool = True, loss_consensus: str = 'mode', predictor_hidden_dim: int = 256,
-            num_predictor_layers: int = 2, loss_weight: float = 1.0,
-            perturb_feats: bool = False, drop_feat_modality: bool = True,
-            add_noise: bool = True, perturbed_loss_weight: float = 0.3,
-            drop_viz_prob: float = 0.5, init_cfg: OptMultiConfig = None) -> None:
+            use_gnn_feats: bool = True, loss_consensus: str = 'mode', predictor_hidden_dim: int = 1024,
+            num_predictor_layers: int = 2, loss_weight: float = 1.0, add_noise: bool = True,
+            semantic_loss_weight: float = 0.0, viz_loss_weight: float = 0.0,
+            img_loss_weight: float = 0.0, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # set viz and sem dims for projecting node/edge feats in input graph
@@ -66,11 +65,10 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         self.graph_feat_projected_dim = final_viz_feat_size + final_sem_feat_size
 
         # feature perturb
-        self.perturb_feats = perturb_feats
-        self.drop_feat_modality = drop_feat_modality
         self.add_noise = add_noise
-        self.drop_viz_prob = drop_viz_prob
-        self.perturbed_loss_weight = perturbed_loss_weight
+        self.viz_loss_weight = viz_loss_weight
+        self.semantic_loss_weight = semantic_loss_weight
+        self.img_loss_weight = img_loss_weight
 
         # construct gnn
         gnn_cfg.input_dim_node = self.graph_feat_projected_dim
@@ -177,11 +175,16 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             img_feats = self.img_feat_projector(F.adaptive_avg_pool2d(img_feats,
                 1).squeeze(-1).squeeze(-1))
 
-        if self.perturb_feats:
-            perturbed_node_feats, perturbed_edge_feats, perturbed_img_feats = \
-                    self.feature_perturbation(node_feats, edge_feats, img_feats)
-            perturbed_node_feats = [f for f in perturbed_node_feats if f is not None]
-            perturbed_edge_feats = [f for f in perturbed_edge_feats if f is not None]
+        perturbed_ds_preds = {}
+        if self.semantic_loss_weight > 0 and self.final_sem_feat_size > 0:
+            graph_sem_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'sem')
+            perturbed_ds_preds['graph_sem'] = self.forward(graph, *graph_sem_feats_only)
+        if self.viz_loss_weight > 0 and self.final_viz_feat_size > 0:
+            graph_viz_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'viz')
+            perturbed_ds_preds['graph_viz'] = self.forward(graph, *graph_viz_feats_only)
+        if self.img_loss_weight > 0 and self.use_img_feats:
+            img_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'img')
+            perturbed_ds_preds['img'] = self.forward(graph, *img_feats_only)
 
         # get rid of None
         node_feats = [f for f in node_feats if f is not None]
@@ -192,11 +195,6 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         # run forward pass with all the components to get ds preds
         ds_preds = self.forward(graph, node_feats, edge_feats, img_feats)
-        if self.perturb_feats:
-            perturbed_ds_preds = self.forward(graph, perturbed_node_feats, perturbed_edge_feats,
-                    perturbed_img_feats)
-        else:
-            perturbed_ds_preds = None
 
         return ds_preds, perturbed_ds_preds
 
@@ -236,18 +234,24 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         return ds_preds
 
-    def feature_perturbation(self, node_feats, edge_feats, img_feats) -> Tuple[List]:
-        # options: (1) replace viz/sem feats with random noise, (2) add random noise to viz feats
+    def feature_perturbation(self, node_feats, edge_feats, img_feats, keep_modality) -> Tuple[List]:
         perturbed_node_feats = [None for x in node_feats]
         perturbed_edge_feats = [None for x in edge_feats]
-        if self.drop_feat_modality:
-            mode_to_drop = 0 if torch.rand(1) < self.drop_viz_prob else 1 # select whether to drop viz (0) or sem (1)
-            if mode_to_drop == 0:
-                perturbed_img_feats = torch.normal(torch.zeros_like(img_feats),
-                        torch.ones_like(img_feats)).to(img_feats.device)
-            else:
-                perturbed_img_feats = img_feats
+        if keep_modality == 'viz':
+            perturb_img = True
+            mode_to_drop = 1
+        elif keep_modality == 'sem':
+            perturb_img = True
+            mode_to_drop = 0
+        elif keep_modality == 'img':
+            perturb_img = False
 
+        if perturb_img:
+            # mask img feats
+            perturbed_img_feats = torch.normal(torch.zeros_like(img_feats),
+                    torch.ones_like(img_feats)).to(img_feats.device)
+
+            # mask one modality in both node and edge feats
             if node_feats[mode_to_drop] is not None:
                 f = node_feats[mode_to_drop]
                 perturbed_node_feats[mode_to_drop] = torch.normal(torch.zeros_like(f),
@@ -257,31 +261,52 @@ class DSHead(BaseModule, metaclass=ABCMeta):
                 f = edge_feats[mode_to_drop]
                 perturbed_edge_feats[mode_to_drop] = torch.normal(torch.zeros_like(f),
                         torch.ones_like(f)).to(f.device)
+        else:
+            # keep orig img feats
+            perturbed_img_feats = img_feats
 
-        if self.add_noise and mode_to_drop != 0: # only add noise to visual features if we didn't drop them already
-            if node_feats[0] is not None:
-                f = node_feats[mode_to_drop]
-                a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
-                b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
-                perturbed_f = f * a + b # randomly scale and add noise
-                perturbed_node_feats[0] = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+            # mask all node feats
+            f = node_feats[0]
+            perturbed_node_feats[0] = torch.normal(torch.zeros_like(f),
+                    torch.ones_like(f)).to(f.device)
+            f = node_feats[1]
+            perturbed_node_feats[1] = torch.normal(torch.zeros_like(f),
+                    torch.ones_like(f)).to(f.device)
 
-            if edge_feats[0] is not None:
-                f = edge_feats[mode_to_drop]
-                a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
-                b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
-                perturbed_f = f * a + b # randomly scale and add noise
-                perturbed_edge_feats[0] = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+            # mask all edge feats
+            f = edge_feats[0]
+            perturbed_edge_feats[0] = torch.normal(torch.zeros_like(f),
+                    torch.ones_like(f)).to(f.device)
+            f = edge_feats[1]
+            perturbed_edge_feats[1] = torch.normal(torch.zeros_like(f),
+                    torch.ones_like(f)).to(f.device)
+
+        if self.add_noise:
+            # add noise to graph_feats
+            for i in range(len(node_feats)):
+                if node_feats[i] is not None:
+                    f = node_feats[i]
+                    a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
+                    b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
+                    perturbed_node_feats[i] = f * a + b # randomly scale and add noise
+
+                if edge_feats[i] is not None:
+                    f = edge_feats[i]
+                    a = torch.normal(torch.ones_like(f), torch.ones_like(f)).to(f.device)
+                    b = torch.normal(torch.zeros_like(f), torch.ones_like(f)).to(f.device)
+                    perturbed_edge_feats[i] = f * a + b # randomly scale and add noise
 
             a = torch.normal(torch.ones_like(img_feats), torch.ones_like(img_feats)).to(img_feats.device)
             b = torch.normal(torch.zeros_like(img_feats), torch.ones_like(img_feats)).to(img_feats.device)
-            perturbed_f = img_feats * a + b # randomly scale and add noise
-            perturbed_img_feats = perturbed_f #/ torch.linalg.norm(perturbed_f, dim=-1).unsqueeze(-1)
+            perturbed_img_feats = img_feats * a + b # randomly scale and add noise
 
         perturbed_node_feats = [node_feats[i] if perturbed_node_feats[i] is None \
                 else perturbed_node_feats[i] for i in range(len(node_feats))]
         perturbed_edge_feats = [edge_feats[i] if perturbed_edge_feats[i] is None \
                 else perturbed_edge_feats[i] for i in range(len(edge_feats))]
+
+        perturbed_node_feats = [f for f in perturbed_node_feats if f is not None]
+        perturbed_edge_feats = [f for f in perturbed_edge_feats if f is not None]
 
         return perturbed_node_feats, perturbed_edge_feats, perturbed_img_feats
 
@@ -299,21 +324,24 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         else:
             ds_gt = ds_gt.long()
 
+        perturbed_ds_loss = {}
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
             ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
-            if perturbed_ds_preds is not None:
-                perturbed_ds_loss = sum([self.loss_fn[i](perturbed_ds_preds[:, i],
-                    ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            for k, v in perturbed_ds_preds.items():
+                wt = self.viz_loss_weight if k == 'graph_viz' else self.semantic_loss_weight if k == 'graph_sem' else self.img_loss_weight
+                loss_val = sum([self.loss_fn[i](v[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
-            if perturbed_ds_preds is not None:
-                perturbed_ds_loss = self.loss_fn(perturbed_ds_preds, ds_gt)
+            for k, v in perturbed_ds_preds.items():
+                wt = self.viz_loss_weight if k == 'graph_viz' else self.semantic_loss_weight if k == 'graph_sem' else self.img_loss_weight
+                loss_val = self.loss_fn(v, ds_gt)
+                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
 
         loss = {'ds_loss': ds_loss * self.loss_weight}
-        if perturbed_ds_preds is not None:
-            loss.update({'perturbed_ds_loss': perturbed_ds_loss * self.perturbed_loss_weight * self.loss_weight})
+        loss.update(perturbed_ds_loss)
 
         return loss
 
