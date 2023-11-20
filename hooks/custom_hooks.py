@@ -6,13 +6,16 @@ import torch
 @HOOKS.register_module()
 class FreezeHook(Hook):
     def __init__(self, freeze_detector: bool = True, freeze_graph_head: bool = False,
-            freeze_projectors: bool = True):
+            freeze_projectors: bool = False):
         self.freeze_detector = freeze_detector
         self.freeze_graph_head = freeze_graph_head
         self.freeze_projectors = freeze_projectors
-
-    def before_train(self, runner):
-        self.before_train_iter(runner)
+        if self.freeze_detector:
+            print("FREEZING DETECTOR")
+        if self.freeze_graph_head:
+            print("FREEZING GRAPH HEAD")
+        if self.freeze_projectors:
+            print("FREEZING PROJECTORS")
 
     def before_train_iter(self, runner, **kwargs):
         model = runner.model

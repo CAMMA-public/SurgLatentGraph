@@ -16,7 +16,7 @@ custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMet
 
 # feat sizes
 viz_feat_size = 256
-semantic_feat_size = 256
+semantic_feat_size = 512
 
 # num nodes in graph
 num_nodes = 16
@@ -25,12 +25,11 @@ num_classes = len(_base_.metainfo.classes)
 lg_model=dict(
     type='LGDetector',
     num_classes=num_classes,
+    viz_feat_size = viz_feat_size,
     semantic_feat_size=semantic_feat_size,
     graph_head=dict(
         type='GraphHead',
         edges_per_node=4,
-        viz_feat_size=viz_feat_size,
-        semantic_feat_size=semantic_feat_size,
         gnn_cfg=dict(
             type='GNNHead',
             num_layers=3,
