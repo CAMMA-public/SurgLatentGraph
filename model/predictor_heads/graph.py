@@ -30,20 +30,19 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         roi_extractor
         gnn_cfg (ConfigType): gnn cfg
     """
-    def __init__(self, edges_per_node: int, viz_feat_size: int, semantic_feat_size: int,
+    def __init__(self, edges_per_node: int, viz_feat_size: int,
             roi_extractor: BaseRoIExtractor, num_edge_classes: int,
             presence_loss_cfg: ConfigType, presence_loss_weight: float,
             classifier_loss_cfg: ConfigType, classifier_loss_weight: float,
             gt_use_pred_detections: bool = False, sem_feat_hidden_dim: int = 2048,
             semantic_feat_projector_layers: int = 3, num_roi_feat_maps: int = 4,
-            gnn_cfg: ConfigType = None, compute_gt_eval: bool = False,
-            init_cfg: OptMultiConfig = None) -> None:
+            allow_same_label_edge: List = [5], gnn_cfg: ConfigType = None,
+            compute_gt_eval: bool = False, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # attributes for building graph from detections
         self.edges_per_node = edges_per_node
         self.viz_feat_size = viz_feat_size
-        self.semantic_feat_size = semantic_feat_size
         self.roi_extractor = roi_extractor
         self.num_roi_feat_maps = num_roi_feat_maps
         dim_list = [viz_feat_size, 64, 64]
@@ -53,6 +52,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                 final_nonlinearity=False)
         self.gt_use_pred_detections = gt_use_pred_detections
         self.compute_gt_eval = compute_gt_eval
+        self.allow_same_label_edge = torch.tensor(allow_same_label_edge)
 
         # presence loss
         self.presence_loss = MODELS.build(presence_loss_cfg)
@@ -286,26 +286,33 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
     def _build_gt_edges(self, results: SampleList) -> BaseDataElement:
         boxes_per_img = []
         bounding_boxes = []
+        all_labels = []
         for r in results:
             if r.is_det_keyframe and not self.gt_use_pred_detections:
                 boxes = r.gt_instances.bboxes
+                labels = r.gt_instances.labels
                 bounding_boxes.append(boxes)
+                all_labels.append(labels)
                 boxes_per_img.append(len(boxes))
 
             else:
                 # get boxes, rescale
                 boxes = r.pred_instances.bboxes
                 scores = r.pred_instances.scores
+                labels = r.pred_instances.labels
 
                 # use score thresh 0.3 to filter boxes
                 boxes = boxes[scores > 0.3]
+                labels = labels[scores > 0.3]
 
                 # convert to tensor and scale boxes
                 bounding_boxes.append(scale_boxes(boxes.float(), r.scale_factor))
                 boxes_per_img.append(len(bounding_boxes))
+                all_labels.append(labels)
 
         # convert to tensor
         bounding_boxes = pad_sequence(bounding_boxes, batch_first=True)
+        all_labels = pad_sequence(all_labels, batch_first=True)
 
         # compute centroids and distances for general use
         centroids = (bounding_boxes[:, :, :2] + bounding_boxes[:, :, 2:]) / 2
@@ -347,9 +354,20 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # SELECT E EDGES PER NODE BASED ON gIoU
         iou_matrix = bbox_overlaps(bounding_boxes, bounding_boxes)
+
+        # mask diagonal, invalid bbox edges
         diag_mask = torch.eye(iou_matrix.shape[-1]).repeat(iou_matrix.shape[0], 1, 1).bool()
         iou_matrix[diag_mask] = float('-inf') # set diagonal to -inf
         iou_matrix[torch.minimum(areas_x, areas_y) == 0] = float('-inf') # set all entries where bbox area is 0 to -inf
+
+        # mask edges between same class
+        same_class = (all_labels.unsqueeze(1) == all_labels.unsqueeze(2))
+        allow_same_label_edge = self.allow_same_label_edge.view(1, 1, -1).to(all_labels.device)
+        same_label_edge_mask = (all_labels.unsqueeze(-1) == allow_same_label_edge).any(-1)
+        same_class[same_label_edge_mask] = False
+        same_class.permute(0, 2, 1)[same_label_edge_mask] = False
+        iou_matrix[same_class] = float('-inf')
+
         valid_nodes_per_img = [(a > 0).sum().item() for a in areas]
         num_edges_per_img = [min(self.edges_per_node, max(0, v-1)) for v in valid_nodes_per_img] # limit edges based on number of valid boxes per img
         selected_edges = [torch.topk(iou_mat[:v, :v], e, dim=1).indices for iou_mat, v, e in zip(iou_matrix, valid_nodes_per_img, num_edges_per_img)]
