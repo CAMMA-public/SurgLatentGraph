@@ -38,18 +38,18 @@ class LGDetector(BaseDetector):
         reconstruction_img_stats (ConfigType): reconstructed image mean and std
     """
 
-    def __init__(self, detector: ConfigType, num_classes: int, semantic_feat_size: int,
-            sem_feat_hidden_dim: int = 2048, semantic_feat_projector_layers: int = 3,
-            semantic_feat_projector_arch: str = 'mlp', perturb_factor: float = 0.0,
+    def __init__(self, detector: ConfigType, num_classes: int, viz_feat_size: int,
+            semantic_feat_size: int, sem_feat_hidden_dim: int = 2048,
+            semantic_feat_projector_layers: int = 3, perturb_factor: float = 0.0,
             use_pred_boxes_recon_loss: bool = False, reconstruction_head: ConfigType = None,
             reconstruction_loss: ConfigType = None, reconstruction_img_stats: ConfigType = None,
-            graph_head: ConfigType = None, ds_head: ConfigType = None, roi_extractor: ConfigType = None,
-            use_gt_dets: bool = False, trainable_detector_cfg: OptConfigType = None,
+            graph_head: ConfigType = None, ds_head: ConfigType = None,
+            roi_extractor: ConfigType = None, use_gt_dets: bool = False,
+            trainable_detector_cfg: OptConfigType = None,
             trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool = False,
             sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
             sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
-            mask_augment: bool = True, use_semantic_queries: bool = False,
-            trainable_neck_cfg: OptConfigType = None, **kwargs):
+            mask_augment: bool = True, trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
         self.num_classes = num_classes
@@ -57,6 +57,8 @@ class LGDetector(BaseDetector):
         self.roi_extractor = MODELS.build(roi_extractor) if roi_extractor is not None else None
         self.use_gt_dets = use_gt_dets
         self.perturb_factor = perturb_factor if not use_gt_dets else 0
+        self.viz_feat_size = viz_feat_size
+        graph_head.viz_feat_size = viz_feat_size
 
         # if trainable detector cfg is defined, that is used for trainable backbone
         if trainable_detector_cfg is not None:
@@ -82,7 +84,7 @@ class LGDetector(BaseDetector):
 
         # add obj feat size to recon cfg
         if reconstruction_head is not None:
-            reconstruction_head.obj_viz_feat_size = graph_head.viz_feat_size
+            reconstruction_head.obj_viz_feat_size = viz_feat_size
             self.reconstruction_head = MODELS.build(reconstruction_head)
         else:
             self.reconstruction_head = None
@@ -116,65 +118,29 @@ class LGDetector(BaseDetector):
             self.sem_feat_use_masks = sem_feat_use_masks
             self.mask_augment = mask_augment
             self.mask_polygon_num_points = mask_polygon_num_points
-            self.use_semantic_queries = use_semantic_queries
             self.semantic_feat_size = semantic_feat_size
-            if self.use_semantic_queries:
-                self.sem_feat_hidden_dim = sem_feat_hidden_dim
-                self.point_pos_embed_size = 128 # pos embed dim per point
-                sem_input_dim = 1 # for scores/bg_prob
-                if self.sem_feat_use_bboxes:
-                    if semantic_feat_size % 2 != 0:
-                        raise ValueError("Semantic Feat Size must be a multiple of 2 when using bounding boxes")
-                    self.bbox_pos_embed_projector = build_mlp([self.point_pos_embed_size * 2,
-                        self.point_pos_embed_size, self.point_pos_embed_size])#, batch_norm='batch')
 
-                    sem_input_dim += self.point_pos_embed_size
-                    #sem_input_dim += self.point_pos_embed_size
+            # compute sem_input_dim
+            sem_input_dim = 1 # scores
+            edge_sem_input_dim = 1 # bg prob
+            if self.sem_feat_use_bboxes:
+                # boxes and score
+                sem_input_dim += 4
+                edge_sem_input_dim += 4
 
-                if self.sem_feat_use_class_logits:
-                    self.class_embedding = Embedding(num_classes, self.point_pos_embed_size)#, scale_grad_by_freq=True)
-                    #self.class_embedding_projector = build_mlp([self.point_pos_embed_size,
-                    #    self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
-                    self.class_embedding_projector = build_mlp([num_classes,
-                        self.point_pos_embed_size, self.point_pos_embed_size], batch_norm='batch')
-                    sem_input_dim += self.point_pos_embed_size
+            if self.sem_feat_use_class_logits:
+                # class logits
+                sem_input_dim += num_classes
+                edge_sem_input_dim += self.num_edge_classes
 
-                if self.sem_feat_use_masks:
-                    if semantic_feat_size % 2 != 0:
-                        raise ValueError("Semantic Feat Size must be a multiple of 2 when using masks")
-                    self.mask_pos_embed_projector = build_mlp([self.point_pos_embed_size * \
-                            self.mask_polygon_num_points, self.point_pos_embed_size,
-                            self.point_pos_embed_size])#, batch_norm='batch')
+            if self.sem_feat_use_masks:
+                sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
 
-                    #sem_input_dim += sem_feat_hidden_dim
-                    sem_input_dim += self.point_pos_embed_size
+            dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
+            self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
 
-                dim_list = [self.point_pos_embed_size] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-                self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
-
-            else:
-                # compute sem_input_dim
-                sem_input_dim = 1 # scores
-                edge_sem_input_dim = 1 # bg prob
-                if self.sem_feat_use_bboxes:
-                    # boxes and score
-                    sem_input_dim += 4
-                    edge_sem_input_dim += 4
-
-                if self.sem_feat_use_class_logits:
-                    # class logits
-                    sem_input_dim += num_classes
-                    edge_sem_input_dim += self.num_edge_classes
-
-                if self.sem_feat_use_masks:
-                    sem_input_dim += self.mask_polygon_num_points * 2 # number of points, x and y coord
-
-                self.semantic_feat_projector_arch = semantic_feat_projector_arch
-                dim_list = [sem_input_dim] + [sem_feat_hidden_dim] * (semantic_feat_projector_layers - 1) + [semantic_feat_size]
-                self.semantic_feat_projector = build_mlp(dim_list, batch_norm='batch')
-
-                edge_dim_list = [edge_sem_input_dim] + dim_list[1:]
-                self.edge_semantic_feat_projector = build_mlp(edge_dim_list, batch_norm='batch')
+            edge_dim_list = [edge_sem_input_dim] + dim_list[1:]
+            self.edge_semantic_feat_projector = build_mlp(edge_dim_list, batch_norm='batch')
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         if self.detector.training:
@@ -473,97 +439,39 @@ class LGDetector(BaseDetector):
                 masks = [r.pred_instances.masks for r in results]
 
         # compute semantic feat
-        if self.use_semantic_queries:
-            #sem_feat_input = []
-            sem_feat_input = 0
-            if self.sem_feat_use_class_logits:
-                c = pad_sequence([self.class_embedding(i) for i in classes], batch_first=True)
-                c_one_hot = F.one_hot(pad_sequence(classes, batch_first=True),
-                        num_classes=self.num_classes).float()
-                c = self.class_embedding_projector(c_one_hot.flatten(end_dim=1)).view(c_one_hot.shape[0],
-                        c_one_hot.shape[1], self.point_pos_embed_size)
-                #class_embed_size = self.point_pos_embed_size
-                #sem_feat_input.append(self.class_embedding_projector(c_one_hot.flatten(end_dim=1)).view(
-                #    c_one_hot.shape[0], c_one_hot.shape[1], class_embed_size))
-                #sem_feat_input.append(self.class_embedding_projector(c.flatten(end_dim=1)).view(
-                #    c.shape[0], c.shape[1], class_embed_size))
-                sem_feat_input += c
-                #sem_feat_input.append(c)
+        c = pad_sequence(classes, batch_first=True)
+        b = pad_sequence(boxes, batch_first=True)
+        s = pad_sequence(scores, batch_first=True)
+        b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
+        c_one_hot = F.one_hot(c, num_classes=self.num_classes)
 
-            if self.sem_feat_use_bboxes:
-                b = pad_sequence(boxes, batch_first=True)
-                b_norm = b / Tensor(final_shape).flip(0).repeat(2).to(b.device)
-                b_enc = coordinate_to_encoding(b_norm,
-                        num_feats=self.point_pos_embed_size / 2)
+        sem_feat_input = []
+        if self.sem_feat_use_bboxes:
+            sem_feat_input.append(b_norm)
 
-                #norm_boxes = [b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device) for b in boxes]
-                b_enc = self.bbox_pos_embed_projector(b_enc)#.view(b_enc.shape[0], b_enc.shape[1], self.point_pos_embed_size)
-                sem_feat_input += b_enc
+        if self.sem_feat_use_class_logits:
+            sem_feat_input.append(c_one_hot)
 
-            if self.sem_feat_use_masks:
-                # iterate through masks and convert to polygon mask
-                polygon_masks = self.masks_to_polygons(masks)
-
-                # process masks
-                polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
-                polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
-
-                #norm_masks = [m / Tensor(ori_shape).flip(0).to(m.device) for m in polygon_masks]
-                m_enc = coordinate_to_encoding(polygon_masks_norm, num_feats=self.point_pos_embed_size / 2)
-                m_enc = self.mask_pos_embed_projector(m_enc)#.view(m_enc.shape[0], m_enc.shape[1], self.point_pos_embed_size)
-                sem_feat_input += m_enc
-
-            s = pad_sequence(scores, batch_first=True) # B x N x 1
-            B, N = s.shape
-
-            #sem_feat_input.append(s.unsqueeze(-1))
-            #sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
-            sem_feat_input = sem_feat_input.flatten(end_dim=1)
-
-            if sem_feat_input.shape[0] == 1:
-                s = self.semantic_feat_projector(torch.cat([sem_feat_input,
-                    sem_feat_input]))[0].unsqueeze(0)
-            else:
-                s = self.semantic_feat_projector(sem_feat_input)
-
-            semantic_feats = s.view(B, N, s.shape[-1])
-
-        else:
-            c = pad_sequence(classes, batch_first=True)
-            b = pad_sequence(boxes, batch_first=True)
-            s = pad_sequence(scores, batch_first=True)
-            b_norm = b / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(b.device)
-            c_one_hot = F.one_hot(c, num_classes=self.num_classes)
-
-            sem_feat_input = []
-            if self.sem_feat_use_bboxes:
-                sem_feat_input.append(b_norm)
-
-            if self.sem_feat_use_class_logits:
-                sem_feat_input.append(c_one_hot)
+        # process masks
+        if self.sem_feat_use_masks:
+            # iterate through masks and convert to polygon mask
+            polygon_masks = self.masks_to_polygons(masks)
 
             # process masks
-            if self.sem_feat_use_masks:
-                # iterate through masks and convert to polygon mask
-                polygon_masks = self.masks_to_polygons(masks)
+            polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
+            polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
 
-                # process masks
-                polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
-                polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
+            sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
 
-                sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
+        sem_feat_input.append(s.unsqueeze(-1))
 
-            sem_feat_input.append(s.unsqueeze(-1))
+        sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
+        if sem_feat_input.shape[0] == 1:
+            s = self.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
+        else:
+            s = self.semantic_feat_projector(sem_feat_input)
 
-            sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
-            if sem_feat_input.shape[0] == 1:
-                s = self.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
-            else:
-                s = self.semantic_feat_projector(sem_feat_input)
-
-            semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
-
-        feats.semantic_feats = semantic_feats
+        feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
 
         if graph is not None:
             # compute edge semantic feats
