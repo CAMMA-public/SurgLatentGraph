@@ -61,6 +61,6 @@ test_evaluator = [
         num_classes=100,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/cholecT50_preds/test'
+        outfile_prefix='./results/cholecT50_preds/test/r50'
     ),
 ]

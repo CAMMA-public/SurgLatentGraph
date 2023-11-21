@@ -22,13 +22,11 @@ lg_model = dict(
         compute_gt_eval=False,
     ),
     reconstruction_head=None,
-    trainable_backbone_cfg=None,
-    trainable_neck_cfg=None,
 )
 
 test_dataloader = dict(
     dataset=dict(
-        ann_file='all/annotation_ds_coco_all_frames.json',
+        ann_file='annotation_coco_all_frames.json',
         data_prefix=dict(img='all/'),
     )
 )
