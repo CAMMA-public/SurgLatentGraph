@@ -13,17 +13,7 @@ model = dict(
         img_loss_weight=0,
     ),
     # skip graph head training
-    force_train_graph_head=True,
-)
-
-# optimizer
-optim_wrapper = dict(
-    optimizer=dict(lr=0.00001),
-    paramwise_cfg=dict(
-        custom_keys={
-            'semantic_feat_projector': dict(lr_mult=10),
-        }
-    ),
+    force_train_graph_head=False,
 )
 
 train_cfg = dict(

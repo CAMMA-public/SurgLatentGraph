@@ -45,7 +45,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         self.use_img = use_img
 
         # node (object) feature bottleneck settings
-        if self.use_gnn_feats:
+        if self.use_gnn_feats and self.use_visual:
             self.node_viz_feat_projector = build_mlp([viz_feat_size * 2, viz_feat_size],
                     batch_norm='batch')
 
@@ -122,23 +122,30 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             else:
                 gt_layouts = None
 
-        # first combine gnn feats and pre-gnn viz feats
-        if self.use_gnn_feats:
-            node_viz_feats = self.node_viz_feat_projector(torch.cat([feats.instance_feats,
-                graph.nodes.gnn_viz_feats], -1).flatten(end_dim=1)).view(*feats.instance_feats.shape[:-1], -1)
-        else:
-            node_viz_feats = feats.instance_feats
-
-        # now combine viz feats and semantic feats and bottleneck
+        # gather features to bottleneck
         bottleneck_input = []
+
+        # first combine gnn feats and pre-gnn viz feats
         if self.use_visual:
+            if self.use_gnn_feats:
+                node_viz_feats = self.node_viz_feat_projector(torch.cat([feats.instance_feats,
+                    graph.nodes.gnn_viz_feats], -1).flatten(end_dim=1))
+                node_viz_feats = node_viz_feats.view(*feats.instance_feats.shape[:-1],
+                        node_viz_feats.shape[-1])
+            else:
+                node_viz_feats = feats.instance_feats
+
+            # now combine viz feats and semantic feats and bottleneck
             bottleneck_input.append(node_viz_feats)
+
+        # add semantic feats
         if self.use_semantics:
             bottleneck_input.append(feats.semantic_feats)
 
         if len(bottleneck_input) > 0:
-            node_features = self.bottleneck(torch.cat(bottleneck_input, -1).flatten(end_dim=1)).view(
-                    *bottleneck_input[0].shape[:-1], -1)
+            node_features = self.bottleneck(torch.cat(bottleneck_input, -1).flatten(end_dim=1))
+            node_features = node_features.view(*bottleneck_input[0].shape[:-1],
+                    node_features.shape[-1])
         else:
             node_features = None
 
@@ -245,8 +252,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         return processed_bg_img
 
     def _rescale_results(self, results: SampleList) -> SampleList:
-        rescaled_results = copy.deepcopy(results)
-        for r in rescaled_results:
+        for r in results:
             # rescale boxes
             pred_scale_factor = (self.reconstruction_size / Tensor(r.ori_shape)).flip(0).tolist()
             r.pred_instances.bboxes = scale_boxes(r.pred_instances.bboxes, pred_scale_factor)
@@ -264,7 +270,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
                 r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
 
-        return rescaled_results
+        return results
 
 @MODELS.register_module()
 class DecoderNetwork(nn.Module):

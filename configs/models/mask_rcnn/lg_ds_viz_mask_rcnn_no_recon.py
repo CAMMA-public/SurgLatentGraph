@@ -1,5 +1,5 @@
 # modify base for different detectors
-_base_ = ['lg_ds_no_sem_mask_rcnn.py']
+_base_ = ['lg_ds_viz_mask_rcnn.py']
 
 model = dict(
     reconstruction_head=None,

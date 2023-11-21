@@ -111,7 +111,7 @@ class LGDetector(BaseDetector):
         # use pred boxes or gt boxes for recon loss
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
 
-        self.encode_semantics = self.ds_head is not None or self.reconstruction_head is not None
+        self.encode_semantics = self.ds_head is not None or self.reconstruction_head is not None and semantic_feat_size > 0
         if self.encode_semantics:
             # build semantic feat projector (input feat size is classes+box coords+score)
             self.sem_feat_use_bboxes = sem_feat_use_bboxes

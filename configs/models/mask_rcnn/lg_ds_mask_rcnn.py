@@ -33,8 +33,9 @@ if 'neck' in detector:
     model.trainable_neck_cfg=copy.deepcopy(detector.neck)
 
 # perturbation
-model.ds_head.perturb_feats = False
-model.ds_head.perturbed_loss_weight = 0.5
+model.ds_head.semantic_loss_weight = 1.0
+model.ds_head.viz_loss_weight = 0.3
+model.ds_head.img_loss_weight = 0.3
 model.ds_head.add_noise = False
 #drop_viz_prob = 0.7
 
