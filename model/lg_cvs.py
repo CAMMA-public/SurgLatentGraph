@@ -381,14 +381,6 @@ class LGDetector(BaseDetector):
             # instance feats are just queries (run detector.get_queries to get)
             if self.trainable_backbone is not None:
                 if 'SAM' in type(self.trainable_backbone).__name__:
-                    ## trainable bb to get img feats
-                    #feats.bb_feats, _ = self.trainable_backbone.extract_feat(batch_inputs, results)
-                    #feats.neck_feats = feats.bb_feats
-
-                    ## frozen bb for instance feats
-                    #feats.instance_feats = pad_sequence([r.pred_instances['feats'].sum(1) \
-                    #        for r in results], batch_first=True)
-
                     # extract selected indices from results
                     selected_inds = [r.pred_instances['instance_ids'] for r in results]
 
