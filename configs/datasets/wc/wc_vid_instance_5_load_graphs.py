@@ -1,6 +1,6 @@
 import os
 
-_base_ = 'endoscapes_vid_instance_15.py'
+_base_ = 'wc_vid_instance_5.py'
 num_temp_frames = _base_.num_temp_frames
 
 train_pipeline = [
