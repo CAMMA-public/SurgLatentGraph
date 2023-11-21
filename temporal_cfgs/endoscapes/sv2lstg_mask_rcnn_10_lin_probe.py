@@ -12,6 +12,8 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
 # set saved graph dir in pipelines
 _base_.train_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
         'latent_graphs/endoscapes_mask_rcnn'
+_base_.train_eval_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/endoscapes_mask_rcnn'
 _base_.val_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
         'latent_graphs/endoscapes_mask_rcnn'
 _base_.test_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
@@ -52,6 +54,21 @@ model = dict(
 )
 
 # metric
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='endoscapes',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_data_prefix,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        metric=[],
+        num_classes=3,
+        additional_metrics=['reconstruction'],
+        use_pred_boxes_recon=False,
+        outfile_prefix='./results/endoscapes_preds/train/sv2lstg',
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
@@ -60,8 +77,10 @@ val_evaluator = [
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        outfile_prefix='./results/endoscapes_preds/val/sv2lstg',
     )
 ]
 
@@ -73,9 +92,10 @@ test_evaluator = [
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+        outfile_prefix='./results/endoscapes_preds/test/sv2lstg',
     ),
 ]
 

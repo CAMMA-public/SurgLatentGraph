@@ -64,6 +64,7 @@ val_evaluator = [
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
         metric=[],
+        num_classes=7,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
     )
@@ -77,9 +78,10 @@ test_evaluator = [
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
         metric=[],
+        num_classes=7,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/c80_phase_preds/test/lg_cvs',
+        outfile_prefix='./results/c80_phase_preds/test/sv2lstg',
     ),
 ]
 

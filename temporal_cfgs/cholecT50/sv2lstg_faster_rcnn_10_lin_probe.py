@@ -2,8 +2,8 @@ import os
 import copy
 
 _base_ = [
-    '../../configs/datasets/endoscapes/endoscapes_vid_instance_5_load_graphs.py',
-    'sv2lstg_mask_rcnn_base.py',
+    '../../configs/datasets/cholecT50/cholecT50_vid_instance_10_load_graphs.py',
+    'sv2lstg_faster_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
@@ -11,13 +11,11 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
 
 # set saved graph dir in pipelines
 _base_.train_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/endoscapes_mask_rcnn'
-_base_.train_eval_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/endoscapes_mask_rcnn'
+        'latent_graphs/cholecT50_faster_rcnn'
 _base_.val_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/endoscapes_mask_rcnn'
+        'latent_graphs/cholecT50_faster_rcnn'
 _base_.test_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/endoscapes_mask_rcnn'
+        'latent_graphs/cholecT50_faster_rcnn'
 
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
@@ -29,7 +27,6 @@ ds_head['type'] = 'STDSHead'
 ds_head['gnn_cfg']['num_layers'] = 5
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 #ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
-ds_head['use_node_positional_embedding'] = True
 ds_head['use_temporal_model'] = True
 ds_head['temporal_arch'] = 'transformer'
 ds_head['edit_graph'] = True
@@ -54,48 +51,32 @@ model = dict(
 )
 
 # metric
-train_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='endoscapes',
-        data_root=_base_.data_root,
-        data_prefix=_base_.train_data_prefix,
-        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
-        metric=[],
-        num_classes=3,
-        additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/train/sv2lstg',
-    )
-]
-
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='cholecT50',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
-        num_classes=3,
+        num_classes=100,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/val/sv2lstg',
     )
 ]
 
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='endoscapes',
+        prefix='cholecT50',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
-        num_classes=3,
+        num_classes=100,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/sv2lstg',
+        outfile_prefix='./results/cholecT50_preds/test/sv2lstg',
     ),
 ]
 
@@ -109,7 +90,6 @@ test_cfg = dict(type='TestLoopKeyframeEval')
 
 # Hooks
 del _base_.custom_hooks
-custom_hooks = [dict(type="FreezeLGDetector", finetune_backbone=False)]#, dict(type="CopyDetectorBackbone", temporal=True)]
 
 # visualizer
 default_hooks = dict(

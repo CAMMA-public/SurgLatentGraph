@@ -57,6 +57,21 @@ model = dict(
 )
 
 # metric
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='endoscapes',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_data_prefix,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        metric=[],
+        num_classes=3,
+        additional_metrics=['reconstruction'],
+        use_pred_boxes_recon=False,
+        outfile_prefix='./results/endoscapes_preds/train/sv2lstg',
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
@@ -65,8 +80,10 @@ val_evaluator = [
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        outfile_prefix='./results/endoscapes_preds/val/sv2lstg',
     )
 ]
 
@@ -78,9 +95,10 @@ test_evaluator = [
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+        outfile_prefix='./results/endoscapes_preds/test/sv2lstg',
     ),
 ]
 
@@ -111,7 +129,7 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector': dict(lr_mult=0.5),
+            'lg_detector': dict(lr_mult=0.25),
         }
     )
 )

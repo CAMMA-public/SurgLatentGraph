@@ -187,8 +187,8 @@ class SV2LSTG(BaseDetector):
         graphs.edges.class_logits = list(graphs.edges.class_logits.split(graphs.edges.edges_per_clip))
         graphs.edges.feats = list(graphs.edges.feats.split(graphs.edges.edges_per_clip))
         graphs.edges.boxes = list(graphs.edges.boxes.split(graphs.edges.edges_per_clip))
-        #graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
-        #graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
+        graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
+        graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
 
         if 'presence_logits' in graphs.edges.keys():
             del graphs.edges.presence_logits
@@ -243,7 +243,6 @@ class SV2LSTG(BaseDetector):
 
         # pad spat graph if needed
         if len(graphs_to_use) == 2 and graphs_to_use[0].shape[-1] != graphs_to_use[1].shape[-1]:
-            breakpoint()
             # pad spat graph before adding
             padded_spat_graph = torch.zeros_like(graphs_to_use[1])
             padded_spat_graph[:B, :M, :M] = graphs_to_use[0]
@@ -287,15 +286,17 @@ class SV2LSTG(BaseDetector):
         # mask out invalid_edge_inds on both axes
         temporal_edge_class = temporal_edge_class * valid_edge_inds.to_dense().view(B, -1, 1, 1)
         temporal_edge_class = temporal_edge_class * valid_edge_inds.to_dense().view(B, 1, -1, 1)
-        temporal_edge_class = torch.masked._combine_input_and_mask(sum, temporal_edge_class.coalesce(),
-                temporal_edge_class.coalesce())
+        #temporal_edge_class = torch.masked._combine_input_and_mask(sum, temporal_edge_class.coalesce(),
+        #        temporal_edge_class.coalesce())
+        temporal_edge_class = torch.masked._combine_input_and_mask(sum, temporal_edge_class,
+                temporal_edge_class)
 
         # update graphs.edges with temporal edge quantities
         for ind, ec in enumerate(temporal_edge_class):
             # get information from ec
-            all_nonzero_vals = ec.coalesce().values()
-            all_nonzero_inds = ec.coalesce().indices()
-            nonzero_uids, nonzero_idx, nonzero_counts = torch.unique(all_nonzero_inds[:2],
+            all_nonzero_vals = ec._values()
+            all_nonzero_inds = ec._indices()
+            nonzero_uids, nonzero_idx, _ = torch.unique(all_nonzero_inds[:2],
                     dim=-1, sorted=True, return_inverse=True, return_counts=True)
 
             # UPDATE EDGE FLATS
@@ -339,12 +340,12 @@ class SV2LSTG(BaseDetector):
             extra_edge_boxes = self._box_union(extra_boxesA, extra_boxesB)
             if self.use_temporal_edges_only:
                 graphs.edges.boxes[ind] = extra_edge_boxes
-                #graphs.edges.boxesA[ind] = extra_boxesA
-                #graphs.edges.boxesB[ind] = extra_boxesB
+                graphs.edges.boxesA[ind] = extra_boxesA
+                graphs.edges.boxesB[ind] = extra_boxesB
             else:
                 graphs.edges.boxes[ind] = torch.cat([graphs.edges.boxes[ind], extra_edge_boxes])
-                #graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
-                #graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
+                graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
+                graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
 
             try:
                 # update viz feats
@@ -543,8 +544,8 @@ class SV2LSTG(BaseDetector):
             # collate edge info
             graphs.edges.feats = torch.cat([l.edges.feats for l in lg_list])
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
-            #graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
-            #graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
+            graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
+            graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
             graphs.edges.class_logits = torch.cat([l.edges.class_logits for l in lg_list])
             graphs.edges.edge_flats = torch.cat([torch.cat([torch.ones(
                 l.edges.edge_flats.shape[0], 1).to(l.edges.edge_flats) * ind,
@@ -576,8 +577,8 @@ class SV2LSTG(BaseDetector):
 
             # concatenate boxes
             graphs.edges.boxes = torch.cat(graphs.edges.boxes)
-            #graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
-            #graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
+            graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
+            graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
 
         # reorganize feats and graphs by clip
         B = len(batch_data_samples)
