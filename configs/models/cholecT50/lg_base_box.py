@@ -49,6 +49,7 @@ lg_model=dict(
         ),
         classifier_loss_weight=0.5,
         num_edge_classes=3,
+        allow_same_label_edge=[4, 8],
     ),
 )
 
