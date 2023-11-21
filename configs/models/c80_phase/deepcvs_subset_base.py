@@ -32,7 +32,7 @@ dc_model = dict(
         in_channels=4+len(_base_.metainfo.classes), # 3 channels + detector_num_classes + 1 (bg)
         depth=18,
         num_stages=4,
-        out_indices=(0, 1, 2, 3),
+        out_indices=(3,),
         frozen_stages=-1,
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
@@ -85,24 +85,24 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
-        ann_file='train/annotation_ds_coco.json',
+        ann_file='train/annotation_coco.json',
     ),
 )
 val_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
-        ann_file='val/annotation_ds_coco.json',
+        ann_file='val/annotation_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
-        ann_file='test/annotation_ds_coco.json',
+        ann_file='test/annotation_coco.json',
     ),
 )
 
@@ -113,7 +113,7 @@ val_evaluator = [
         prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
         num_classes=7,
@@ -127,7 +127,7 @@ test_evaluator = [
         prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
         metric=[],
         num_classes=7,
         task_type='multilabel',

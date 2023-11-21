@@ -25,16 +25,13 @@ model = dict(
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
-        init_cfg=dict(
-            type='Pretrained',
-            checkpoint='torchvision://resnet50'
-        )
-    ),
+        init_cfg=dict(type='Pretrained',
+            checkpoint='torchvision://resnet50')),
     loss=dict(
         type='CrossEntropyLoss',
-        use_sigmoid=False,
-        class_weight=[1.9209686, 0.19571111, 0.98499113, 0.2993076, 1.9426803, 1,  2.20292951],
+        use_sigmoid=True,
     ),
+    loss_consensus='mode',
     num_classes=7,
     data_preprocessor=dict(
         type='DetDataPreprocessor',
@@ -42,30 +39,30 @@ model = dict(
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=True,
         pad_mask=True,
-        pad_size_divisor=32,
+        pad_size_divisor=1,
     ),
 )
 
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
-        ann_file='train_phase/annotation_ds_coco.json',
+        ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
-        ann_file='val_phase/annotation_ds_coco.json',
+        ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
-        ann_file='test_phase/annotation_ds_coco.json',
+        ann_file='test/annotation_ds_coco.json',
     ),
 )
 
@@ -76,7 +73,7 @@ val_evaluator = [
         prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
         num_classes=7,
@@ -90,20 +87,20 @@ test_evaluator = [
         prefix='c80_phase',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
+        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
         num_classes=7,
-        task_type='multiclass',
+        task_type='multilabel',
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/c80_phase_preds/test'
+        outfile_prefix='./results/c80_phase_preds/test/r50'
     ),
 ]
 
 # optimizer
 del _base_.param_scheduler
-del _base_.optim_wrapper
 optim_wrapper = dict(
+    _delete_=True,
     optimizer=dict(type='AdamW', lr=0.00001),
 )
 auto_scale_lr = dict(enable=False)
@@ -118,5 +115,5 @@ test_cfg = dict(type='TestLoop')
 
 # hooks
 default_hooks = dict(
-    checkpoint=dict(save_best='c80_phase/ds_f1', rule='greater'),
+    checkpoint=dict(save_best='c80_phase/ds_average_precision'),
 )

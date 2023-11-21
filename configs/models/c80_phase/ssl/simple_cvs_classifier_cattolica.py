@@ -5,7 +5,7 @@ _base_ = ['../simple_cvs_classifier.py']
 model = dict(
     backbone=dict(
         init_cfg=dict(
-            checkpoint='weights/ssl_weights/moco/converted_ext_cholec.torch',
+            checkpoint='weights/ssl_weights/moco/converted_cattolica.torch',
         ),
     ),
 )
