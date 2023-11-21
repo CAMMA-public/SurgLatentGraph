@@ -30,8 +30,9 @@ model = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[69.43, 55.544, 51.42962963],
+        class_weight=[153.7875, 90.46323529, 62.13636364],
     ),
+    loss_consensus='mode',
     num_classes=3,
     data_preprocessor=dict(
         type='DetDataPreprocessor',
@@ -39,7 +40,7 @@ model = dict(
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=True,
         pad_mask=True,
-        pad_size_divisor=32,
+        pad_size_divisor=1,
     ),
 )
 
@@ -76,6 +77,7 @@ val_evaluator = [
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         use_pred_boxes_recon=True,
         metric=[],
+        num_classes=3,
     )
 ]
 
@@ -87,6 +89,7 @@ test_evaluator = [
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
+        num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
         outfile_prefix='./results/wc_preds/test/r50'

@@ -47,21 +47,21 @@ model = dict(
 # dataset
 train_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
     ),
 )
 val_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
-    num_workers=4,
+    num_workers=2,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',
     ),

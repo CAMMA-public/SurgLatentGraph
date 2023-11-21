@@ -12,6 +12,7 @@ val_evaluator = dict(
     metric=['bbox', 'segm'],
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
+    num_classes=-1, # ds num classes
 )
 
 test_evaluator = dict(
@@ -24,7 +25,8 @@ test_evaluator = dict(
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     outfile_prefix='./results/wc_preds/test/lg_cvs',
-    classwise = True,
+    classwise=True,
+    num_classes=-1, # ds num classes
 )
 
 default_hooks = dict(
