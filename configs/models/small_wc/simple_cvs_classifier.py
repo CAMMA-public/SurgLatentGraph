@@ -32,7 +32,7 @@ model = dict(
         use_sigmoid=True,
         class_weight=[23.76262626, 18.23643411, 16.92446043],
     ),
-    loss_consensus='prob',
+    loss_consensus='mode',
     num_classes=3,
     data_preprocessor=dict(
         type='DetDataPreprocessor',

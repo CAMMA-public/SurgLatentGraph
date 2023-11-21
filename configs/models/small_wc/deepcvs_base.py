@@ -47,7 +47,7 @@ dc_model = dict(
         use_sigmoid=True,
         class_weight=[23.76262626, 18.23643411, 16.92446043],
     ),
-    loss_consensus='prob',
+    loss_consensus='mode',
     use_pred_boxes_recon_loss=True,
     reconstruction_head=dict(
         type='ReconstructionHead',
