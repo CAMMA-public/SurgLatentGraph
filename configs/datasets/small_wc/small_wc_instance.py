@@ -75,7 +75,8 @@ eval_pipeline = [
             with_mask=True),
         dict(
             type='PackDetInputs',
-            meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor', 'ds'),
+            meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
+                'ds', 'is_det_keyframe'),
         ),
 ]
 

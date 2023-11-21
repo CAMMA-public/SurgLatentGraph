@@ -66,7 +66,7 @@ lg_model.reconstruction_loss=dict(
     deep_loss_weight=0.6,
     perceptual_weight=1.0,
     box_loss_weight=0.75,
-    recon_loss_weight=0.1,
+    recon_loss_weight=1.0,
     use_content=True,
     use_style=False,
     use_ssim=False,
@@ -149,7 +149,7 @@ test_evaluator = dict(
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.000005),
+    optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
     #paramwise_cfg=dict(
     #    custom_keys={

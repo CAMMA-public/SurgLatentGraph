@@ -16,7 +16,7 @@ custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMet
 
 # feat sizes
 viz_feat_size = 256
-semantic_feat_size = 256
+semantic_feat_size = 512
 
 # num nodes in graph
 num_nodes = 16
@@ -26,11 +26,10 @@ lg_model=dict(
     type='LGDetector',
     num_classes=num_classes,
     semantic_feat_size=semantic_feat_size,
+    viz_feat_size=viz_feat_size,
     graph_head=dict(
         type='GraphHead',
         edges_per_node=4,
-        viz_feat_size=viz_feat_size,
-        semantic_feat_size=semantic_feat_size,
         gnn_cfg=dict(
             type='GNNHead',
             num_layers=3,
@@ -61,7 +60,6 @@ val_evaluator = dict(
     data_prefix=val_data_prefix,
     ann_file=os.path.join(data_root, 'val/annotation_coco.json'),
     metric=['bbox'],
-    additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     num_classes=-1, # ds num classes
 )
@@ -73,7 +71,6 @@ test_evaluator = dict(
     data_prefix=test_data_prefix,
     ann_file=os.path.join(data_root, 'test/annotation_coco.json'),
     metric=['bbox'],
-    additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     outfile_prefix='./results/small_wc_preds/test/lg_cvs',
     classwise=True,
@@ -83,7 +80,7 @@ test_evaluator = dict(
 # learning rate
 param_scheduler = [
     dict(
-        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=1500),
+        type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
     dict(
         type='MultiStepLR',
         begin=0,

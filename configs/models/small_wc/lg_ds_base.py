@@ -14,7 +14,6 @@ recon_input_dim = bottleneck_feat_size + layout_noise_dim + _base_.semantic_feat
 # model
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
-lg_model.use_pred_boxes_recon_loss = True
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=3,
@@ -31,8 +30,8 @@ lg_model.ds_head = dict(
     img_feat_size=2048,
     input_sem_feat_size=_base_.semantic_feat_size,
     input_viz_feat_size=_base_.viz_feat_size,
-    final_sem_feat_size=256,
-    final_viz_feat_size=256,
+    final_sem_feat_size=512,
+    final_viz_feat_size=512,
     use_img_feats=True,
     loss_consensus='prob',
     loss=dict(
@@ -59,7 +58,6 @@ lg_model.reconstruction_head = dict(
     ),
     aspect_ratio=[2, 3],
     use_seg_recon=True,
-    use_pred_boxes_whiteout=True,
 )
 lg_model.reconstruction_loss=dict(
     type='ReconstructionLoss',
@@ -68,7 +66,7 @@ lg_model.reconstruction_loss=dict(
     deep_loss_weight=0.6,
     perceptual_weight=1.0,
     box_loss_weight=0.75,
-    recon_loss_weight=0.1,
+    recon_loss_weight=1.0,
     use_content=True,
     use_style=False,
     use_ssim=False,
@@ -176,5 +174,5 @@ load_from = 'weights/small_wc/lg_base_no_recon.pth'
 
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=60,
+    max_epochs=30,
     val_interval=1)

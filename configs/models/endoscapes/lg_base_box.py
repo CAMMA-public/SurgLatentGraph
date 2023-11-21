@@ -60,7 +60,6 @@ val_evaluator = dict(
     data_prefix=val_data_prefix,
     ann_file=os.path.join(data_root, 'val/annotation_coco.json'),
     metric=['bbox'],
-    additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     num_classes=-1, # ds_num_classes
 )
@@ -72,7 +71,6 @@ test_evaluator = dict(
     data_prefix=test_data_prefix,
     ann_file=os.path.join(data_root, 'test/annotation_coco.json'),
     metric=['bbox'],
-    additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     num_classes=-1, # ds num classes
     outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
