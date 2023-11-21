@@ -168,3 +168,9 @@ default_hooks = dict(
 
 # loading
 load_from = 'weights/small_wc/lg_base_no_recon.pth'
+
+# Running settings
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=30,
+    val_interval=1)
