@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/small_wc/small_wc_instance.py',
+    '../datasets/italy/italy_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -111,7 +111,7 @@ test_dataloader = dict(
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='small_wc',
+        prefix='italy',
         data_root=_base_.data_root,
         data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_coco.json'),
@@ -124,7 +124,7 @@ val_evaluator = [
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='small_wc',
+        prefix='italy',
         data_root=_base_.data_root,
         data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_coco.json'),
@@ -132,7 +132,7 @@ test_evaluator = [
         num_classes=3,
         #additional_metrics = ['reconstruction'],
         use_pred_boxes_recon=True,
-        outfile_prefix='./results/small_wc_preds/test/deepcvs'
+        outfile_prefix='./results/italy_preds/test/deepcvs'
     ),
 ]
 
@@ -155,8 +155,8 @@ test_cfg = dict(type='TestLoop')
 # hooks
 custom_hooks = [dict(type="FreezeHook")]
 default_hooks = dict(
-    checkpoint=dict(save_best='small_wc/ds_average_precision'),
+    checkpoint=dict(save_best='italy/ds_average_precision'),
 )
 
 # loading
-load_from = 'weights/small_wc/lg_base_no_recon.pth'
+load_from = 'weights/italy/lg_base_no_recon.pth'

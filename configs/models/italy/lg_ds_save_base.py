@@ -6,7 +6,7 @@ custom_imports = dict(imports=orig_imports + ['visualizer.LatentGraphVisualizer'
 
 visualizer = dict(
     type='LatentGraphVisualizer',
-    prefix='small_wc_base',
+    prefix='italy_base',
     save_graphs=True,
     draw=False,
 )

@@ -2,7 +2,7 @@ import os
 
 # dataset, optimizer, and runtime cfgs
 _base_ = [
-    '../datasets/small_wc/small_wc_instance.py',
+    '../datasets/italy/italy_instance.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/schedules/schedule_1x.py'),
     os.path.expandvars('$MMDETECTION/configs/_base_/default_runtime.py')
 ]
@@ -55,7 +55,7 @@ lg_model=dict(
 # metric
 val_evaluator = dict(
     type='CocoMetricRGD',
-    prefix='small_wc',
+    prefix='italy',
     data_root=data_root,
     data_prefix=val_data_prefix,
     ann_file=os.path.join(data_root, 'val/annotation_coco.json'),
@@ -66,13 +66,13 @@ val_evaluator = dict(
 
 test_evaluator = dict(
     type='CocoMetricRGD',
-    prefix='small_wc',
+    prefix='italy',
     data_root=data_root,
     data_prefix=test_data_prefix,
     ann_file=os.path.join(data_root, 'test/annotation_coco.json'),
     metric=['bbox'],
     use_pred_boxes_recon=False,
-    outfile_prefix='./results/small_wc_preds/test/lg_cvs',
+    outfile_prefix='./results/italy_preds/test/lg_cvs',
     classwise=True,
     num_classes=-1, # ds num classes
 )
@@ -114,7 +114,7 @@ log_config = dict( # config to register logger hook
 )
 
 default_hooks = dict(
-    checkpoint=dict(save_best='small_wc/bbox_mAP'),
+    checkpoint=dict(save_best='italy/bbox_mAP'),
 )
 
 # visualizer
