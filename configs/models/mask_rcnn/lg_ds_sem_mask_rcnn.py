@@ -18,7 +18,7 @@ model = dict(
 
 train_cfg = dict(
     type='EpochBasedTrainLoop',
-    max_epochs=30,
+    max_epochs=int(_base_.train_cfg.max_epochs * 1.5),
     val_interval=1)
 
 # freeze graph head (viz feats are frozen, no need to update graph prediction)

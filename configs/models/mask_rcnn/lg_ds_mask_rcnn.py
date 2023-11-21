@@ -37,18 +37,6 @@ model.ds_head.semantic_loss_weight = 1.0
 model.ds_head.viz_loss_weight = 0.3
 model.ds_head.img_loss_weight = 0.3
 model.ds_head.add_noise = False
-#drop_viz_prob = 0.7
-
-# optimizer
-optim_wrapper = dict(
-    optimizer=dict(lr=0.00001),
-    #paramwise_cfg=dict(
-    #    custom_keys={
-    #        # decrease lr of trainable backbone
-    #        'trainable_backbone': dict(lr_mult=0.1),
-    #    }
-    #),
-)
 
 del _base_.lg_model
 
