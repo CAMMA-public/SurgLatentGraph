@@ -25,7 +25,8 @@ class CocoMetricRGD(CocoMetric):
     def __init__(self, data_root: str, data_prefix: str, use_pred_boxes_recon: bool,
             num_classes: int, additional_metrics: List = [], clip_eval: bool = False,
             pred_per_frame: bool = False, save_lg: bool = False, num_thresholds: int = 10,
-            task_type: str = 'multilabel', **kwargs):
+            task_type: str = 'multilabel', agg: str = 'frame', ds_per_class: bool = True,
+            **kwargs):
 
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
@@ -37,6 +38,7 @@ class CocoMetricRGD(CocoMetric):
         self.pred_per_frame = pred_per_frame # whether we want to keep predictions for each frame
         self.save_lg = save_lg
         self.task_type = task_type
+        self.agg = agg
         self.num_classes = num_classes
         self.num_thresholds = num_thresholds
 
@@ -80,6 +82,12 @@ class CocoMetricRGD(CocoMetric):
                         gt['height'] = data_sample['img_shape'][0]
 
                     gt['img_id'] = data_sample['img_id']
+
+                    # add vid id
+                    if 'video_id' in data_sample:
+                        result['video_id'] = data_sample['video_id']
+                        gt['video_id'] = data_sample['video_id']
+
                     if self._coco_api is None:
                         # TODO: Need to refactor to support LoadAnnotations
                         assert 'instances' in data_sample, \
@@ -182,56 +190,87 @@ class CocoMetricRGD(CocoMetric):
         # TODO compute graph metrics
 
         # compute DS metrics
-        # TODO(adit98) add other metrics besides AP
+        if self.agg == 'video':
+            vid_ids = torch.stack([p['video_id'] for p in preds])
+
         if 'ds' in preds[0]:
-            if preds[0]['ds'].ndim > 1:
-                ds_preds = torch.stack([p['ds'] for p in preds]).max(-1).indices
-                ds_gt = torch.stack([Tensor(g['ds']) for g in gts])
+            if 'multitask' in self.task_type:
+                if 'multiclass' in self.task_type:
+                    ds_preds = torch.stack([p['ds'] for p in preds]).max(-1).indices
+                    ds_gt = torch.stack([Tensor(g['ds']) for g in gts])
 
-                # compute precision, recall, f1
-                torch_prec = Precision(task='multiclass', average='macro', num_classes=3)
-                torch_rec = Recall(task='multiclass', average='macro', num_classes=3)
-                torch_f1 = F1Score(task='multiclass', average='macro', num_classes=3)
+                    # compute precision, recall, f1
+                    torch_prec = Precision(task='multiclass', average='macro', num_classes=3)
+                    torch_rec = Recall(task='multiclass', average='macro', num_classes=3)
+                    torch_f1 = F1Score(task='multiclass', average='macro', num_classes=3)
 
-                ds_prec = [torch_prec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
-                ds_rec = [torch_rec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
-                ds_f1 = [torch_f1(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
+                    ds_prec = [torch_prec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
+                    ds_rec = [torch_rec(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
+                    ds_f1 = [torch_f1(ds_preds[:, i], ds_gt[:, i]) for i in range(ds_gt.shape[-1])]
 
-                # log
-                for i in range(len(ds_prec)):
-                    logger_info.append(f'ds_prec_C{i+1}: {ds_prec[i]:.4f}')
-                    logger_info.append(f'ds_rec_C{i+1}: {ds_rec[i]:.4f}')
-                    logger_info.append(f'ds_f1_C{i+1}: {ds_f1[i]:.4f}')
-                    eval_results[f'ds_precision_C{i+1}'] = ds_prec[i]
-                    eval_results[f'ds_recall_C{i+1}'] = ds_rec[i]
-                    eval_results[f'ds_f1_C{i+1}'] = ds_f1[i]
+                    # log
+                    if self.ds_per_class:
+                        for i in range(len(ds_prec)):
+                            logger_info.append(f'ds_prec_C{i+1}: {ds_prec[i]:.4f}')
+                            logger_info.append(f'ds_rec_C{i+1}: {ds_rec[i]:.4f}')
+                            logger_info.append(f'ds_f1_C{i+1}: {ds_f1[i]:.4f}')
+                            eval_results[f'ds_precision_C{i+1}'] = ds_prec[i]
+                            eval_results[f'ds_recall_C{i+1}'] = ds_rec[i]
+                            eval_results[f'ds_f1_C{i+1}'] = ds_f1[i]
 
-                ds_prec = sum(ds_prec) / len(ds_prec)
-                ds_rec = sum(ds_rec) / len(ds_rec)
-                ds_f1 = sum(ds_f1) / len(ds_f1)
+                    ds_prec = sum(ds_prec) / len(ds_prec)
+                    ds_rec = sum(ds_rec) / len(ds_rec)
+                    ds_f1 = sum(ds_f1) / len(ds_f1)
 
-                logger_info.append(f'ds_precision: {ds_prec:.4f}')
-                logger_info.append(f'ds_recall: {ds_rec:.4f}')
-                logger_info.append(f'ds_f1: {ds_f1:.4f}')
-                eval_results['ds_precision'] = ds_prec
-                eval_results['ds_recall'] = ds_rec
-                eval_results['ds_f1'] = ds_f1
+                    logger_info.append(f'ds_precision: {ds_prec:.4f}')
+                    logger_info.append(f'ds_recall: {ds_rec:.4f}')
+                    logger_info.append(f'ds_f1: {ds_f1:.4f}')
+                    eval_results['ds_precision'] = ds_prec
+                    eval_results['ds_recall'] = ds_rec
+                    eval_results['ds_f1'] = ds_f1
+
+                else:
+                    raise NotImplementedError
 
             else:
                 if self.task_type == 'multilabel':
                     torch_ap = AP(task='multilabel', num_labels=self.num_classes, average='none')
                     ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                     ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
-                    ds_ap = torch_ap(ds_preds, ds_gt)
 
-                    # log overall
-                    logger_info.append(f'ds_average_precision: {torch.nanmean(ds_ap):.4f}')
-                    eval_results['ds_average_precision'] = torch.nanmean(ds_ap)
+                    if self.agg == 'video':
+                        # split ds_preds, gt by video
+                        _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
+                        ds_preds_per_vid = ds_preds.split(vid_lengths)
+                        ds_gt_per_vid = ds_gt.split(vid_lengths)
+                        aps = []
+                        for p, gt in zip(ds_preds_per_vid, ds_gt_per_vid):
+                            aps.append(torch_ap(p, gt))
 
-                    # log component-wise
-                    for ind, i in enumerate(ds_ap):
-                        logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
-                        eval_results['ds_average_precision_C{}'.format(ind+1)] = i
+                        if self.ds_per_class:
+                            ds_vid_ap_per_class = torch.stack(aps).nanmean(0)
+                            for ind, i in enumerate(ds_vid_ap_per_class):
+                                logger_info.append(f'ds_vid_ap_C{ind+1}: {i:.4f}')
+                                eval_results[f'ds_vid_ap_C{ind+1}'] = i
+
+                        ds_vid_ap = torch.stack(aps).nanmean(1).mean(0)
+                        ds_vid_ap_std = torch.stack(aps).nanmean(1).std(0)
+                        logger_info.append(f'ds_vid_ap: {ds_vid_ap} +- {ds_vid_ap_std}')
+                        eval_results['ds_video_average_precision'] = ds_vid_ap
+                        eval_results['ds_video_average_precision_std'] = ds_vid_ap_std
+
+                    else:
+                        ds_ap = torch_ap(ds_preds, ds_gt)
+
+                        # log overall
+                        logger_info.append(f'ds_average_precision: {torch.nanmean(ds_ap):.4f}')
+                        eval_results['ds_average_precision'] = torch.nanmean(ds_ap)
+
+                        if self.ds_per_class:
+                            # log component-wise
+                            for ind, i in enumerate(ds_ap):
+                                logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
+                                eval_results['ds_average_precision_C{}'.format(ind+1)] = i
 
                 elif self.task_type == 'multiclass':
                     # get preds and gt
@@ -239,22 +278,71 @@ class CocoMetricRGD(CocoMetric):
                     ds_gt = torch.stack([Tensor(g['ds'].astype(float)).view(-1) for g in gts]).long().view(-1)
 
                     # define
-                    torch_prec = Precision(task='multiclass', average='macro', num_classes=self.num_classes)
-                    torch_rec = Recall(task='multiclass', average='macro', num_classes=self.num_classes)
-                    torch_f1 = F1Score(task='multiclass', average='macro', num_classes=self.num_classes)
+                    torch_prec = Precision(task='multiclass', average='none', num_classes=self.num_classes)
+                    torch_rec = Recall(task='multiclass', average='none', num_classes=self.num_classes)
+                    torch_f1 = F1Score(task='multiclass', average='none', num_classes=self.num_classes)
 
-                    # compute
-                    ds_prec = torch_prec(ds_preds, ds_gt)
-                    ds_rec = torch_rec(ds_preds, ds_gt)
-                    ds_f1 = torch_f1(ds_preds, ds_gt)
+                    if self.agg == 'video':
+                        # split ds_preds, gt by video
+                        _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
+                        ds_preds_per_vid = ds_preds.split(vid_lengths)
+                        ds_gt_per_vid = ds_gt.split(vid_lengths)
+                        precs = []
+                        recs = []
+                        f1s = []
+                        for p, gt in zip(ds_preds_per_vid, ds_gt_per_vid):
+                            precs.append(torch_prec(p, gt))
+                            recs.append(torch_rec(p, gt))
+                            f1s.append(torch_f1(p, gt))
 
-                    # log
-                    logger_info.append(f'ds_precision: {ds_prec:.4f}')
-                    logger_info.append(f'ds_recall: {ds_rec:.4f}')
-                    logger_info.append(f'ds_f1: {ds_f1:.4f}')
-                    eval_results['ds_precision'] = ds_prec
-                    eval_results['ds_recall'] = ds_rec
-                    eval_results['ds_f1'] = ds_f1
+                        if self.ds_per_class:
+                            ds_vid_prec_per_class = torch.stack(precs).nanmean(0)
+                            ds_vid_rec_per_class = torch.stack(recs).nanmean(0)
+                            ds_vid_f1_per_class = torch.stack(f1s).nanmean(0)
+                            for i in range(len(ds_vid_ap_per_class)):
+                                logger_info.append(f'ds_vid_prec_C{i+1}: {ds_vid_prec_per_class[i]:.4f}')
+                                logger_info.append(f'ds_vid_rec_C{i+1}: {ds_vid_rec_per_class[i]:.4f}')
+                                logger_info.append(f'ds_vid_f1_C{i+1}: {ds_vid_f1_per_class[i]:.4f}')
+                                eval_results[f'ds_video_precision_C{i+1}'] = ds_vid_prec_per_class[i]
+                                eval_results[f'ds_video_recall_C{i+1}'] = ds_vid_rec_per_class[i]
+                                eval_results[f'ds_video_f1_C{i+1}'] = ds_vid_f1_per_class[i]
+
+                        ds_vid_prec = torch.stack(precs).nanmean(1).mean(0)
+                        ds_vid_prec_std = torch.stack(precs).nanmean(1).std(0)
+                        ds_vid_rec = torch.stack(recs).nanmean(1).mean(0)
+                        ds_vid_rec_std = torch.stack(recs).nanmean(1).std(0)
+                        ds_vid_f1 = torch.stack(f1s).nanmean(1).mean(0)
+                        ds_vid_f1_std = torch.stack(f1s).nanmean(1).std(0)
+
+                        logger_info.append(f'ds_video_precision: {ds_vid_prec:.4f} +- {ds_vid_prec_std:.4f}')
+                        logger_info.append(f'ds_video_recall: {ds_vid_rec:.4f} +- {ds_vid_rec_std:.4f}')
+                        logger_info.append(f'ds_video_f1: {ds_vid_f1:.4f} +- {ds_vid_f1_std:.4f}')
+                        eval_results['ds_video_precision'] = ds_vid_prec
+                        eval_results['ds_video_precision_std'] = ds_vid_prec_std
+                        eval_results['ds_video_recall'] = ds_vid_rec
+                        eval_results['ds_video_recall_std'] = ds_vid_rec_std
+                        eval_results['ds_video_f1'] = ds_vid_f1
+                        eval_results['ds_video_f1_std'] = ds_vid_f1_std
+
+                    else:
+                        # compute
+                        ds_prec = torch_prec(ds_preds, ds_gt)
+                        ds_rec = torch_rec(ds_preds, ds_gt)
+                        ds_f1 = torch_f1(ds_preds, ds_gt)
+
+                        if self.ds_per_class:
+                            # log component-wise
+                            for ind, i in enumerate(ds_prec):
+                                logger_info.append(f'ds_precision_C{ind+1}: {i:.4f}')
+                                eval_results['ds_precision_C{}'.format(ind+1)] = i
+
+                        # log
+                        logger_info.append(f'ds_precision: {torch.nanmean(ds_prec):.4f}')
+                        logger_info.append(f'ds_recall: {torch.nanmean(ds_rec):.4f}')
+                        logger_info.append(f'ds_f1: {torch.nanmean(ds_f1):.4f}')
+                        eval_results['ds_precision'] = torch.nanmean(ds_prec)
+                        eval_results['ds_recall'] = torch.nanmean(ds_rec)
+                        eval_results['ds_f1'] = torch.nanmean(ds_f1)
 
                 else:
                     raise NotImplementedError("Metrics not defined for task type {}".format(self.task_type))
