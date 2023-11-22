@@ -1,4 +1,4 @@
-_base_ = ['lg_ds_base.py']
+_base_ = ['lg_base_box.py']
 
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['visualizer.LatentGraphVisualizer'],
@@ -17,12 +17,9 @@ default_hooks = dict(
     ),
 )
 
-lg_model = dict(
-    graph_head=dict(
-        compute_gt_eval=False,
-    ),
-    reconstruction_head=None,
-)
+#lg_model = dict(
+#    reconstruction_head=None,
+#)
 
 test_dataloader = dict(
     dataset=dict(

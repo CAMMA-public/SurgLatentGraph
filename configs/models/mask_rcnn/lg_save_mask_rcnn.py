@@ -3,7 +3,7 @@ import copy
 
 # modify base for different detectors
 _base_ = [
-    '../lg_ds_save_base.py',
+    '../lg_save_base.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/models/mask-rcnn_r50_fpn.py'),
 ]
 

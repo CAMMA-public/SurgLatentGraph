@@ -30,6 +30,12 @@ model.trainable_backbone_cfg.frozen_stages=_base_.trainable_backbone_frozen_stag
 if 'neck' in detector:
     model.trainable_neck_cfg=copy.deepcopy(detector.neck)
 
+# perturbation
+model.ds_head.semantic_loss_weight = 1.0
+model.ds_head.viz_loss_weight = 0.3
+model.ds_head.img_loss_weight = 0.3
+model.ds_head.add_noise = False
+
 del _base_.lg_model
 
 # modify load_from
