@@ -126,7 +126,7 @@ val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
 # hooks
-metric_key = 'ds_video_average_precision' if test_evaluator.agg == 'video' else 'ds_average_precision'
+metric_key = 'ds_video_average_precision' if test_evaluator['agg'] == 'video' else 'ds_average_precision'
 default_hooks = dict(
     checkpoint=dict(save_best='cholecT50/{}'.format(metric_key)),
 )

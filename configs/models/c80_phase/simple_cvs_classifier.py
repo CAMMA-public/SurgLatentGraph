@@ -126,7 +126,7 @@ val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
 # hooks
-metric_key = 'ds_video_f1' if test_evaluator.agg == 'video' else 'ds_f1'
+metric_key = 'ds_video_f1' if test_evaluator['agg'] == 'video' else 'ds_f1'
 default_hooks = dict(
     checkpoint=dict(save_best='c80_phase/{}'.format(metric_key)),
 )

@@ -167,7 +167,7 @@ test_cfg = dict(type='TestLoop')
 
 # hooks
 custom_hooks = [dict(type="FreezeHook")]
-metric_key = 'ds_video_average_precision' if test_evaluator.agg == 'video' else 'ds_average_precision'
+metric_key = 'ds_video_average_precision' if test_evaluator['agg'] == 'video' else 'ds_average_precision'
 default_hooks = dict(
     checkpoint=dict(save_best='cholecT50/{}'.format(metric_key)),
     visualization=dict(draw=False),
