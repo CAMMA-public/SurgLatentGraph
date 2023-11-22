@@ -49,7 +49,8 @@ class LGDetector(BaseDetector):
             trainable_backbone_cfg: OptConfigType = None, force_train_graph_head: bool = False,
             sem_feat_use_class_logits: bool = True, sem_feat_use_bboxes: bool = True,
             sem_feat_use_masks: bool = True, mask_polygon_num_points: int = 16,
-            mask_augment: bool = True, trainable_neck_cfg: OptConfigType = None, **kwargs):
+            mask_augment: bool = True, force_encode_semantics: bool = False,
+            trainable_neck_cfg: OptConfigType = None, **kwargs):
         super().__init__(**kwargs)
 
         self.num_classes = num_classes
@@ -111,7 +112,9 @@ class LGDetector(BaseDetector):
         # use pred boxes or gt boxes for recon loss
         self.use_pred_boxes_recon_loss = use_pred_boxes_recon_loss
 
-        self.encode_semantics = self.ds_head is not None or self.reconstruction_head is not None and semantic_feat_size > 0
+        # only encode semantics if needed
+        self.encode_semantics = force_encode_semantics or ((self.ds_head is not None or \
+                self.reconstruction_head is not None) and semantic_feat_size > 0)
         if self.encode_semantics:
             # build semantic feat projector (input feat size is classes+box coords+score)
             self.sem_feat_use_bboxes = sem_feat_use_bboxes
@@ -211,7 +214,9 @@ class LGDetector(BaseDetector):
                 g_i = BaseDataElement()
                 g_i.nodes = BaseDataElement()
                 g_i.edges = BaseDataElement()
-                g_i.nodes.viz_feats = graph.nodes.viz_feats[ind]
+                g_i.nodes.viz_feats = feats.instance_feats[ind]
+                g_i.nodes.gnn_viz_feats = graph.nodes.gnn_viz_feats[ind]
+                g_i.nodes.semantic_feats = feats.semantic_feats[ind]
                 g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
                 g_i.nodes.bboxes = r.pred_instances.bboxes
                 g_i.nodes.scores = r.pred_instances.scores
@@ -307,7 +312,7 @@ class LGDetector(BaseDetector):
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
-            r.pred_instances.graph_feats = graph.nodes.viz_feats[ind][:r.pred_instances.feats.shape[0]]
+            r.pred_instances.graph_feats = graph.nodes.gnn_viz_feats
 
         return feats, graph, detached_results, results, gt_edges, losses
 
