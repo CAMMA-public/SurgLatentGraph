@@ -40,6 +40,9 @@ lg_model.ds_head = dict(
     ),
     loss_weight=1.0,
     num_predictor_layers=3,
+    semantic_loss_weight=1.0,
+    viz_loss_weight=0.3,
+    img_loss_weight=0.3,
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',
@@ -81,7 +84,7 @@ lg_model.force_train_graph_head = True
 train_dataloader = dict(
     batch_size=32,
     dataset=dict(
-        ann_file='train/annotation_ds_coco.json',
+        ann_file='train_phase/annotation_ds_coco.json',
         filter_cfg=dict(filter_empty_gt=False),
     ),
 )
@@ -89,7 +92,7 @@ train_eval_dataloader = dict(
     batch_size=32,
     num_workers=2,
     dataset=dict(
-        ann_file='train/annotation_ds_coco.json',
+        ann_file='train_phase/annotation_ds_coco.json',
         test_mode=True,
     ),
     drop_last=False,
@@ -97,13 +100,13 @@ train_eval_dataloader = dict(
 val_dataloader = dict(
     batch_size=32,
     dataset=dict(
-        ann_file='val/annotation_ds_coco.json',
+        ann_file='val_phase/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
     batch_size=32,
     dataset=dict(
-        ann_file='test/annotation_ds_coco.json',
+        ann_file='test_phase/annotation_ds_coco.json',
     ),
 )
 
@@ -113,7 +116,7 @@ train_evaluator = dict(
     prefix='c80_phase',
     data_root=_base_.data_root,
     data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+    ann_file=os.path.join(_base_.data_root, 'train_phase/annotation_ds_coco.json'),
     use_pred_boxes_recon=True,
     metric=[],
     num_classes=7,
@@ -126,7 +129,7 @@ val_evaluator = dict(
     prefix='c80_phase',
     data_root=_base_.data_root,
     data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
+    ann_file=os.path.join(_base_.data_root, 'val_phase/annotation_ds_coco.json'),
     use_pred_boxes_recon=True,
     metric=[],
     num_classes=7,
@@ -140,7 +143,7 @@ test_evaluator = dict(
     prefix='c80_phase',
     data_root=_base_.data_root,
     data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
+    ann_file=os.path.join(_base_.data_root, 'test_phase/annotation_ds_coco.json'),
     metric=[],
     num_classes=7,
     task_type='multiclass',
@@ -166,9 +169,9 @@ auto_scale_lr = dict(enable=False)
 
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
-metric_key = 'ds_video_f1' if test_evaluator.agg == 'video' else 'ds_f1'
+metric_key = 'ds_video_f1' if test_evaluator['agg'] == 'video' else 'ds_f1'
 default_hooks = dict(
-    checkpoint=dict(save_best='c80_phase/{}'.format(metric_key)),
+    checkpoint=dict(save_best='c80_phase/{}'.format(metric_key), rule='greater'),
     visualization=dict(draw=False),
 )
 

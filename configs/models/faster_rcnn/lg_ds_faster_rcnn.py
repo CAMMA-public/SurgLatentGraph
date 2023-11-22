@@ -23,18 +23,13 @@ model.detector = detector
 model.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.roi_extractor.roi_layer.output_size = 1
 model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
+model.sem_feat_use_masks = False
 
 # trainable bb, neck
 model.trainable_backbone_cfg=copy.deepcopy(detector.backbone)
 model.trainable_backbone_cfg.frozen_stages=_base_.trainable_backbone_frozen_stages
 if 'neck' in detector:
     model.trainable_neck_cfg=copy.deepcopy(detector.neck)
-
-# perturbation
-model.ds_head.semantic_loss_weight = 1.0
-model.ds_head.viz_loss_weight = 0.3
-model.ds_head.img_loss_weight = 0.3
-model.ds_head.add_noise = False
 
 del _base_.lg_model
 

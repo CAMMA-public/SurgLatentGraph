@@ -40,6 +40,9 @@ lg_model.ds_head = dict(
     ),
     loss_weight=1.0,
     num_predictor_layers=3,
+    semantic_loss_weight=1.0,
+    viz_loss_weight=0.3,
+    img_loss_weight=0.3,
 )
 lg_model.reconstruction_head = dict(
     type='ReconstructionHead',

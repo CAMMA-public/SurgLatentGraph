@@ -24,7 +24,7 @@ default_hooks = dict(
 test_dataloader = dict(
     dataset=dict(
         ann_file='annotation_coco_all_frames.json',
-        data_prefix=dict(img='all/'),
+        data_prefix=dict(img='all_phase/'),
     )
 )
 
