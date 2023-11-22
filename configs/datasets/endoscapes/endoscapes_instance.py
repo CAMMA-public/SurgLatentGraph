@@ -59,7 +59,7 @@ train_pipeline = [
         dict(type='FilterAnnotations', min_gt_bbox_wh=(1e-2, 1e-2)),
         dict(type='PackDetInputs',
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
-                'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe')
+                'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe', 'video_id')
         ),
 ]
 
@@ -76,7 +76,7 @@ eval_pipeline = [
         dict(
             type='PackDetInputs',
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
-                'ds', 'is_det_keyframe'),
+                'ds', 'is_det_keyframe', 'video_id'),
         ),
 ]
 

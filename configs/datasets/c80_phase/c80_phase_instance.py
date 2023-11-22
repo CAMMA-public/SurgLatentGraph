@@ -1,4 +1,5 @@
 import os
+import copy
 
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/coco_instance.py')
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
@@ -63,7 +64,7 @@ train_pipeline = [
         dict(type='FilterAnnotations', min_gt_bbox_wh=(1e-2, 1e-2)),
         dict(type='PackDetInputs',
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
-                'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe')
+                'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe', 'video_id')
         ),
 ]
 
@@ -80,7 +81,7 @@ eval_pipeline = [
         dict(
             type='PackDetInputs',
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
-                'ds', 'is_det_keyframe'),
+                'ds', 'is_det_keyframe', 'video_id'),
         ),
 ]
 
@@ -93,7 +94,7 @@ train_dataloader = dict(
         ann_file='train_phase/annotation_coco.json',
         data_prefix=dict(img='train_phase/'),
         pipeline=train_pipeline,
-    )
+    ),
     batch_sampler=dict(drop_last=True),
 )
 
@@ -102,7 +103,7 @@ train_eval_dataloader['dataset'].update(dict(
         type='CocoDatasetWithDS',
         data_root=data_root,
         metainfo=metainfo,
-        ann_file='train/annotation_coco.json',
+        ann_file='train_phase/annotation_coco.json',
         data_prefix=dict(img='train/'),
         pipeline=eval_pipeline,
     )
