@@ -192,7 +192,7 @@ class CocoMetricRGD(CocoMetric):
 
         # compute DS metrics
         if self.agg == 'video':
-            vid_ids = torch.stack([p['video_id'] for p in preds])
+            vid_ids = torch.tensor([p['video_id'] for p in preds])
 
         if 'ds' in preds[0]:
             if 'multitask' in self.task_type:
@@ -242,8 +242,8 @@ class CocoMetricRGD(CocoMetric):
                     if self.agg == 'video':
                         # split ds_preds, gt by video
                         _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
-                        ds_preds_per_vid = ds_preds.split(vid_lengths)
-                        ds_gt_per_vid = ds_gt.split(vid_lengths)
+                        ds_preds_per_vid = ds_preds.split(vid_lengths.tolist())
+                        ds_gt_per_vid = ds_gt.split(vid_lengths.tolist())
                         aps = []
                         for p, gt in zip(ds_preds_per_vid, ds_gt_per_vid):
                             aps.append(torch_ap(p, gt))
@@ -254,8 +254,10 @@ class CocoMetricRGD(CocoMetric):
                                 logger_info.append(f'ds_vid_ap_C{ind+1}: {i:.4f}')
                                 eval_results[f'ds_vid_ap_C{ind+1}'] = i
 
-                        ds_vid_ap = torch.stack(aps).nanmean(1).mean(0)
-                        ds_vid_ap_std = torch.stack(aps).nanmean(1).std(0)
+                        ds_per_vid_ap = torch.stack(aps).nanmean(1)
+                        ds_vid_ap = ds_per_vid_ap.nanmean(0)
+                        ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std(0)
+
                         logger_info.append(f'ds_vid_ap: {ds_vid_ap} +- {ds_vid_ap_std}')
                         eval_results['ds_video_average_precision'] = ds_vid_ap
                         eval_results['ds_video_average_precision_std'] = ds_vid_ap_std
@@ -286,8 +288,8 @@ class CocoMetricRGD(CocoMetric):
                     if self.agg == 'video':
                         # split ds_preds, gt by video
                         _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
-                        ds_preds_per_vid = ds_preds.split(vid_lengths)
-                        ds_gt_per_vid = ds_gt.split(vid_lengths)
+                        ds_preds_per_vid = ds_preds.split(vid_lengths.tolist())
+                        ds_gt_per_vid = ds_gt.split(vid_lengths.tolist())
                         precs = []
                         recs = []
                         f1s = []
@@ -300,7 +302,7 @@ class CocoMetricRGD(CocoMetric):
                             ds_vid_prec_per_class = torch.stack(precs).nanmean(0)
                             ds_vid_rec_per_class = torch.stack(recs).nanmean(0)
                             ds_vid_f1_per_class = torch.stack(f1s).nanmean(0)
-                            for i in range(len(ds_vid_ap_per_class)):
+                            for i in range(len(ds_vid_prec_per_class)):
                                 logger_info.append(f'ds_vid_prec_C{i+1}: {ds_vid_prec_per_class[i]:.4f}')
                                 logger_info.append(f'ds_vid_rec_C{i+1}: {ds_vid_rec_per_class[i]:.4f}')
                                 logger_info.append(f'ds_vid_f1_C{i+1}: {ds_vid_f1_per_class[i]:.4f}')
@@ -308,12 +310,17 @@ class CocoMetricRGD(CocoMetric):
                                 eval_results[f'ds_video_recall_C{i+1}'] = ds_vid_rec_per_class[i]
                                 eval_results[f'ds_video_f1_C{i+1}'] = ds_vid_f1_per_class[i]
 
-                        ds_vid_prec = torch.stack(precs).nanmean(1).mean(0)
-                        ds_vid_prec_std = torch.stack(precs).nanmean(1).std(0)
-                        ds_vid_rec = torch.stack(recs).nanmean(1).mean(0)
-                        ds_vid_rec_std = torch.stack(recs).nanmean(1).std(0)
-                        ds_vid_f1 = torch.stack(f1s).nanmean(1).mean(0)
-                        ds_vid_f1_std = torch.stack(f1s).nanmean(1).std(0)
+                        ds_per_vid_prec = torch.stack(precs).nanmean(1)
+                        ds_vid_prec = ds_per_vid_prec.nanmean(0)
+                        ds_vid_prec_std = ds_per_vid_prec[~ds_per_vid_prec.isnan()].std(0)
+
+                        ds_per_vid_rec = torch.stack(recs).nanmean(1)
+                        ds_vid_rec = ds_per_vid_rec.nanmean(0)
+                        ds_vid_rec_std = ds_per_vid_rec[~ds_per_vid_rec.isnan()].std(0)
+
+                        ds_per_vid_f1 = torch.stack(f1s).nanmean(1)
+                        ds_vid_f1 = ds_per_vid_f1.nanmean(0)
+                        ds_vid_f1_std = ds_per_vid_f1[~ds_per_vid_f1.isnan()].std(0)
 
                         logger_info.append(f'ds_video_precision: {ds_vid_prec:.4f} +- {ds_vid_prec_std:.4f}')
                         logger_info.append(f'ds_video_recall: {ds_vid_rec:.4f} +- {ds_vid_rec_std:.4f}')
@@ -399,8 +406,8 @@ class CocoMetricRGD(CocoMetric):
                 gt_outname = os.path.join(outfile_prefix, 'gt_ds.txt')
                 np.savetxt(gt_outname, gt_ds)
 
-                # calibration only supported for single ds task
-                if pred_ds.ndim == 2:
+                # calibration only supported for single task, multilabel classification
+                if 'multitask' not in self.task_type and 'multilabel' in self.task_type:
                     # calibrate thresholds and save
                     threshs = self.calibrate_thresholds(pred_ds, torch.from_numpy(gt_ds))
                     thresh_outname = os.path.join(outfile_prefix, 'threshs.txt')

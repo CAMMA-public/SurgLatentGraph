@@ -100,6 +100,9 @@ class CocoDatasetWithDS(CocoDataset):
         if 'is_det_keyframe' in raw_data_info['raw_img_info']:
             data_info['is_det_keyframe'] = raw_data_info['raw_img_info']['is_det_keyframe']
 
+        if 'video_id' in raw_data_info['raw_img_info']:
+            data_info['video_id'] = raw_data_info['raw_img_info']['video_id']
+
         return data_info
 
 @DATASETS.register_module()
@@ -109,6 +112,12 @@ class VideoDatasetWithDS(BaseVideoDataset):
 
         # get ds labels
         data_info['ds'] = raw_data_info['raw_img_info']['ds']
+
+        if 'is_det_keyframe' in raw_data_info['raw_img_info']:
+            data_info['is_det_keyframe'] = raw_data_info['raw_img_info']['is_det_keyframe']
+
+        if 'video_id' in raw_data_info['raw_img_info']:
+            data_info['video_id'] = raw_data_info['raw_img_info']['video_id']
 
         return data_info
 
