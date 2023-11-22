@@ -107,7 +107,7 @@ test_dataloader = dict(
     ),
 )
 
-# metric (in case we need to change dataset)
+# evaluators
 train_evaluator = dict(
     type='CocoMetricRGD',
     prefix='cholecT50',
@@ -116,17 +116,18 @@ train_evaluator = dict(
     ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
     use_pred_boxes_recon=True,
     metric=[],
+    agg='video',
     num_classes=100,
     outfile_prefix='./results/cholecT50_preds/train/lg_cvs',
 )
 val_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='cholecT50',
+    type='CocoMetricRGD', prefix='cholecT50',
     data_root=_base_.data_root,
     data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
     ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
     use_pred_boxes_recon=True,
     metric=[],
+    agg='video',
     num_classes=100,
     outfile_prefix='./results/cholecT50_preds/val/lg_cvs',
 )
@@ -138,6 +139,7 @@ test_evaluator = dict(
     data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
     ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
     metric=[],
+    agg='video',
     num_classes=100,
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
@@ -160,8 +162,9 @@ auto_scale_lr = dict(enable=False)
 
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
+metric_key = 'ds_video_average_precision' if test_evaluator.agg == 'video' else 'ds_average_precision'
 default_hooks = dict(
-    checkpoint=dict(save_best='cholecT50/ds_average_precision'),
+    checkpoint=dict(save_best='cholecT50/{}'.format(metric_key)),
     visualization=dict(draw=False),
 )
 

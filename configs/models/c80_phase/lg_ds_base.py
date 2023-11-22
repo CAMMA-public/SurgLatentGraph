@@ -107,7 +107,7 @@ test_dataloader = dict(
     ),
 )
 
-# metric (in case we need to change dataset)
+# evaluators
 train_evaluator = dict(
     type='CocoMetricRGD',
     prefix='c80_phase',
@@ -118,6 +118,7 @@ train_evaluator = dict(
     metric=[],
     num_classes=7,
     task_type='multiclass',
+    agg='video',
     outfile_prefix='./results/c80_phase_preds/train/lg_cvs',
 )
 val_evaluator = dict(
@@ -130,6 +131,7 @@ val_evaluator = dict(
     metric=[],
     num_classes=7,
     task_type='multiclass',
+    agg='video',
     outfile_prefix='./results/c80_phase_preds/val/lg_cvs',
 )
 
@@ -141,7 +143,8 @@ test_evaluator = dict(
     ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
     metric=[],
     num_classes=7,
-    task_type='multilabel',
+    task_type='multiclass',
+    agg='video',
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
     outfile_prefix='./results/c80_phase_preds/test/lg_cvs',
@@ -163,8 +166,9 @@ auto_scale_lr = dict(enable=False)
 
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
+metric_key = 'ds_video_f1' if test_evaluator.agg == 'video' else 'ds_f1'
 default_hooks = dict(
-    checkpoint=dict(save_best='c80_phase/ds_average_precision'),
+    checkpoint=dict(save_best='c80_phase/{}'.format(metric_key)),
     visualization=dict(draw=False),
 )
 
