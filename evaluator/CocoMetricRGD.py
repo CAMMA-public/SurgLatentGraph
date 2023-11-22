@@ -39,6 +39,7 @@ class CocoMetricRGD(CocoMetric):
         self.save_lg = save_lg
         self.task_type = task_type
         self.agg = agg
+        self.ds_per_class = ds_per_class
         self.num_classes = num_classes
         self.num_thresholds = num_thresholds
 
