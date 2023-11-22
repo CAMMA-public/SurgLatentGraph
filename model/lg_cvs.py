@@ -312,7 +312,7 @@ class LGDetector(BaseDetector):
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
-            r.pred_instances.graph_feats = graph.nodes.gnn_viz_feats
+            r.pred_instances.graph_feats = graph.nodes.gnn_viz_feats[ind, :r.pred_instances.bboxes.shape[0]]
 
         return feats, graph, detached_results, results, gt_edges, losses
 
