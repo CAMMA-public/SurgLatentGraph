@@ -93,7 +93,7 @@ train_dataloader=dict(
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
-    batch_sampler=dict(type='TrackAspectRatioBatchSampler'),
+    batch_sampler=dict(type='TrackAspectRatioBatchSampler', drop_last=True),
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
@@ -125,7 +125,7 @@ val_dataloader=dict(
 
 train_eval_dataloader = copy.deepcopy(_base_.val_dataloader)
 train_eval_dataloader.update(dict(
-        batch_size=10,
+        batch_size=20,
         num_workers=4,
         persistent_workers=True,
     )

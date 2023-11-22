@@ -92,8 +92,21 @@ train_dataloader = dict(
         metainfo=metainfo,
         ann_file='train_phase/annotation_coco.json',
         data_prefix=dict(img='train_phase/'),
-        filter_cfg=dict(filter_empty_gt=False),
-        pipeline=train_pipeline))
+        pipeline=train_pipeline,
+    )
+    batch_sampler=dict(drop_last=True),
+)
+
+train_eval_dataloader = copy.deepcopy(_base_.val_dataloader)
+train_eval_dataloader['dataset'].update(dict(
+        type='CocoDatasetWithDS',
+        data_root=data_root,
+        metainfo=metainfo,
+        ann_file='train/annotation_coco.json',
+        data_prefix=dict(img='train/'),
+        pipeline=eval_pipeline,
+    )
+)
 
 val_dataloader = dict(
     batch_size=8,
@@ -103,7 +116,6 @@ val_dataloader = dict(
         metainfo=metainfo,
         ann_file='val_phase/annotation_coco.json',
         data_prefix=dict(img='val_phase/'),
-        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 test_dataloader = dict(
@@ -114,7 +126,6 @@ test_dataloader = dict(
         metainfo=metainfo,
         ann_file='test_phase/annotation_coco.json',
         data_prefix=dict(img='test_phase/'),
-        filter_cfg=dict(filter_empty_gt=False),
         pipeline=eval_pipeline))
 
 # metric
