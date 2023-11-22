@@ -216,7 +216,8 @@ class LGDetector(BaseDetector):
                 g_i.edges = BaseDataElement()
                 g_i.nodes.viz_feats = feats.instance_feats[ind]
                 g_i.nodes.gnn_viz_feats = graph.nodes.gnn_viz_feats[ind]
-                g_i.nodes.semantic_feats = feats.semantic_feats[ind]
+                if 'semantic_feats' in feats:
+                    g_i.nodes.semantic_feats = feats.semantic_feats[ind]
                 g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
                 g_i.nodes.bboxes = r.pred_instances.bboxes
                 g_i.nodes.scores = r.pred_instances.scores
