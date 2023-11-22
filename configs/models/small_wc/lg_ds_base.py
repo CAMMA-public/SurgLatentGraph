@@ -108,7 +108,7 @@ test_dataloader = dict(
     ),
 )
 
-# metric (in case we need to change dataset)
+# evaluators
 train_evaluator = dict(
     type='CocoMetricRGD',
     prefix='small_wc',

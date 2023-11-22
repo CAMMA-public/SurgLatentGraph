@@ -108,33 +108,41 @@ test_dataloader = dict(
 )
 
 # evaluators
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='italy',
-        data_root=_base_.data_root,
-        data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
-        use_pred_boxes_recon=True,
-        metric=[],
-        num_classes=3,
-    )
-]
+train_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='italy',
+    data_root=_base_.data_root,
+    data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+    num_classes=3,
+    outfile_prefix='./results/italy_preds/train/deepcvs',
+)
+val_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='italy',
+    data_root=_base_.data_root,
+    data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
+    use_pred_boxes_recon=True,
+    metric=[],
+    num_classes=3,
+    outfile_prefix='./results/italy_preds/val/deepcvs',
+)
 
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='italy',
-        data_root=_base_.data_root,
-        data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
-        metric=[],
-        num_classes=3,
-        #additional_metrics = ['reconstruction'],
-        use_pred_boxes_recon=True,
-        outfile_prefix='./results/italy_preds/test/deepcvs'
-    ),
-]
+test_evaluator = dict(
+    type='CocoMetricRGD',
+    prefix='italy',
+    data_root=_base_.data_root,
+    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
+    ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
+    metric=[],
+    num_classes=3,
+    #additional_metrics = ['reconstruction'],
+    use_pred_boxes_recon=True,
+    outfile_prefix='./results/italy_preds/test/deepcvs',
+)
 
 # optimizer
 del _base_.param_scheduler
