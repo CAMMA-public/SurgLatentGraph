@@ -171,3 +171,11 @@ default_hooks = dict(
 
 # loading
 load_from = 'weights/italy/lg_base_no_recon.pth'
+
+# visualization
+visualizer = dict(
+    type='LatentGraphVisualizer',
+    dataset='endoscapes',
+    data_prefix='test',
+    draw=True,
+)

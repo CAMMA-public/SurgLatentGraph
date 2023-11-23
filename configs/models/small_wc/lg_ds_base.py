@@ -177,3 +177,11 @@ train_cfg = dict(
     type='EpochBasedTrainLoop',
     max_epochs=30,
     val_interval=1)
+
+# visualization
+visualizer = dict(
+    type='LatentGraphVisualizer',
+    dataset='endoscapes',
+    data_prefix='test',
+    draw=True,
+)

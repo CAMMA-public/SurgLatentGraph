@@ -183,3 +183,11 @@ train_cfg = dict(
     max_epochs=10,
     val_interval=1
 )
+
+# visualization
+visualizer = dict(
+    type='LatentGraphVisualizer',
+    dataset='endoscapes',
+    data_prefix='test',
+    draw=True,
+)

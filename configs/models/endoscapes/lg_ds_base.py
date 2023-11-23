@@ -5,7 +5,7 @@ _base_ = ['lg_base_box.py']
 
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.LatentGraphVisualizer'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64
 bg_img_dim = 256
@@ -171,3 +171,11 @@ default_hooks = dict(
 
 # loading
 load_from = 'weights/endoscapes/lg_base_no_recon.pth'
+
+# visualization
+visualizer = dict(
+    type='LatentGraphVisualizer',
+    dataset='endoscapes',
+    data_prefix='test',
+    draw=True,
+)
