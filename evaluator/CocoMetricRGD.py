@@ -26,7 +26,7 @@ class CocoMetricRGD(CocoMetric):
             num_classes: int, additional_metrics: List = [], clip_eval: bool = False,
             pred_per_frame: bool = False, save_lg: bool = False, num_thresholds: int = 10,
             task_type: str = 'multilabel', agg: str = 'frame', ds_per_class: bool = True,
-            **kwargs):
+            save_reconstructions: bool = False, **kwargs):
 
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
@@ -42,6 +42,7 @@ class CocoMetricRGD(CocoMetric):
         self.ds_per_class = ds_per_class
         self.num_classes = num_classes
         self.num_thresholds = num_thresholds
+        self.save_reconstructions = save_reconstructions
 
         # fonts
         try:
@@ -367,7 +368,7 @@ class CocoMetricRGD(CocoMetric):
         else:
             result_files = {}
 
-        if 'reconstruction' in results[0]:
+        if 'reconstruction' in results[0] and self.save_reconstructions:
             recon_imgs = []
             img_ids = []
             for idx, result in enumerate(results):
