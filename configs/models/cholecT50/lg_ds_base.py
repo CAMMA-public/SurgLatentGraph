@@ -171,9 +171,21 @@ auto_scale_lr = dict(enable=False)
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 metric_key = 'ds_video_average_precision' if test_evaluator['agg'] == 'video' else 'ds_average_precision'
 default_hooks = dict(
-    checkpoint=dict(save_best='cholecT50/{}'.format(metric_key)),
+    checkpoint=dict(
+        save_best='cholecT50/{}'.format(metric_key),
+        by_epoch=False,
+        interval=1000,
+    ),
     visualization=dict(draw=False),
 )
 
 # loading
 load_from = 'weights/cholecT50/lg_base_no_recon.pth'
+
+# Running settings
+train_cfg = dict(
+    _delete_=True,
+    type='IterBasedTrainLoop',
+    max_iters=20000,
+    val_interval=1000,
+)
