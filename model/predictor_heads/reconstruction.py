@@ -3,8 +3,8 @@ from mmdet.registry import MODELS
 from abc import ABCMeta
 from mmdet.utils import ConfigType, OptConfigType, InstanceList, OptMultiConfig
 from mmengine.model import BaseModule, constant_init
-from mmengine.structures import BaseDataElement
-from mmdet.structures import SampleList
+from mmengine.structures import BaseDataElement, InstanceData
+from mmdet.structures import SampleList, DetDataSample
 from mmdet.structures.bbox import scale_boxes
 from typing import List, Tuple, Union
 import torch
@@ -99,25 +99,25 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
     def predict(self, results: Tuple, feats: BaseDataElement, graph: BaseDataElement,
             imgs: Tensor) -> Tensor:
         # first, rescale results
-        results = self._rescale_results(results)
+        rescaled_results = self._rescale_results(results)
 
         # extract raw semantic feats for layout construction
-        classes = [r.pred_instances.labels for r in results]
-        boxes = [r.pred_instances.bboxes for r in results]
+        classes = [r.pred_instances.labels for r in rescaled_results]
+        boxes = [r.pred_instances.bboxes for r in rescaled_results]
         if 'gt_instances' in results[0]:
-            gt_classes = [r.gt_instances.labels if r.is_det_keyframe else r.pred_instances.labels for r in results]
-            gt_boxes = [r.gt_instances.bboxes if r.is_det_keyframe else r.pred_instances.bboxes for r in results]
+            gt_classes = [r.gt_instances.labels if r.is_det_keyframe else r.pred_instances.labels for r in rescaled_results]
+            gt_boxes = [r.gt_instances.bboxes if r.is_det_keyframe else r.pred_instances.bboxes for r in rescaled_results]
 
-        if 'masks' in results[0].pred_instances:
-            masks = [r.pred_instances.masks for r in results]
+        if 'masks' in rescaled_results[0].pred_instances:
+            masks = [r.pred_instances.masks for r in rescaled_results]
             layouts = self._construct_layout(classes, boxes, masks)
-            if 'gt_instances' in results[0]:
+            if 'gt_instances' in rescaled_results[0]:
                 gt_masks = [r.gt_instances.masks.to_tensor(masks[0].dtype,
-                    masks[0].device) if r.is_det_keyframe else r.pred_instances.masks for r in results]
+                    masks[0].device) if r.is_det_keyframe else r.pred_instances.masks for r in rescaled_results]
                 gt_layouts = self._construct_layout(gt_classes, gt_boxes, gt_masks)
         else:
             layouts = self._construct_layout(classes, boxes)
-            if 'gt_instances' in results[0]:
+            if 'gt_instances' in rescaled_results[0]:
                 gt_layouts = self._construct_layout(gt_classes, gt_boxes)
             else:
                 gt_layouts = None
@@ -252,25 +252,35 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         return processed_bg_img
 
     def _rescale_results(self, results: SampleList) -> SampleList:
+        rescaled_results = []
         for r in results:
             # rescale boxes
             pred_scale_factor = (self.reconstruction_size / Tensor(r.ori_shape)).flip(0).tolist()
-            r.pred_instances.bboxes = scale_boxes(r.pred_instances.bboxes, pred_scale_factor)
+            rescaled_pred_bboxes = scale_boxes(r.pred_instances.bboxes, pred_scale_factor)
 
             gt_actual_size = [r.gt_instances.masks.height, r.gt_instances.masks.width]
             gt_scale_factor = (self.reconstruction_size / Tensor(gt_actual_size)).flip(0).tolist()
-            r.gt_instances.bboxes = scale_boxes(r.gt_instances.bboxes, gt_scale_factor)
+            rescaled_gt_bboxes = scale_boxes(r.gt_instances.bboxes, gt_scale_factor)
+            rescaled_r = DetDataSample(
+                    metainfo=r.metainfo,
+                    pred_instances=InstanceData(bboxes=rescaled_pred_bboxes,
+                        labels=r.pred_instances.labels),
+                    gt_instances=InstanceData(bboxes=rescaled_gt_bboxes,
+                        labels=r.gt_instances.labels),
+            )
 
             if 'masks' in r.pred_instances:
                 if r.pred_instances.masks.shape[0] == 0:
-                    r.pred_instances.masks = torch.zeros(0, *self.reconstruction_size).to(r.pred_instances.masks.device)
+                    rescaled_r.pred_instances.masks = torch.zeros(0, *self.reconstruction_size).to(r.pred_instances.masks.device)
                 else:
-                    r.pred_instances.masks = TF.resize(r.pred_instances.masks,
+                    rescaled_r.pred_instances.masks = TF.resize(r.pred_instances.masks,
                             self.reconstruction_size.tolist(), InterpolationMode.NEAREST)
 
-                r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
+                rescaled_r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
 
-        return results
+            rescaled_results.append(rescaled_r)
+
+        return rescaled_results
 
 @MODELS.register_module()
 class DecoderNetwork(nn.Module):
