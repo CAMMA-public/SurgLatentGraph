@@ -103,7 +103,7 @@ class CopyDetectorBackbone(Hook):
                 try:
                     lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
-                    print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
+                    print("SUCCESSFULLY INITIALIZED TRAINABLE BACKBONE USING DETECTOR BACKBONE WEIGHTS")
                     print()
                 except AttributeError as e:
                     print(e)
@@ -112,7 +112,7 @@ class CopyDetectorBackbone(Hook):
                 try:
                     lg_model.trainable_backbone.load_state_dict(det.state_dict())
                     print()
-                    print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
+                    print("SUCCESSFULLY INITIALIZED TRAINABLE BACKBONE USING DETECTOR BACKBONE WEIGHTS")
                     print()
                 except AttributeError as e:
                     print(e)
@@ -123,10 +123,10 @@ class CopyDetectorBackbone(Hook):
                     try:
                         lg_model.trainable_backbone.neck.load_state_dict(det.neck.state_dict())
                     except RuntimeError as re:
-                        print("SKIPPING LOADING OF NECK WEIGHTS")
+                        print("SKIPPING NECK INITIALIZATION")
 
                     print()
-                    print("SUCCESSFULLY LOADED TRAINABLE BACKBONE WEIGHTS")
+                    print("SUCCESSFULLY INITIALIZED TRAINABLE BACKBONE USING DETECTOR BACKBONE WEIGHTS")
                     print()
                 except AttributeError as e:
                     print(e)
