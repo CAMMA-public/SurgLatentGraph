@@ -534,15 +534,22 @@ class SV2LSTG(BaseDetector):
             graphs.edges = BaseDataElement()
 
             # collate node info
-            graphs.nodes.feats = pad_sequence([l.nodes.feats for l in lg_list], batch_first=True)
+            graphs.nodes.gnn_viz_feats = pad_sequence([l.nodes.gnn_viz_feats \
+                    for l in lg_list], batch_first=True)
             graphs.nodes.nodes_per_img = [l.nodes.nodes_per_img for l in lg_list]
+            graphs.nodes.bboxes = pad_sequence([l.nodes.bboxes for l in lg_list],
+                    batch_first=True)
             graphs.nodes.labels = pad_sequence([l.nodes.labels for l in lg_list],
                     batch_first=True)
             graphs.nodes.scores = pad_sequence([l.nodes.scores for l in lg_list],
                     batch_first=True)
+            if 'masks' in lg_list[0].nodes.keys():
+                graphs.nodes.masks = pad_sequence([l.nodes.masks for l in lg_list],
+                        batch_first=True)
 
             # collate edge info
-            graphs.edges.feats = torch.cat([l.edges.feats for l in lg_list])
+            graphs.edges.viz_feats = torch.cat([l.edges.viz_feats for l in lg_list])
+            graphs.edges.gnn_viz_feats = torch.cat([l.edges.gnn_viz_feats for l in lg_list])
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
             graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
             graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
@@ -556,8 +563,9 @@ class SV2LSTG(BaseDetector):
             feats = BaseDataElement()
             feats.bb_feats = (torch.stack([l.img_feats.view(-1, 1, 1) for l in lg_list]),)
             feats.neck_feats = (torch.stack([l.img_feats.view(-1, 1, 1) for l in lg_list]),)
-            feats.instance_feats = graphs.nodes.feats[..., :self.viz_feat_size]
-            feats.semantic_feats = graphs.nodes.feats[..., self.viz_feat_size:]
+            feats.instance_feats = graphs.nodes.viz_feats
+            if 'semantic_feats' in graphs.nodes:
+                feats.semantic_feats = graphs.nodes.semantic_feats
 
             # add node info to results
             metainfo = [x.metainfo for b in batch_data_samples for x in b]
