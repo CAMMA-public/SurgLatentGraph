@@ -82,7 +82,7 @@ class FreezeLGDetector(Hook):
             for m in model.lg_detector.modules():
                 m.eval()
 
-        model.lg_detector.eval()
+            model.lg_detector.eval()
 
 @HOOKS.register_module()
 class CopyDetectorBackbone(Hook):

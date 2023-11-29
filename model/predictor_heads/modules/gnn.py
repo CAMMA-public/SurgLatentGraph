@@ -87,11 +87,15 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 if k in skip_keys: continue
 
                 # for each img in each clip, remove padded nodes and concatenate all values for batch of clips
-                g.ndata[k] = torch.cat([torch.cat([v_i[:n] for v_i, n in zip(cv,
-                    npi_i.int())]) for cv, npi_i in zip(v, graph.nodes.nodes_per_img)])
+                if torch.stack(graph.nodes.nodes_per_img).sum() > 0:
+                    g.ndata[k] = torch.cat([torch.cat([v_i[:n] for v_i, n in zip(cv,
+                        npi_i.int())]) for cv, npi_i in zip(v, graph.nodes.nodes_per_img)])
+                else:
+                    g.ndata[k] = torch.zeros(0, v.shape[-1]).to(v.device)
 
             for k, v in graph.edges.items():
-                skip_keys = ['edges_per_img', 'edges_per_clip', 'batch_index', 'edge_flats', 'presence_logits']
+                skip_keys = ['edges_per_img', 'edges_per_clip', 'batch_index', 'edge_flats',
+                        'presence_logits', 'gnn_viz_feats', 'viz_feats', 'semantic_feats']
                 if k in skip_keys: continue
                 if isinstance(v, tuple) or isinstance(v, list):
                     v = torch.cat(v)
