@@ -418,18 +418,19 @@ class STDSHead(DSHead):
 
         # perturb features and get auxiliary preds
         perturbed_ds_preds = {}
-        if self.semantic_loss_weight > 0 and self.final_sem_feat_size > 0:
-            graph_sem_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'sem')
-            perturbed_ds_preds['graph_sem'] = self.forward(graph, *graph_sem_feats_only)
-        if self.viz_loss_weight > 0 and self.final_viz_feat_size > 0:
-            graph_viz_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'viz')
-            perturbed_ds_preds['graph_viz'] = self.forward(graph, *graph_viz_feats_only)
-        if self.img_loss_weight > 0 and self.use_img_feats:
-            img_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'img')
-            perturbed_ds_preds['img'] = self.forward(graph, *img_feats_only)
-        if self.edited_graph_loss_weight > 0:
-            perturbed_ds_preds['edited_graph'] = self.forward(graph, node_feats,
-                    edge_feats, img_feats, True)
+        if self.training:
+            if self.semantic_loss_weight > 0 and self.final_sem_feat_size > 0:
+                graph_sem_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'sem')
+                perturbed_ds_preds['graph_sem'] = self.forward(graph, *graph_sem_feats_only)
+            if self.viz_loss_weight > 0 and self.final_viz_feat_size > 0:
+                graph_viz_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'viz')
+                perturbed_ds_preds['graph_viz'] = self.forward(graph, *graph_viz_feats_only)
+            if self.img_loss_weight > 0 and self.use_img_feats:
+                img_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'img')
+                perturbed_ds_preds['img'] = self.forward(graph, *img_feats_only)
+            if self.edited_graph_loss_weight > 0:
+                perturbed_ds_preds['edited_graph'] = self.forward(graph, node_feats,
+                        edge_feats, img_feats, True)
 
         return ds_preds, perturbed_ds_preds
 
