@@ -191,7 +191,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         edge_feats = [f for f in edge_feats if f is not None]
 
         if len(node_feats) == 0 or len(edge_feats) == 0:
-            raise ValueError("Sum of final_viz_feat_size and final_sem_feat_size must be > 0")
+            raise ValueError("At least one of final_viz_feat_size or final_sem_feat_size must be > 0")
 
         # run forward pass with all the components to get ds preds
         ds_preds = self.forward(graph, node_feats, edge_feats, img_feats)
@@ -350,10 +350,9 @@ class STDSHead(DSHead):
     def __init__(self, num_temp_frames: int, graph_pooling_window: int = 1,
             use_temporal_model: bool = False, temporal_arch: str = 'transformer',
             pred_per_frame: bool = False, per_video: bool = False,
-            use_node_positional_embedding: bool = True,
-            use_positional_embedding: bool = False, edit_graph: bool = False,
-            reassign_edges: bool = True, combine_nodes: bool = True,
-            causal: bool = False, gnn_cfg: ConfigType = None,
+            use_node_positional_embedding: bool = True, use_positional_embedding: bool = False,
+            edited_graph_loss_weight: float = 0, reassign_edges: bool = True,
+            combine_nodes: bool = True, causal: bool = False, gnn_cfg: ConfigType = None,
             keep_all_instances: list = [0, 0, 0, 0, 0, 1], **kwargs) -> None:
 
         # set causal in gnn_cfg
@@ -365,7 +364,7 @@ class STDSHead(DSHead):
         self.graph_pooling_window = graph_pooling_window
         self.pred_per_frame = pred_per_frame
         self.per_video = per_video
-        self.edit_graph = edit_graph
+        self.edited_graph_loss_weight = edited_graph_loss_weight
         self.reassign_edges = reassign_edges
         self.combine_nodes = combine_nodes
         self.keep_all_instances = keep_all_instances
@@ -386,7 +385,6 @@ class STDSHead(DSHead):
         self.temporal_arch = temporal_arch
         if self.use_temporal_model:
             self.img_feat_temporal_model = self._create_temporal_model()
-            self.img_feat_projector = torch.nn.Linear(2048, self.img_feat_projector.out_features)
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
         # get dims
@@ -396,19 +394,48 @@ class STDSHead(DSHead):
         node_feats = []
         edge_feats = []
         if self.final_viz_feat_size > 0:
-            node_viz_feats = self.node_viz_feat_projector(graph.nodes.feats[..., :self.input_viz_feat_size])
-            edge_viz_feats = self.edge_viz_feat_projector(torch.cat(graph.edges.feats)[..., :self.input_viz_feat_size])
-            node_feats.append(node_viz_feats)
-            edge_feats.append(edge_viz_feats)
+            node_feats.append(self.node_viz_feat_projector(
+                graph.nodes.feats.flatten(end_dim=2)).view(B, T, N, self.final_viz_feat_size))
+            edge_feats.append(self.edge_viz_feat_projector(torch.cat(graph.edges.feats)))
 
         if self.final_sem_feat_size > 0:
-            node_sem_feats = self.node_sem_feat_projector(graph.nodes.feats[..., -self.input_sem_feat_size:])
-            edge_sem_feats = self.edge_sem_feat_projector(torch.cat(graph.edges.feats)[..., -self.input_sem_feat_size:])
-            node_feats.append(node_sem_feats)
-            edge_feats.append(edge_sem_feats)
+            node_feats.append(graph.nodes.semantic_feats)
+            edge_feats.append(torch.cat(graph.edges.semantic_feats))
+
+        # get img feats
+        img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
+        img_feats = F.adaptive_avg_pool2d(img_feats, 1).squeeze(-1).squeeze(-1)
 
         if len(node_feats) == 0 or len(edge_feats) == 0:
-            raise ValueError("Sum of final_viz_feat_size and final_sem_feat_size must be > 0")
+            raise ValueError("At least one of final_viz_feat_size or final_sem_feat_size must be > 0")
+
+        # get rid of None
+        node_feats = [f for f in node_feats if f is not None]
+        edge_feats = [f for f in edge_feats if f is not None]
+
+        # run forward pass with all the components to get ds preds
+        ds_preds = self.forward(graph, node_feats, edge_feats, img_feats)
+
+        # perturb features and get auxiliary preds
+        perturbed_ds_preds = {}
+        if self.semantic_loss_weight > 0 and self.final_sem_feat_size > 0:
+            graph_sem_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'sem')
+            perturbed_ds_preds['graph_sem'] = self.forward(graph, *graph_sem_feats_only)
+        if self.viz_loss_weight > 0 and self.final_viz_feat_size > 0:
+            graph_viz_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'viz')
+            perturbed_ds_preds['graph_viz'] = self.forward(graph, *graph_viz_feats_only)
+        if self.img_loss_weight > 0 and self.use_img_feats:
+            img_feats_only = self.feature_perturbation(node_feats, edge_feats, img_feats, 'img')
+            perturbed_ds_preds['img'] = self.forward(graph, *img_feats_only)
+        if self.edited_graph_loss_weight > 0:
+            perturbed_ds_preds['edited_graph'] = self.forward(graph, node_feats,
+                    edge_feats, img_feats, True)
+
+        return ds_preds, perturbed_ds_preds
+
+    def forward(self, graph, node_feats, edge_feats, img_feats, edit_graph: bool = False):
+        # get dims
+        B, T, N, _ = graph.nodes.feats.shape
 
         # add positional embedding to node feats
         node_feats = torch.cat(node_feats, -1)
@@ -425,42 +452,42 @@ class STDSHead(DSHead):
         dgl_g = self.gnn(graph)
 
         # edit graph
-        if self.edit_graph:
-            dgl_g, edited_nodes_per_img = self._edit_graph(dgl_g, graph.nodes.nodes_per_img)
-            graph.nodes.nodes_per_img = edited_nodes_per_img
+        if edit_graph:
+            dgl_g, nodes_per_img = self._edit_graph(dgl_g, graph.nodes.nodes_per_img)
+        else:
+            nodes_per_img = graph.nodes.nodes_per_img
 
         # get node features and pool to get graph feats
-        node_feats = dgl_g.ndata['feats'] + dgl_g.ndata['orig_feats'] # skip connection
+        orig_node_feats = torch.cat([f[:npi.int().item()] for clip_node_feats, clip_nodes_per_img in zip(
+            graph.nodes.feats, nodes_per_img) for f, npi in zip(clip_node_feats, clip_nodes_per_img)])
+        node_feats = dgl_g.ndata['feats'] + orig_node_feats # skip connection
 
         # pool node feats by img
         node_to_img = torch.cat([ind * T + torch.arange(T).repeat_interleave(n.int()).long().to(
-            node_feats.device) for ind, n in enumerate(graph.nodes.nodes_per_img)])
+            node_feats.device) for ind, n in enumerate(nodes_per_img)])
         graph_feats = torch.zeros(B * T, node_feats.shape[-1]).to(node_feats.device)
         scatter_mean(node_feats, node_to_img, dim=0, out=graph_feats)
 
         # combine two types of feats
         if self.use_img_feats:
-            # get img feats
-            img_feats = feats.bb_feats[-1] if self.img_feat_key == 'bb' else feats.fpn_feats[-1]
-            img_feats = F.adaptive_avg_pool2d(img_feats, 1).squeeze(-1).squeeze(-1)
-
             if self.use_temporal_model:
                 if self.temporal_arch == 'tcn':
                     tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
-                    img_feats = tcn_output.sum(0).permute(0, 2, 1)
+                    img_feats = tcn_output.sum(0).permute(0, 2, 1) # sum across stages
                 else:
                     img_feats = self.img_feat_temporal_model(img_feats)
 
             elif self.use_positional_embedding:
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
-                img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training).mean(1, keepdims=True)
+                img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training)
 
-            img_feats = self.img_feat_projector(img_feats)
+            # project img feats and fuse with graph feats
+            img_feats = self.img_feat_projector(img_feats.flatten(end_dim=1)).view(B, T, -1)
             if self.img_feats_only:
                 final_feats = img_feats
             else:
-                #final_feats = torch.cat([img_feats, graph_feats.view(B, T, -1)], -1)
-                final_feats = img_feats + graph_feats.view(B, T, -1)
+                pre_fusion_feat = torch.cat([img_feats.flatten(end_dim=1), graph_feats], -1)
+                final_feats = self.img_graph_feat_fusion(pre_fusion_feat).view(B, T, -1)
 
         else:
             final_feats = graph_feats.view(B, T, -1)
@@ -489,33 +516,54 @@ class STDSHead(DSHead):
 
     def loss(self, graph: BaseDataElement, feats: BaseDataElement,
             batch_data_samples: SampleList) -> Tensor:
-        ds_preds = self.predict(graph, feats)
+        ds_preds, perturbed_ds_preds = self.predict(graph, feats)
         ds_gt = torch.stack([torch.stack([torch.from_numpy(b.ds) for b in vds]) \
                 for vds in batch_data_samples]).to(ds_preds.device)
 
-        # preprocess gt
         if self.loss_consensus == 'mode':
             ds_gt = ds_gt.float().round().long()
+        elif self.loss_consensus == 'prob':
+            # interpret GT as probability of 1 and randomly generate gt
+            random_probs = torch.rand_like(ds_gt) # random probability per label per example
+            ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
         else:
             ds_gt = ds_gt.long()
 
-        # TODO handle case when loss_fn is module list (multi-task ds head)
         # reshape preds and gt according to prediction settings
         if not self.pred_per_frame:
             # keep only last gt per clip
             ds_gt = ds_gt[:, -1]
         else:
-            ds_preds = ds_preds.flatten(end_dim=1)
             ds_gt = ds_gt.flatten(end_dim=1)
+            ds_preds = ds_preds.flatten(end_dim=1)
+            for k, v in perturbed_ds_preds.items():
+                perturbed_ds_preds[k] = v.flatten(end_dim=1)
 
+        perturbed_ds_loss = {}
         if isinstance(self.loss_fn, torch.nn.ModuleList):
             # compute loss for each criterion and sum
             ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+            for k, v in perturbed_ds_preds.items():
+                loss_val = sum([self.loss_fn[i](v[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
+                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
+            for k, v in perturbed_ds_preds.items():
+                if k == 'graph_viz':
+                    wt = self.viz_loss_weight
+                elif k == 'graph_sem':
+                    wt = self.semantic_loss_weight
+                elif k == 'img':
+                    wt = self.img_loss_weight
+                else:
+                    wt = self.edited_graph_loss_weight
+
+                loss_val = self.loss_fn(v, ds_gt)
+                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
 
         loss = {'ds_loss': ds_loss * self.loss_weight}
+        loss.update(perturbed_ds_loss)
 
         return loss
 
