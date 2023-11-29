@@ -189,63 +189,12 @@ class LGDetector(BaseDetector):
         feats, graph, detached_results, results, gt_edges, _ = self.extract_lg(batch_inputs,
                 batch_data_samples)
 
-        if gt_edges is not None:
-            # add graph to result
-            for ind, r in enumerate(results):
-                # GT
-                r.gt_edges = InstanceData()
-                r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
-                r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
-                r.gt_edges.relations = gt_edges.edge_relations[ind]
-
-                # PRED
-                r.pred_edges = InstanceData()
-
-                # select correct batch
-                batch_inds = graph.edges.edge_flats[:, 0] == ind
-                r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
-                r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
-                r.pred_edges.relations = graph.edges.class_logits[batch_inds]
-
-        # LATENT GRAPH
         if graph is not None:
-            for ind, r in enumerate(results):
-                # extract graph for frame i, add to result
-                g_i = BaseDataElement()
-                g_i.nodes = BaseDataElement()
-                g_i.edges = BaseDataElement()
-                g_i.nodes.viz_feats = feats.instance_feats[ind]
-                g_i.nodes.gnn_viz_feats = graph.nodes.gnn_viz_feats[ind]
-                if 'semantic_feats' in feats:
-                    g_i.nodes.semantic_feats = feats.semantic_feats[ind]
-                g_i.nodes.nodes_per_img = graph.nodes.nodes_per_img[ind]
-                g_i.nodes.bboxes = r.pred_instances.bboxes
-                g_i.nodes.scores = r.pred_instances.scores
-                g_i.nodes.labels = r.pred_instances.labels
+            # add latent graph to results
+            results = self.add_lg_to_results(results, feats, graph)
 
-                # split edge quantities and add
-                epi = graph.edges.edges_per_img.tolist()
-                for k in graph.edges.keys():
-                    if k in ['batch_index', 'presence_logits', 'edges_per_img']:
-                        continue
-
-                    elif k == 'edge_flats':
-                        val = graph.edges.get(k).split(epi)[ind][:, 1:]
-
-                    elif not isinstance(graph.edges.get(k), Tensor):
-                        # no need to split, just index
-                        val = graph.edges.get(k)[ind]
-
-                    else:
-                        val = graph.edges.get(k).split(epi)[ind]
-
-                    g_i.edges.set_data({k: val})
-
-                # pool img feats and add to graph
-                g_i.img_feats = F.adaptive_avg_pool2d(feats.bb_feats[-1][ind], 1).squeeze()
-
-                # add graph to result
-                r.lg = g_i
+            # add scene graph to result
+            results = self.add_scene_graph_to_results(results, gt_edges, graph)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
@@ -266,6 +215,68 @@ class LGDetector(BaseDetector):
 
             for r, dp in zip(results, ds_preds):
                 r.pred_ds = dp
+
+        return results
+
+    def add_scene_graph_to_results(self, results: SampleList, gt_edges: BaseDataElement,
+            graph: BaseDataElement) -> SampleList:
+        for ind, r in enumerate(results):
+            # GT
+            r.gt_edges = InstanceData()
+            r.gt_edges.edge_flats = gt_edges.edge_flats[ind]
+            r.gt_edges.edge_boxes = gt_edges.edge_boxes[ind]
+            r.gt_edges.relations = gt_edges.edge_relations[ind]
+
+            # PRED
+            r.pred_edges = InstanceData()
+
+            # select correct batch
+            batch_inds = graph.edges.edge_flats[:, 0] == ind
+            r.pred_edges.edge_flats = graph.edges.edge_flats[batch_inds][:, 1:] # remove batch id
+            r.pred_edges.edge_boxes = graph.edges.boxes[ind] # already a list
+            r.pred_edges.relations = graph.edges.class_logits[batch_inds]
+
+        return results
+
+    def add_lg_to_results(self, results: SampleList, feats: BaseDataElement,
+            graph: BaseDataElement) -> SampleList:
+        for batch_ind, r in enumerate(results):
+            # extract graph for frame i, add to result
+            g = BaseDataElement()
+            g.nodes = BaseDataElement()
+            g.edges = BaseDataElement()
+            g.nodes.viz_feats = feats.instance_feats[batch_ind]
+            g.nodes.gnn_viz_feats = graph.nodes.gnn_viz_feats[batch_ind]
+            if 'semantic_feats' in feats:
+                g.nodes.semantic_feats = feats.semantic_feats[batch_ind]
+            g.nodes.nodes_per_img = graph.nodes.nodes_per_img[batch_ind]
+            g.nodes.bboxes = r.pred_instances.bboxes
+            g.nodes.scores = r.pred_instances.scores
+            g.nodes.labels = r.pred_instances.labels
+
+            # split edge quantities and add
+            epi = graph.edges.edges_per_img.tolist()
+            for k in graph.edges.keys():
+                if k in ['batch_index', 'presence_logits', 'edges_per_img']:
+                    continue
+
+                elif k == 'edge_flats':
+                    val = graph.edges.get(k).split(epi)[batch_ind][:, 1:]
+
+                elif not isinstance(graph.edges.get(k), Tensor):
+                    # no need to split, just index
+                    val = graph.edges.get(k)[batch_ind]
+
+                else:
+                    val = graph.edges.get(k).split(epi)[batch_ind]
+
+                g.edges.set_data({k: val})
+
+            # pool img feats and add to graph
+            g.img_feats = F.adaptive_avg_pool2d(feats.bb_feats[-1][batch_ind], 1).squeeze()
+
+            # add LG to results
+            r.lg = g
 
         return results
 
