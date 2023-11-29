@@ -83,7 +83,7 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
 
             # add attributes to graph
             for k, v in graph.nodes.items():
-                skip_keys = ['nodes_per_img']
+                skip_keys = ['nodes_per_img', 'viz_feats', 'gnn_viz_feats', 'instance_feats']
                 if k in skip_keys: continue
 
                 # for each img in each clip, remove padded nodes and concatenate all values for batch of clips

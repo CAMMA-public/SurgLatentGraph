@@ -615,9 +615,6 @@ class STDSHead(DSHead):
         return ds_preds
 
     def _edit_graph(self, batched_graph, nodes_per_img):
-        if (self.training and random.random() > 0.5):
-            return batched_graph, nodes_per_img
-
         # split graph into clip graphs
         node_labels = batched_graph.ndata['labels']
         node_features = batched_graph.ndata['feats']
@@ -658,15 +655,13 @@ class STDSHead(DSHead):
         node_reassignment_map = torch.cat([torch.cat([n + o + co for n, o in zip(nrm, fo)]) for nrm, fo, co in zip(
             node_reassignment_map, frame_offsets, clip_offsets)])
 
-        if self.combine_nodes and (not self.training or random.random() > 0.5): # always edit in eval, random in train
+        if self.combine_nodes:
             # use node reassignment map to combine node features, set in batched graph
             updated_node_features = scatter_mean(node_features, node_reassignment_map,
                     dim=0, dim_size=node_features.shape[0])
             batched_graph.ndata['feats'] = updated_node_features
 
-        reassign_edges = False
-        if self.reassign_edges and (not self.training or random.random() > 0.5): # always edit in eval, random in train
-            reassign_edges = True
+        if self.reassign_edges:
             # use node reassignment map to edit edge flats
             updated_edge_flats = node_reassignment_map[edge_flats[edge_flats[:, 0].sort().indices]]
 
@@ -700,7 +695,7 @@ class STDSHead(DSHead):
 
         # finally update batch nodes per img and batch edges per img
         batch_num_nodes = torch.tensor([sum(x) for x in edited_nodes_per_img])
-        if not reassign_edges:
+        if not self.reassign_edges:
             # compute batch num edges
             edges_to_keep = (edge_flats.unsqueeze(-1) == inds_to_keep_tensor).any(-1).all(-1)
             batch_num_edges = torch.tensor([x.sum() for x in edges_to_keep.split(edges_per_clip.tolist())])
