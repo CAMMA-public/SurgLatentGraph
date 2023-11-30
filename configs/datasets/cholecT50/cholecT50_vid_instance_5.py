@@ -4,7 +4,7 @@ _base_ = [os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.p
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
 
 dataset_type = 'VideoDatasetWithDS'
-data_root='data/mmdet_datasets/cholecT50_mmdet'
+data_root='data/mmdet_datasets/cholecT50'
 metainfo = {
     'classes': ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper',
         'connective_tissue', 'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein',
