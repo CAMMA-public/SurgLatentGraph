@@ -169,7 +169,7 @@ auto_scale_lr = dict(enable=False)
 
 # hooks
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
-metric_key = 'ds_video_average_precision' if test_evaluator['agg'] == 'video' else 'ds_average_precision'
+metric_key = 'ds_video_average_precision' if 'video' in test_evaluator['agg'] else 'ds_average_precision'
 default_hooks = dict(
     checkpoint=dict(
         save_best='cholecT50/{}'.format(metric_key),

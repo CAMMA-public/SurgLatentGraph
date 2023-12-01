@@ -35,32 +35,3 @@ model = dict(
         std=_base_.model.data_preprocessor.std,
     ),
 )
-
-# evaluators
-val_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='cholecT50',
-        data_root=_base_.data_root,
-        data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
-        use_pred_boxes_recon=True,
-        metric=[],
-        num_classes=100,
-    )
-]
-
-test_evaluator = [
-    dict(
-        type='CocoMetricRGD',
-        prefix='cholecT50',
-        data_root=_base_.data_root,
-        data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-        ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
-        metric=[],
-        num_classes=100,
-        #additional_metrics = ['reconstruction'],
-        use_pred_boxes_recon=True,
-        outfile_prefix='./results/cholecT50_preds/test/r50'
-    ),
-]

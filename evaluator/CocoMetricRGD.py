@@ -256,13 +256,13 @@ class CocoMetricRGD(CocoMetric):
                                 eval_results[f'ds_vid_ap_C{ind+1}'] = i
 
                         if 'per_class' in self.agg:
-                            ds_vid_ap = ds_vid_ap_per_class.nanmean(0)
-                            ds_vid_ap_std = ds_vid_ap_per_class[~ds_vid_ap_per_class.isnan()].std(0)
+                            ds_vid_ap = ds_vid_ap_per_class.nanmean()
+                            ds_vid_ap_std = ds_vid_ap_per_class[~ds_vid_ap_per_class.isnan()].std()
 
                         else:
                             ds_per_vid_ap = torch.stack(aps).nanmean(1)
                             ds_vid_ap = ds_per_vid_ap.nanmean()
-                            ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std(0)
+                            ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std()
 
                         logger_info.append(f'ds_vid_ap: {ds_vid_ap} +- {ds_vid_ap_std}')
                         eval_results['ds_video_average_precision'] = ds_vid_ap

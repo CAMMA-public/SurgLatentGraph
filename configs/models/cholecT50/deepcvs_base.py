@@ -157,21 +157,27 @@ optim_wrapper = dict(
 )
 auto_scale_lr = dict(enable=False)
 
-# Running settings
-train_cfg = dict(
-    type='EpochBasedTrainLoop',
-    max_epochs=20,
-    val_interval=1)
-val_cfg = dict(type='ValLoop')
-test_cfg = dict(type='TestLoop')
-
 # hooks
 custom_hooks = [dict(type="FreezeHook")]
-metric_key = 'ds_video_average_precision' if test_evaluator['agg'] == 'video' else 'ds_average_precision'
+metric_key = 'ds_video_average_precision' if 'video' in test_evaluator['agg'] else 'ds_average_precision'
 default_hooks = dict(
-    checkpoint=dict(save_best='cholecT50/{}'.format(metric_key)),
+    checkpoint=dict(
+        save_best='cholecT50/{}'.format(metric_key),
+        by_epoch=False,
+        interval=1000,
+    ),
     visualization=dict(draw=False),
 )
 
 # loading
 load_from = 'weights/cholecT50/lg_base_no_recon.pth'
+
+# Running settings
+train_cfg = dict(
+    _delete_=True,
+    type='IterBasedTrainLoop',
+    max_iters=20000,
+    val_interval=1000,
+)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
