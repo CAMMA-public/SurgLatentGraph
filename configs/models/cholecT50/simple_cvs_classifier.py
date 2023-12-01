@@ -113,7 +113,7 @@ test_evaluator = dict(
 del _base_.param_scheduler
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.00001),
+    optimizer=dict(type='AdamW', lr=0.0001),
 )
 auto_scale_lr = dict(enable=False)
 
