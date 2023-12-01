@@ -192,7 +192,7 @@ class CocoMetricRGD(CocoMetric):
         # TODO compute graph metrics
 
         # compute DS metrics
-        if self.agg == 'video':
+        if 'per_video' in self.agg:
             vid_ids = torch.tensor([p['video_id'] for p in preds])
 
         if 'ds' in preds[0]:
