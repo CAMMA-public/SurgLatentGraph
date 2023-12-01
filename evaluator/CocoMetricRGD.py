@@ -240,7 +240,7 @@ class CocoMetricRGD(CocoMetric):
                     ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                     ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
 
-                    if self.agg == 'video':
+                    if 'per_video' in self.agg:
                         # split ds_preds, gt by video
                         _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
                         ds_preds_per_vid = ds_preds.split(vid_lengths.tolist())
@@ -249,15 +249,20 @@ class CocoMetricRGD(CocoMetric):
                         for p, gt in zip(ds_preds_per_vid, ds_gt_per_vid):
                             aps.append(torch_ap(p, gt))
 
+                        ds_vid_ap_per_class = torch.stack(aps).nanmean(0)
                         if self.ds_per_class:
-                            ds_vid_ap_per_class = torch.stack(aps).nanmean(0)
                             for ind, i in enumerate(ds_vid_ap_per_class):
                                 logger_info.append(f'ds_vid_ap_C{ind+1}: {i:.4f}')
                                 eval_results[f'ds_vid_ap_C{ind+1}'] = i
 
-                        ds_per_vid_ap = torch.stack(aps).nanmean(1)
-                        ds_vid_ap = ds_per_vid_ap.nanmean(0)
-                        ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std(0)
+                        if 'per_class' in self.agg:
+                            ds_vid_ap = ds_vid_ap_per_class.nanmean(0)
+                            ds_vid_ap_std = ds_vid_ap_per_class[~ds_vid_ap_per_class.isnan()].std(0)
+
+                        else:
+                            ds_per_vid_ap = torch.stack(aps).nanmean(1)
+                            ds_vid_ap = ds_per_vid_ap.nanmean()
+                            ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std(0)
 
                         logger_info.append(f'ds_vid_ap: {ds_vid_ap} +- {ds_vid_ap_std}')
                         eval_results['ds_video_average_precision'] = ds_vid_ap
