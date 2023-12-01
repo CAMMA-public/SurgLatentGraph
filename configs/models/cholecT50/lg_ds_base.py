@@ -157,7 +157,7 @@ test_evaluator = dict(
 del _base_.param_scheduler
 del _base_.optim_wrapper
 optim_wrapper = dict(
-    optimizer=dict(type='AdamW', lr=0.00001),
+    optimizer=dict(type='AdamW', lr=0.0001),
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
