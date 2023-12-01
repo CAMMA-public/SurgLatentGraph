@@ -197,6 +197,7 @@ class VideoDatasetWithDS(BaseVideoDataset):
 
 @DATA_SAMPLERS.register_module()
 class TrackCustomKeyframeSampler(TrackImgSampler):
+    """Code to sample a keyframe from the entire dataset"""
     def __init__(
         self,
         dataset: Sized,
@@ -292,6 +293,7 @@ class TrackCustomKeyframeSampler(TrackImgSampler):
 
 @TRANSFORMS.register_module()
 class UniformRefFrameSampleWithPad(UniformRefFrameSample):
+    """Code to load all images and metadata for a clip given a keyframe"""
     def sampling_frames(self, video_length: int, key_frame_id: int):
         """Sampling frames.
 
@@ -333,6 +335,7 @@ class UniformRefFrameSampleWithPad(UniformRefFrameSample):
 
 @TRANSFORMS.register_module()
 class AllFramesSample(BaseFrameSample):
+    """Code to load all the frames and associated metadata in a video"""
     def __init__(self, sampling_ratio: int = 1, collect_video_keys: List[str] = ['video_id', 'video_length']):
         super().__init__(collect_video_keys=collect_video_keys)
         self.sampling_ratio = sampling_ratio
