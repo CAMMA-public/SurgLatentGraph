@@ -43,7 +43,6 @@ model = dict(
 visualizer = dict(
     type='SAMQueryVisualizer',
     prefix='endoscapes',
-    #prefix='endoscapes_ssl_resnet_bb',
     draw=False,
 )
 

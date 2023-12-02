@@ -2,7 +2,7 @@ _base_ = ['lg_ds_base.py']
 
 visualizer = dict(
     type='LatentGraphVisualizer',
-    prefix='italy_base',
+    dataset='italy',
     save_graphs=True,
     draw=False,
 )

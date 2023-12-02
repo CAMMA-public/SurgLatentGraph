@@ -2,7 +2,7 @@ _base_ = ['lg_ds_base.py']
 
 visualizer = dict(
     type='LatentGraphVisualizer',
-    prefix='small_wc_base',
+    dataset='small_wc',
     save_graphs=True,
     draw=False,
 )

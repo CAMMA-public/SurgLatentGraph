@@ -27,7 +27,7 @@ model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 del _base_.lg_model
 
 visualizer = dict(
-    prefix=_base_.visualizer.prefix.replace('base', 'faster_rcnn'),
+    detector='faster_rcnn',
 )
 
 # modify load_from

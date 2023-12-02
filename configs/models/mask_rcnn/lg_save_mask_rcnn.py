@@ -28,7 +28,7 @@ model.roi_extractor.roi_layer.output_size = 1
 del _base_.lg_model
 
 visualizer = dict(
-    prefix=_base_.visualizer.prefix.replace('base', 'mask_rcnn'),
+    detector='mask_rcnn',
 )
 
 # modify load_from

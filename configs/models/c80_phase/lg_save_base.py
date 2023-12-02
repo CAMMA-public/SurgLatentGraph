@@ -2,7 +2,7 @@ _base_ = ['lg_ds_base.py']
 
 visualizer = dict(
     type='LatentGraphVisualizer',
-    prefix='c80_phase_base',
+    dataset='c80_phase',
     save_graphs=True,
     draw=False,
 )

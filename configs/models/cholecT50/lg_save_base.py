@@ -2,7 +2,7 @@ _base_ = ['lg_ds_base.py']
 
 visualizer = dict(
     type='LatentGraphVisualizer',
-    prefix='cholecT50_base',
+    dataset='cholecT50',
     save_graphs=True,
     draw=False,
 )
