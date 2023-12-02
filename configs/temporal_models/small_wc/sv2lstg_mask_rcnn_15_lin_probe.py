@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../../configs/datasets/cholecT50/cholecT50_vid_instance_5_load_graphs.py',
+    '../../configs/datasets/small_wc/small_wc_vid_instance_15_load_graphs.py',
     'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
@@ -11,11 +11,13 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
 
 # set saved graph dir in pipelines
 _base_.train_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/cholecT50_mask_rcnn'
+        'latent_graphs/small_wc_mask_rcnn'
+_base_.train_eval_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
+        'latent_graphs/small_wc_mask_rcnn'
 _base_.val_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/cholecT50_mask_rcnn'
+        'latent_graphs/small_wc_mask_rcnn'
 _base_.test_dataloader['dataset']['pipeline'][1]['transforms'][0]['saved_graph_dir'] = \
-        'latent_graphs/cholecT50_mask_rcnn'
+        'latent_graphs/small_wc_mask_rcnn'
 
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
@@ -52,32 +54,48 @@ model = dict(
 )
 
 # metric
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='small_wc',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_data_prefix,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        metric=[],
+        num_classes=3,
+        additional_metrics=['reconstruction'],
+        use_pred_boxes_recon=False,
+        outfile_prefix='./results/small_wc_preds/train/sv2lstg',
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        outfile_prefix='./results/small_wc_preds/val/sv2lstg',
     )
 ]
 
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/cholecT50_preds/test/sv2lstg',
+        outfile_prefix='./results/small_wc_preds/test/sv2lstg',
     ),
 ]
 

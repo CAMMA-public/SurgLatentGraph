@@ -3,9 +3,11 @@ import copy
 _base_ = '../../configs/models/mask_rcnn/lg_ds_mask_rcnn.py'
 
 # delete dataset related fields
+del _base_.train_evaluator
 del _base_.val_evaluator
 del _base_.test_evaluator
 del _base_.train_dataloader
+del _base_.train_eval_dataloader
 del _base_.val_dataloader
 del _base_.test_dataloader
 del _base_.train_pipeline

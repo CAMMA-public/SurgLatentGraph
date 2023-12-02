@@ -21,7 +21,7 @@ lg_model = dict(
 
 test_dataloader = dict(
     dataset=dict(
-        ann_file='annotation_coco_all_frames.json',
+        ann_file='all/annotation_coco.json',
         data_prefix=dict(img='all_phase/'),
     )
 )

@@ -20,13 +20,13 @@ from .predictor_heads.modules.utils import apply_sparse_mask, get_sparse_mask_in
 @MODELS.register_module()
 class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType, clip_size: int,
-            viz_feat_size: int, semantic_feat_size: int, use_gnn_feats: bool = True,
-            num_spatial_edge_classes: int = 4, use_spat_graph: bool = True,
-            use_viz_graph: bool = True, learn_sim_graph: bool = False,
+            viz_feat_size: int, semantic_feat_size: int, reencode_semantics: bool = False,
+            use_gnn_feats: bool = True, num_spatial_edge_classes: int = 4,
+            use_spat_graph: bool = True, use_viz_graph: bool = True, learn_sim_graph: bool = False,
             sem_feat_hidden_dim: int = 2048, semantic_feat_projector_layers: int = 3,
-            sem_feat_use_boxes: bool = True, sem_feat_use_classes: bool = True,
-            sem_feat_use_temporal_window: bool = True, num_sim_topk: int = 2,
-            temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
+            sem_feat_use_bboxes: bool = True, sem_feat_use_classes: bool = True,
+            sem_feat_use_masks: bool = True, sem_feat_use_temporal_window: bool = True,
+            num_sim_topk: int = 2, temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
             use_max_iou_only: bool = True, use_temporal_edges_only: bool = False,
             per_video: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -58,6 +58,7 @@ class SV2LSTG(BaseDetector):
         self.learn_sim_graph = learn_sim_graph
         self.viz_feat_size = viz_feat_size
         self.semantic_feat_size = semantic_feat_size
+        self.reencode_semantics = reencode_semantics
 
         self.num_temp_edge_classes = 0
         if self.use_viz_graph:
@@ -67,10 +68,11 @@ class SV2LSTG(BaseDetector):
 
         # edge semantic feat projector
         sem_input_dim = 0
-        self.sem_feat_use_boxes = sem_feat_use_boxes
+        self.sem_feat_use_bboxes = sem_feat_use_bboxes
         self.sem_feat_use_classes = sem_feat_use_classes
+        self.sem_feat_use_masks = sem_feat_use_masks
         self.sem_feat_use_temporal_window = sem_feat_use_temporal_window
-        if self.sem_feat_use_boxes:
+        if self.sem_feat_use_bboxes:
             sem_input_dim += 4
         if self.sem_feat_use_classes:
             sem_input_dim += self.num_temp_edge_classes
@@ -93,6 +95,7 @@ class SV2LSTG(BaseDetector):
 
         # init ds head
         ds_head.per_video = per_video
+        ds_head.num_temp_frames = clip_size
         self.ds_head = MODELS.build(ds_head)
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
@@ -415,7 +418,7 @@ class SV2LSTG(BaseDetector):
 
         # run temporal edge semantic feat projector
         sem_feat_input = []
-        if self.sem_feat_use_boxes:
+        if self.sem_feat_use_bboxes:
             b_norm = boxes / Tensor(box_shape).flip(0).repeat(2).to(boxes.device) # make 0-1
             sem_feat_input.append(b_norm)
         if self.sem_feat_use_classes:
@@ -576,9 +579,12 @@ class SV2LSTG(BaseDetector):
             # box perturb
             if self.training and self.perturb:
                 perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes for l in lg_list],
-                        batch_data_samples[0][0].ori_shape)
+                        batch_data_samples[0][0].img_shape)
                 for l, p in zip(lg_list, perturbed_boxes):
                     l.nodes.bboxes = p
+
+            if self.reencode_semantics:
+                self.compute_semantic_feat(lg_list)
 
             graphs = BaseDataElement()
             graphs.nodes = BaseDataElement()
@@ -597,8 +603,9 @@ class SV2LSTG(BaseDetector):
             else:
                 graphs.nodes.feats = self.node_viz_feat_projector(graphs.nodes.viz_feats)
 
-            if 'semantic_feats' in graphs.nodes:
+            if 'semantic_feats' in lg_list[0].nodes:
                 graphs.nodes.semantic_feats = torch.cat([l.nodes.semantic_feats for l in lg_list])
+
             graphs.nodes.nodes_per_img = [l.nodes.nodes_per_img for l in lg_list]
             graphs.nodes.bboxes = pad_sequence([l.nodes.bboxes for l in lg_list],
                     batch_first=True)
@@ -620,7 +627,7 @@ class SV2LSTG(BaseDetector):
             else:
                 graphs.edges.feats = self.edge_viz_feat_projector(graphs.edges.viz_feats)
 
-            if 'semantic_feats' in graphs.edges:
+            if 'semantic_feats' in lg_list[0].edges:
                 graphs.edges.semantic_feats = torch.cat([l.edges.semantic_feats for l in lg_list])
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
             graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
@@ -686,6 +693,62 @@ class SV2LSTG(BaseDetector):
         feats, graphs, clip_results = self.reshape_as_clip(feats, graphs, results, B, T)
 
         return feats, graphs, clip_results, results
+
+    def compute_semantic_feat(self, lg_list: List) -> Tensor:
+        breakpoint()
+        device = feats.instance_feats.device
+        boxes = [r.pred_instances.bboxes for r in results]
+        classes = [r.pred_instances.labels for r in results]
+        scores = [r.pred_instances.scores for r in results]
+        masks = None
+        if 'masks' in lg_list[0]:
+            masks = [r.pred_instances.masks for r in results]
+
+        # compute semantic feat
+        c = pad_sequence(classes, batch_first=True)
+        b = pad_sequence(boxes, batch_first=True)
+        s = pad_sequence(scores, batch_first=True)
+        b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
+        c_one_hot = F.one_hot(c, num_classes=self.num_classes)
+
+        sem_feat_input = []
+        if self.sem_feat_use_bboxes:
+            sem_feat_input.append(b_norm)
+
+        if self.sem_feat_use_class_logits:
+            sem_feat_input.append(c_one_hot)
+
+        # process masks
+        if self.sem_feat_use_masks:
+            # iterate through masks and convert to polygon mask
+            polygon_masks = self.lg_detector.masks_to_polygons(masks)
+
+            # process masks
+            polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
+            polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
+
+            sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
+
+        sem_feat_input.append(s.unsqueeze(-1))
+
+        sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
+        if sem_feat_input.shape[0] == 1:
+            s = self.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
+        else:
+            s = self.semantic_feat_projector(sem_feat_input)
+
+        feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
+
+        if graph is not None:
+            # compute edge semantic feats
+            eb_norm = torch.cat(graph.edges.boxes) / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(graph.edges.boxes[0].device) # make 0-1
+            edge_sem_input = torch.cat([eb_norm, graph.edges.class_logits.detach()], -1) # detach class logits to prevent backprop
+            if edge_sem_input.shape[1] == 1:
+                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input.repeat(2, 1))[0].unsqueeze(0)
+            else:
+                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input)
+
+            graph.edges.semantic_feats = edge_sem_feats
 
     def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
         raise NotImplementedError

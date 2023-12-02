@@ -2,7 +2,7 @@ import os
 import copy
 
 _base_ = [
-    '../../configs/datasets/cholecT50/cholecT50_vid_instance_10.py',
+    '../../configs/datasets/small_wc/small_wc_vid_instance_5.py',
     'sv2lstg_faster_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
@@ -22,6 +22,7 @@ ds_head['type'] = 'STDSHead'
 ds_head['gnn_cfg']['num_layers'] = 5
 ds_head['num_temp_frames'] = _base_.num_temp_frames
 #ds_head['loss']['class_weight'] = [3.42870491, 4.77537741, 2.97358185]
+ds_head['use_node_positional_embedding'] = True
 ds_head['use_temporal_model'] = True
 ds_head['temporal_arch'] = 'transformer'
 ds_head['edit_graph'] = True
@@ -57,32 +58,48 @@ model = dict(
 )
 
 # metric
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='small_wc',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_data_prefix,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        metric=[],
+        num_classes=3,
+        additional_metrics=['reconstruction'],
+        use_pred_boxes_recon=False,
+        outfile_prefix='./results/small_wc_preds/train/sv2lstg',
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
+        outfile_prefix='./results/small_wc_preds/val/sv2lstg',
     )
 ]
 
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
         use_pred_boxes_recon=False,
-        outfile_prefix='./results/cholecT50_preds/test/sv2lstg',
+        outfile_prefix='./results/small_wc_preds/test/sv2lstg',
     ),
 ]
 
@@ -113,7 +130,7 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector': dict(lr_mult=0.5),
+            'lg_detector': dict(lr_mult=0.25),
         }
     )
 )

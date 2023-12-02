@@ -150,7 +150,7 @@ class LatentGraphVisualizer(DetLocalVisualizer):
             graph_filename = str(data_sample.img_id) + '.npz'
 
             # save latent graph
-            np.savez(os.path.join(save_dir, graph_filename), data_sample.lg.numpy())
+            np.savez(os.path.join(self.save_dir, graph_filename), data_sample.lg.numpy())
 
         if self.draw:
             # extract img prefix

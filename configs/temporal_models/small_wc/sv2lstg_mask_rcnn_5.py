@@ -2,8 +2,8 @@ import os
 import copy
 
 _base_ = [
-    '../../configs/datasets/cholecT50/cholecT50_vid_instance_5.py',
-    'sv2lstg_faster_rcnn_base.py',
+    '../../configs/datasets/small_wc/small_wc_vid_instance_5.py',
+    'sv2lstg_mask_rcnn_base.py',
 ]
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.sv2lstg',
@@ -12,9 +12,11 @@ custom_imports = dict(imports=orig_imports + ['evaluator.CocoMetricRGD', 'model.
 lg_model = copy.deepcopy(_base_.model)
 lg_model.num_classes = len(_base_.metainfo.classes)
 lg_model.detector.roi_head.bbox_head.num_classes = len(_base_.metainfo.classes)
+lg_model.force_encode_semantics = True
+lg_model.force_train_graph_head = True
 
 # turn off box perturbation
-lg_model.perturb_factor = 0
+#lg_model.perturb_factor = 0
 
 # load and modify ds head
 ds_head = copy.deepcopy(lg_model.ds_head)
@@ -25,7 +27,11 @@ ds_head['num_temp_frames'] = _base_.num_temp_frames
 ds_head['use_node_positional_embedding'] = True
 ds_head['use_temporal_model'] = True
 ds_head['temporal_arch'] = 'transformer'
-ds_head['edit_graph'] = True
+ds_head['pred_per_frame'] = True
+#ds_head['semantic_loss_weight'] = 0
+#ds_head['viz_loss_weight'] = 0
+#ds_head['img_loss_weight'] = 0
+ds_head['edited_graph_loss_weight'] = 1
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 del lg_model.data_preprocessor
@@ -42,6 +48,7 @@ del _base_.load_from
 model = dict(
     _delete_=True,
     type='SV2LSTG',
+    clip_size=_base_.num_temp_frames,
     lg_detector=lg_model,
     ds_head=ds_head,
     data_preprocessor=dict(
@@ -54,36 +61,53 @@ model = dict(
     ),
     use_spat_graph=True,
     use_viz_graph=True,
-    pred_per_frame=True,
+    viz_feat_size=512,
+    semantic_feat_size=512,
 )
 
 # metric
+train_evaluator = [
+    dict(
+        type='CocoMetricRGD',
+        prefix='small_wc',
+        data_root=_base_.data_root,
+        data_prefix=_base_.train_data_prefix,
+        ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
+        metric=[],
+        num_classes=3,
+        additional_metrics=['reconstruction'],
+        use_pred_boxes_recon=True,
+        outfile_prefix='./results/small_wc_preds/train/sv2lstg',
+    )
+]
+
 val_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.val_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
+        use_pred_boxes_recon=True,
+        outfile_prefix='./results/small_wc_preds/val/sv2lstg',
     )
 ]
 
 test_evaluator = [
     dict(
         type='CocoMetricRGD',
-        prefix='cholecT50',
+        prefix='small_wc',
         data_root=_base_.data_root,
         data_prefix=_base_.test_data_prefix,
         ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
         metric=[],
-        num_classes=100,
+        num_classes=3,
         additional_metrics=['reconstruction'],
-        use_pred_boxes_recon=False,
-        outfile_prefix='./results/cholecT50_preds/test/sv2lstg',
+        use_pred_boxes_recon=True,
+        outfile_prefix='./results/small_wc_preds/test/sv2lstg',
     ),
 ]
 
@@ -105,7 +129,11 @@ default_hooks = dict(
 
 vis_backends = [dict(type='LocalVisBackend')]
 visualizer = dict(
-    type='TrackLocalVisualizer', vis_backends=vis_backends, name='visualizer')
+    _delete_=True,
+    type='TrackLocalVisualizer',
+    vis_backends=vis_backends,
+    name='visualizer'
+)
 
 # optimizer
 optim_wrapper = dict(
@@ -114,7 +142,8 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector': dict(lr_mult=0.5),
+            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
+            'semantic_feat_projector': dict(lr_mult=10),
         }
     )
 )

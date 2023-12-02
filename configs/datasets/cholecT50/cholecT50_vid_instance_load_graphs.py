@@ -7,7 +7,7 @@ del _base_.train_pipeline[2]
 _base_.train_pipeline[1] = dict(
     type='TransformBroadcaster',
     transforms=[
-        dict(type='LoadLG', saved_graph_dir='latent_graphs/cholecT50_base',
+        dict(type='LoadLG', saved_graph_dir='latent_graphs/cholecT50/base',
             skip_keys=['boxesA', 'boxesB']),
         dict(type='LoadTrackAnnotationsWithDS', with_mask=False),
     ],
@@ -16,7 +16,7 @@ _base_.train_pipeline[1] = dict(
 _base_.eval_pipeline[1] = dict(
     type='TransformBroadcaster',
     transforms=[
-        dict(type='LoadLG', saved_graph_dir='latent_graphs/cholecT50_base',
+        dict(type='LoadLG', saved_graph_dir='latent_graphs/cholecT50/base',
             skip_keys=['boxesA', 'boxesB']),
         dict(type='LoadTrackAnnotationsWithDS', with_mask=False),
     ],
@@ -26,7 +26,7 @@ train_dataloader=dict(
     batch_size=64,
     num_workers=2,
     dataset=dict(
-        pipeline=train_pipeline,
+        pipeline=_base_.train_pipeline,
     ),
 )
 
@@ -34,7 +34,7 @@ val_dataloader=dict(
     batch_size=64,
     num_workers=2,
     dataset=dict(
-        pipeline=eval_pipeline,
+        pipeline=_base_.eval_pipeline,
     ),
 )
 
@@ -42,6 +42,6 @@ test_dataloader=dict(
     batch_size=64,
     num_workers=2,
     dataset=dict(
-        pipeline=eval_pipeline,
+        pipeline=_base_.eval_pipeline,
     ),
 )
