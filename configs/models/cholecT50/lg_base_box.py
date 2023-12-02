@@ -43,11 +43,11 @@ lg_model=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
         ),
-        presence_loss_weight=0.5,
+        presence_loss_weight=0.05,
         classifier_loss_cfg=dict(
             type='CrossEntropyLoss',
         ),
-        classifier_loss_weight=0.5,
+        classifier_loss_weight=0.05,
         num_edge_classes=3,
         allow_same_label_edge=[4, 8],
     ),
