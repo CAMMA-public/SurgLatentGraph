@@ -599,12 +599,15 @@ class SV2LSTG(BaseDetector):
                 graphs.nodes.gnn_viz_feats = pad_sequence([l.nodes.gnn_viz_feats \
                         for l in lg_list], batch_first=True)
                 graphs.nodes.feats = self.node_viz_feat_projector(torch.cat(
-                    [graphs.nodes.viz_feats, graphs.nodes.gnn_viz_feats], -1))
+                    [graphs.nodes.viz_feats, graphs.nodes.gnn_viz_feats], -1).flatten(end_dim=1)).view(
+                            B*T, graphs.nodes.viz_feats.shape[1], self.viz_feat_size)
             else:
-                graphs.nodes.feats = self.node_viz_feat_projector(graphs.nodes.viz_feats)
+                graphs.nodes.feats = self.node_viz_feat_projector(graphs.nodes.viz_feats.flatten(end_dim=1)).view(
+                            B*T, graphs.nodes.viz_feats.shape[1], self.viz_feat_size)
 
             if 'semantic_feats' in lg_list[0].nodes:
-                graphs.nodes.semantic_feats = torch.cat([l.nodes.semantic_feats for l in lg_list])
+                graphs.nodes.semantic_feats = pad_sequence([l.nodes.semantic_feats \
+                        for l in lg_list], batch_first=True)
 
             graphs.nodes.nodes_per_img = [l.nodes.nodes_per_img for l in lg_list]
             graphs.nodes.bboxes = pad_sequence([l.nodes.bboxes for l in lg_list],
@@ -619,16 +622,15 @@ class SV2LSTG(BaseDetector):
 
             # collate edge info
             graphs.edges.viz_feats = torch.cat([l.edges.viz_feats for l in lg_list])
+            graphs.edges.gnn_viz_feats = torch.cat([l.edges.gnn_viz_feats for l in lg_list])
             if self.use_gnn_feats:
-                graphs.edges.gnn_viz_feats = pad_sequence([l.edges.gnn_viz_feats \
-                        for l in lg_list], batch_first=True)
                 graphs.edges.feats = self.edge_viz_feat_projector(torch.cat(
                     [graphs.edges.viz_feats, graphs.edges.gnn_viz_feats], -1))
             else:
                 graphs.edges.feats = self.edge_viz_feat_projector(graphs.edges.viz_feats)
-
             if 'semantic_feats' in lg_list[0].edges:
                 graphs.edges.semantic_feats = torch.cat([l.edges.semantic_feats for l in lg_list])
+
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
             graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
             graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
@@ -636,7 +638,7 @@ class SV2LSTG(BaseDetector):
             graphs.edges.edge_flats = torch.cat([torch.cat([torch.ones(
                 l.edges.edge_flats.shape[0], 1).to(l.edges.edge_flats) * ind,
                 l.edges.edge_flats], dim=1) for ind, l in enumerate(lg_list)])
-            graphs.edges.edges_per_img = Tensor([l.edges.feats.shape[0] for l in lg_list]).int()
+            graphs.edges.edges_per_img = Tensor([l.edges.boxes.shape[0] for l in lg_list]).int()
 
             # set feats
             feats = BaseDataElement()

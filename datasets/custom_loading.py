@@ -85,6 +85,7 @@ class LoadLG(LoadImageFromFile):
 
         # img size
         results['img_shape'] = imagesize.get(results['img_path'])[::-1]
+        results['ori_shape'] = results['img_shape']
 
         return results
 
