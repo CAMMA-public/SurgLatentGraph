@@ -1,7 +1,6 @@
 import os
 
-_base_ = [os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')]
-custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
+_base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')
 
 dataset_type = 'VideoDatasetWithDS'
 data_root='data/mmdet_datasets/small_wc'

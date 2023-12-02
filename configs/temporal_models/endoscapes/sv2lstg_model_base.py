@@ -74,8 +74,7 @@ visualizer = dict(
 
 # Running settings (modify train_cfg here)
 train_cfg = dict(
-    max_iters=5000,
-    val_interval=500,
+    max_epochs=10,
 )
 
 val_cfg = dict(type='ValLoopKeyframeEval')
@@ -92,10 +91,11 @@ custom_hooks = [
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
+            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
             'semantic_feat_projector': dict(lr_mult=10),
         }
     )

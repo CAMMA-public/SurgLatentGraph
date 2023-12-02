@@ -74,8 +74,7 @@ visualizer = dict(
 
 # Running settings (modify train_cfg here)
 train_cfg = dict(
-    max_iters=5000,
-    val_interval=500,
+    max_epochs=5,
 )
 
 val_cfg = dict(type='ValLoopKeyframeEval')

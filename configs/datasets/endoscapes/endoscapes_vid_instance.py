@@ -1,7 +1,6 @@
 import os
 
-_base_ = [os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')]
-custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
+_base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')
 
 dataset_type = 'VideoDatasetWithDS'
 data_root='data/mmdet_datasets/endoscapes_mmdet'
@@ -10,7 +9,7 @@ metainfo = {
         'gallbladder', 'tool'),
     'palette': [(255, 255, 100), (102, 178, 255), (255, 0, 0), (0, 102, 51), (51, 255, 103), (255, 151, 53)]
 }
-num_temp_frames = 15
+num_temp_frames = 5
 
 train_data_prefix = 'train'
 val_data_prefix = 'val'
@@ -88,7 +87,7 @@ eval_pipeline = [
 
 train_dataloader=dict(
     _delete_=True,
-    batch_size=5,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='TrackCustomKeyframeSampler'),
@@ -105,7 +104,7 @@ train_dataloader=dict(
 )
 
 val_dataloader=dict(
-    batch_size=5,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),
@@ -123,7 +122,7 @@ val_dataloader=dict(
 )
 
 test_dataloader=dict(
-    batch_size=5,
+    batch_size=20,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(_delete_=True, type='TrackCustomKeyframeSampler'),

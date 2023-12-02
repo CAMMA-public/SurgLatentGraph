@@ -1,69 +1,37 @@
 import os
 
-_base_ = 'c80_phase_vid_instance_5.py'
+_base_ = 'c80_phase_vid_instance_load_graphs.py'
 num_temp_frames = _base_.num_temp_frames
 
-train_pipeline = [
-    dict(
-        type='AllFramesSample',
-        sampling_ratio=4,
-    ),
-    dict(
-        type='TransformBroadcaster',
-        transforms=[
-            dict(type='LoadLG', saved_graph_dir='',
-                skip_keys=['boxesA', 'boxesB'], load_keyframes_only=True),
-            dict(type='LoadTrackAnnotationsWithDS', with_mask=False),
-        ]
-    ),
-    dict(
-        type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
-    ),
-]
+_base_.train_pipeline[0] = dict(
+    type='AllFramesSample',
+    sampling_ratio=4,
+)
+_base_.train_pipeline[1].transforms[0].load_keyframes_only = True
 
-eval_pipeline = [
-    dict(
-        type='AllFramesSample',
-        sampling_ratio=4,
-    ),
-    dict(
-        type='TransformBroadcaster',
-        transforms=[
-            dict(type='LoadLG', saved_graph_dir='',
-                skip_keys=['boxesA', 'boxesB'], load_keyframes_only=True),
-            dict(type='LoadTrackAnnotationsWithDS', with_mask=False),
-        ],
-    ),
-    dict(
-        type='PackTrackInputs',
-        meta_keys=('ds', 'is_det_keyframe', 'is_ds_keyframe', 'lg'),
-    ),
-]
+_base_.eval_pipeline[0] = dict(
+    type='AllFramesSample',
+    sampling_ratio=4,
+)
+_base_.eval_pipeline[1].transforms[0].load_keyframes_only = True
 
 train_dataloader=dict(
     batch_size=1,
-    num_workers=2,
-    persistent_workers=True,
     dataset=dict(
-        pipeline=train_pipeline,
+        pipeline=_base_.train_pipeline,
     ),
 )
 
 val_dataloader=dict(
     batch_size=1,
-    num_workers=2,
-    persistent_workers=True,
     dataset=dict(
-        pipeline=eval_pipeline,
+        pipeline=_base_.eval_pipeline,
     ),
 )
 
 test_dataloader=dict(
     batch_size=1,
-    num_workers=2,
-    persistent_workers=True,
     dataset=dict(
-        pipeline=eval_pipeline,
+        pipeline=_base_.eval_pipeline,
     ),
 )
