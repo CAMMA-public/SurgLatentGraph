@@ -170,8 +170,7 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False)
 
 # hooks
-#custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
-custom_hooks = [dict(type="FreezeHook")]
+custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 metric_key = 'ds_video_f1' if 'video' in test_evaluator['agg'] else 'ds_f1'
 default_hooks = dict(
     checkpoint=dict(save_best='c80_phase/{}'.format(metric_key), rule='greater'),
