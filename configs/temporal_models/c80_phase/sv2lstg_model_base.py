@@ -15,7 +15,6 @@ del _base_.val_data_prefix
 del _base_.test_data_prefix
 del _base_.dataset_type
 del _base_.data_root
-del _base_.backend_args
 del _base_.rand_aug_surg
 
 model_imports = copy.deepcopy(_base_.custom_imports.imports)
