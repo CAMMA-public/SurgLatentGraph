@@ -5,7 +5,7 @@ _base_ = ['lg_base_box.py']
 
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.LatentGraphVisualizer'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64
 bg_img_dim = 256
@@ -168,7 +168,8 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False)
 
 # hooks
-custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
+#custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
+custom_hooks = [dict(type="FreezeHook")]
 metric_key = 'ds_video_f1' if 'video' in test_evaluator['agg'] else 'ds_f1'
 default_hooks = dict(
     checkpoint=dict(save_best='c80_phase/{}'.format(metric_key), rule='greater'),

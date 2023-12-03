@@ -291,7 +291,7 @@ class CocoMetricRGD(CocoMetric):
                     torch_rec = Recall(task='multiclass', average='none', num_classes=self.num_classes)
                     torch_f1 = F1Score(task='multiclass', average='none', num_classes=self.num_classes)
 
-                    if self.agg == 'video':
+                    if 'video' in self.agg:
                         # split ds_preds, gt by video
                         _, vid_lengths = torch.unique_consecutive(vid_ids, return_counts=True)
                         ds_preds_per_vid = ds_preds.split(vid_lengths.tolist())
@@ -348,7 +348,11 @@ class CocoMetricRGD(CocoMetric):
                             # log component-wise
                             for ind, i in enumerate(ds_prec):
                                 logger_info.append(f'ds_precision_C{ind+1}: {i:.4f}')
+                                logger_info.append(f'ds_recall_C{ind+1}: {i:.4f}')
+                                logger_info.append(f'ds_f1_C{ind+1}: {i:.4f}')
                                 eval_results['ds_precision_C{}'.format(ind+1)] = i
+                                eval_results['ds_recall_C{}'.format(ind+1)] = i
+                                eval_results['ds_f1_C{}'.format(ind+1)] = i
 
                         # log
                         logger_info.append(f'ds_precision: {torch.nanmean(ds_prec):.4f}')
