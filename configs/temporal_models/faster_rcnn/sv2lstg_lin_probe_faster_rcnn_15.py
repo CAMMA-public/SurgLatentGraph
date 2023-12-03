@@ -18,13 +18,13 @@ model = copy.deepcopy(_base_.sv2lstg_model)
 # configure lg detector
 model.lg_detector.detector = detector
 model.lg_detector.sem_feat_use_masks = False
+model.sem_feat_use_masks = False
 
 # weight init
 model.lg_detector.init_cfg = dict(
     type='Pretrained',
     checkpoint=_base_.load_from.replace('base', 'faster_rcnn'),
 )
-
 
 model.lg_detector.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.lg_detector.roi_extractor.roi_layer.output_size = 1

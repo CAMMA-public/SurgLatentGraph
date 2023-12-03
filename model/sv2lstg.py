@@ -24,8 +24,8 @@ class SV2LSTG(BaseDetector):
             use_gnn_feats: bool = True, num_spatial_edge_classes: int = 4,
             use_spat_graph: bool = True, use_viz_graph: bool = True, learn_sim_graph: bool = False,
             sem_feat_hidden_dim: int = 2048, semantic_feat_projector_layers: int = 3,
-            sem_feat_use_bboxes: bool = True, sem_feat_use_classes: bool = True,
-            sem_feat_use_masks: bool = True, sem_feat_use_temporal_window: bool = True,
+            sem_feat_use_bboxes: bool = True, sem_feat_use_class_logits: bool = True,
+            sem_feat_use_masks: bool = False, sem_feat_use_temporal_window: bool = True,
             num_sim_topk: int = 2, temporal_edge_ranges: str = 'exp', edge_max_temporal_range: int = -1,
             use_max_iou_only: bool = True, use_temporal_edges_only: bool = False,
             per_video: bool = False, **kwargs):
@@ -69,12 +69,12 @@ class SV2LSTG(BaseDetector):
         # edge semantic feat projector
         sem_input_dim = 0
         self.sem_feat_use_bboxes = sem_feat_use_bboxes
-        self.sem_feat_use_classes = sem_feat_use_classes
+        self.sem_feat_use_class_logits = sem_feat_use_class_logits
         self.sem_feat_use_masks = sem_feat_use_masks
         self.sem_feat_use_temporal_window = sem_feat_use_temporal_window
         if self.sem_feat_use_bboxes:
             sem_input_dim += 4
-        if self.sem_feat_use_classes:
+        if self.sem_feat_use_class_logits:
             sem_input_dim += self.num_temp_edge_classes
         if self.sem_feat_use_temporal_window:
             sem_input_dim += self.clip_size
@@ -276,9 +276,8 @@ class SV2LSTG(BaseDetector):
 
         # pad spat graph if needed
         if len(graphs_to_use) == 2 and graphs_to_use[0].shape[-1] != graphs_to_use[1].shape[-1]:
-            # pad spat graph before adding
-            padded_spat_graph = torch.zeros_like(graphs_to_use[1])
-            padded_spat_graph[:B, :M, :M] = graphs_to_use[0]
+            padded_spat_graph = torch.sparse_coo_tensor(graphs_to_use[0].indices(),
+                    graphs_to_use[0].values(), size=graphs_to_use[1].shape)
             graphs_to_use[0] = padded_spat_graph
 
             # pad node_boxes
@@ -389,7 +388,7 @@ class SV2LSTG(BaseDetector):
                         nonzero_uids_frame[1]], num_classes=T)
 
                 # compute sem feats
-                extra_edge_sem_feats = self._compute_sem_feats(extra_edge_boxes,
+                extra_edge_sem_feats = self._compute_st_sem_feats(extra_edge_boxes,
                         extra_edge_class_logits[:, -self.num_temp_edge_classes:],
                         edge_temporal_windows, box_shape)
 
@@ -413,7 +412,7 @@ class SV2LSTG(BaseDetector):
 
         return graphs
 
-    def _compute_sem_feats(self, boxes: Tensor, class_logits: Tensor,
+    def _compute_st_sem_feats(self, boxes: Tensor, class_logits: Tensor,
             edge_temporal_windows: Tensor, box_shape: Tuple) -> Tensor:
 
         # run temporal edge semantic feat projector
@@ -421,7 +420,7 @@ class SV2LSTG(BaseDetector):
         if self.sem_feat_use_bboxes:
             b_norm = boxes / Tensor(box_shape).flip(0).repeat(2).to(boxes.device) # make 0-1
             sem_feat_input.append(b_norm)
-        if self.sem_feat_use_classes:
+        if self.sem_feat_use_class_logits:
             sem_feat_input.append(class_logits)
         if self.sem_feat_use_temporal_window:
             sem_feat_input.append(edge_temporal_windows)
@@ -583,12 +582,12 @@ class SV2LSTG(BaseDetector):
                 for l, p in zip(lg_list, perturbed_boxes):
                     l.nodes.bboxes = p
 
-            if self.reencode_semantics:
-                self.compute_semantic_feat(lg_list)
-
             graphs = BaseDataElement()
             graphs.nodes = BaseDataElement()
             graphs.edges = BaseDataElement()
+
+            if self.reencode_semantics:
+                self.compute_lg_semantic_feat(lg_list, graphs)
 
             # collate node info
             graphs.nodes.viz_feats = pad_sequence([l.nodes.viz_feats \
@@ -696,22 +695,21 @@ class SV2LSTG(BaseDetector):
 
         return feats, graphs, clip_results, results
 
-    def compute_semantic_feat(self, lg_list: List) -> Tensor:
-        breakpoint()
-        device = feats.instance_feats.device
-        boxes = [r.pred_instances.bboxes for r in results]
-        classes = [r.pred_instances.labels for r in results]
-        scores = [r.pred_instances.scores for r in results]
+    def compute_lg_semantic_feat(self, lg_list: List, graphs: BaseDataElement) -> Tensor:
+        device = lg_list[0].nodes.viz_feats.device
+        boxes = [l.nodes.bboxes for l in lg_list]
+        classes = [l.nodes.labels for l in lg_list]
+        scores = [l.nodes.scores for l in lg_list]
         masks = None
-        if 'masks' in lg_list[0]:
-            masks = [r.pred_instances.masks for r in results]
+        if 'masks' in lg_list[0].nodes:
+            masks = [l.nodes.masks for l in lg_list]
 
         # compute semantic feat
         c = pad_sequence(classes, batch_first=True)
         b = pad_sequence(boxes, batch_first=True)
         s = pad_sequence(scores, batch_first=True)
-        b_norm = b / Tensor(results[0].ori_shape).flip(0).repeat(2).to(b.device)
-        c_one_hot = F.one_hot(c, num_classes=self.num_classes)
+        b_norm = b / Tensor(lg_list[0].ori_shape).flip(0).repeat(2).to(device)
+        c_one_hot = F.one_hot(c, num_classes=self.lg_detector.num_classes)
 
         sem_feat_input = []
         if self.sem_feat_use_bboxes:
@@ -727,7 +725,7 @@ class SV2LSTG(BaseDetector):
 
             # process masks
             polygon_masks = pad_sequence(polygon_masks, batch_first=True) # B x N x P x 2
-            polygon_masks_norm = polygon_masks / Tensor(results[0].ori_shape).flip(0).to(polygon_masks.device)
+            polygon_masks_norm = polygon_masks / Tensor(lg_list[0].ori_shape).flip(0).to(device)
 
             sem_feat_input.append(polygon_masks_norm.flatten(start_dim=-2))
 
@@ -735,22 +733,23 @@ class SV2LSTG(BaseDetector):
 
         sem_feat_input = torch.cat(sem_feat_input, -1).flatten(end_dim=1)
         if sem_feat_input.shape[0] == 1:
-            s = self.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
+            s = self.lg_detector.semantic_feat_projector(torch.cat([sem_feat_input, sem_feat_input]))[0]
         else:
-            s = self.semantic_feat_projector(sem_feat_input)
+            s = self.lg_detector.semantic_feat_projector(sem_feat_input)
 
-        feats.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
+        # add node sem feats to graph
+        graphs.nodes.semantic_feats = s.view(b_norm.shape[0], b_norm.shape[1], s.shape[-1])
 
-        if graph is not None:
-            # compute edge semantic feats
-            eb_norm = torch.cat(graph.edges.boxes) / Tensor(results[0].batch_input_shape).flip(0).repeat(2).to(graph.edges.boxes[0].device) # make 0-1
-            edge_sem_input = torch.cat([eb_norm, graph.edges.class_logits.detach()], -1) # detach class logits to prevent backprop
-            if edge_sem_input.shape[1] == 1:
-                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input.repeat(2, 1))[0].unsqueeze(0)
-            else:
-                edge_sem_feats = self.edge_semantic_feat_projector(edge_sem_input)
+        # compute edge semantic feats
+        eb_norm = torch.cat([l.edges.boxes for l in lg_list]) / Tensor(lg_list[0].batch_input_shape).flip(0).repeat(2).to(device) # make 0-1
+        ec = torch.cat([l.edges.class_logits for l in lg_list])
+        edge_sem_input = torch.cat([eb_norm, ec], -1) # detach class logits to prevent backprop
+        if edge_sem_input.shape[1] == 1:
+            edge_sem_feats = self.lg_detector.edge_semantic_feat_projector(edge_sem_input.repeat(2, 1))[0].unsqueeze(0)
+        else:
+            edge_sem_feats = self.lg_detector.edge_semantic_feat_projector(edge_sem_input)
 
-            graph.edges.semantic_feats = edge_sem_feats
+        graphs.edges.semantic_feats = edge_sem_feats
 
     def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
         raise NotImplementedError

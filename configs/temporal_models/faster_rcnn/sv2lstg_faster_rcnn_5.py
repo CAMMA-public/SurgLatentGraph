@@ -18,6 +18,7 @@ model = copy.deepcopy(_base_.sv2lstg_model)
 # configure lg detector
 model.lg_detector.detector = detector
 model.lg_detector.sem_feat_use_masks = False
+model.sem_feat_use_masks = False
 
 # trainable bb, neck
 model.lg_detector.trainable_backbone_cfg=copy.deepcopy(detector.backbone)

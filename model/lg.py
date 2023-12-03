@@ -249,10 +249,13 @@ class LGDetector(BaseDetector):
             g.nodes.gnn_viz_feats = graph.nodes.gnn_viz_feats[batch_ind]
             if 'semantic_feats' in feats:
                 g.nodes.semantic_feats = feats.semantic_feats[batch_ind]
+
             g.nodes.nodes_per_img = graph.nodes.nodes_per_img[batch_ind]
             g.nodes.bboxes = r.pred_instances.bboxes
             g.nodes.scores = r.pred_instances.scores
             g.nodes.labels = r.pred_instances.labels
+            if 'masks' in r.pred_instances:
+                g.nodes.masks = r.pred_instances.masks
 
             # split edge quantities and add
             epi = graph.edges.edges_per_img.tolist()
@@ -274,6 +277,10 @@ class LGDetector(BaseDetector):
 
             # pool img feats and add to graph
             g.img_feats = F.adaptive_avg_pool2d(feats.bb_feats[-1][batch_ind], 1).squeeze()
+
+            # add img shape to results
+            g.ori_shape = r.ori_shape
+            g.batch_input_shape = r.batch_input_shape
 
             # add LG to results
             r.lg = g
