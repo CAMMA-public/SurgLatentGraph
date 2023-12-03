@@ -3,7 +3,7 @@ import os
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')
 
 dataset_type = 'VideoDatasetWithDS'
-data_root='data/mmdet_datasets/c80_phase'
+data_root='data/mmdet_datasets/cholec80'
 metainfo = {
     'classes': ('abdominal_wall', 'liver', 'gastrointestinal_wall', 'fat', 'grasper',
         'connective_tissue', 'blood', 'cystic_duct', 'hook', 'gallbladder', 'hepatic_vein',
@@ -11,9 +11,9 @@ metainfo = {
 }
 num_temp_frames = 5
 
-train_data_prefix = 'train'
-val_data_prefix = 'val'
-test_data_prefix = 'test'
+train_data_prefix = 'train_phase'
+val_data_prefix = 'val_phase'
+test_data_prefix = 'test_phase'
 
 # aug
 rand_aug_surg = [
@@ -95,7 +95,7 @@ train_dataloader=dict(
     dataset=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='train/annotation_coco_vid.json',
+        ann_file='train_phase/annotation_coco_vid.json',
         data_prefix=dict(img_path=train_data_prefix),
         pipeline=train_pipeline,
         filter_cfg=dict(filter_empty_gt=False),
@@ -112,7 +112,7 @@ val_dataloader=dict(
         _delete_=True,
         type=dataset_type,
         data_root=data_root,
-        ann_file='val/annotation_coco_vid.json',
+        ann_file='val_phase/annotation_coco_vid.json',
         data_prefix=dict(img_path=val_data_prefix),
         test_mode=True,
         pipeline=eval_pipeline,
@@ -130,7 +130,7 @@ test_dataloader=dict(
         _delete_=True,
         type=dataset_type,
         data_root=data_root,
-        ann_file='test/annotation_coco_vid.json',
+        ann_file='test_phase/annotation_coco_vid.json',
         data_prefix=dict(img_path=test_data_prefix),
         test_mode=True,
         pipeline=eval_pipeline,

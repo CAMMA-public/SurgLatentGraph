@@ -121,7 +121,7 @@ train_evaluator = dict(
     metric=[],
     num_classes=7,
     task_type='multiclass',
-    agg='video',
+    agg='per_video',
     outfile_prefix='./results/c80_phase_preds/train/lg_cvs',
 )
 val_evaluator = dict(
@@ -134,7 +134,7 @@ val_evaluator = dict(
     metric=[],
     num_classes=7,
     task_type='multiclass',
-    agg='video',
+    agg='per_video',
     outfile_prefix='./results/c80_phase_preds/val/lg_cvs',
 )
 
@@ -147,7 +147,7 @@ test_evaluator = dict(
     metric=[],
     num_classes=7,
     task_type='multiclass',
-    agg='video',
+    agg='per_video',
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
     outfile_prefix='./results/c80_phase_preds/test/lg_cvs',
