@@ -14,6 +14,8 @@ recon_input_dim = bottleneck_feat_size + bg_img_dim
 # model
 lg_model = _base_.lg_model
 lg_model.perturb_factor = 0.125
+lg_model.graph_head.presence_loss_weight = 0.1
+lg_model.graph_head.classifier_loss_weight = 0.1
 lg_model.ds_head = dict(
     type='DSHead',
     num_classes=7,
