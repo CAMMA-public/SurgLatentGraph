@@ -13,7 +13,7 @@ from mmdet.models.detectors.base import BaseDetector
 from mmengine.structures import BaseDataElement, InstanceData
 from mmdet.utils import ConfigType, OptConfigType, OptMultiConfig
 from mmdet.registry import MODELS
-from .lg_cvs import LGDetector
+from .lg import LGDetector
 from .predictor_heads.modules.layers import build_mlp
 from .predictor_heads.modules.utils import apply_sparse_mask, get_sparse_mask_inds
 

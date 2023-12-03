@@ -10,7 +10,7 @@ import torchvision.transforms.functional as TF
 from typing import Dict, List, Tuple, Union
 
 @MODELS.register_module()
-class SimpleCVSPredictor(BaseDetector, metaclass=ABCMeta):
+class SimplePredictor(BaseDetector, metaclass=ABCMeta):
     def __init__(self,
             backbone: ConfigType,
             loss: ConfigType,
