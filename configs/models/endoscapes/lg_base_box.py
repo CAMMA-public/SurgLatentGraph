@@ -12,7 +12,7 @@ val_data_prefix = _base_.val_dataloader.dataset.data_prefix.img
 test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['model.lg_cvs', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['model.lg', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
 
 # feat sizes
 viz_feat_size = 256
@@ -73,7 +73,7 @@ test_evaluator = dict(
     metric=['bbox'],
     use_pred_boxes_recon=False,
     num_classes=-1, # ds num classes
-    outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+    outfile_prefix='./results/endoscapes_preds/test/lg',
     classwise=True,
 )
 

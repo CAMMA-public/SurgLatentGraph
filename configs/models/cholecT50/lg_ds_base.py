@@ -122,7 +122,7 @@ train_evaluator = dict(
     agg='per_class_per_video',
     num_classes=100,
     ds_per_class=False,
-    outfile_prefix='./results/cholecT50_preds/train/lg_cvs',
+    outfile_prefix='./results/cholecT50_preds/train/lg',
 )
 val_evaluator = dict(
     type='CocoMetricRGD',
@@ -135,7 +135,7 @@ val_evaluator = dict(
     agg='per_class_per_video',
     num_classes=100,
     ds_per_class=False,
-    outfile_prefix='./results/cholecT50_preds/val/lg_cvs',
+    outfile_prefix='./results/cholecT50_preds/val/lg',
 )
 
 test_evaluator = dict(
@@ -150,7 +150,7 @@ test_evaluator = dict(
     ds_per_class=False,
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
-    outfile_prefix='./results/cholecT50_preds/test/lg_cvs',
+    outfile_prefix='./results/cholecT50_preds/test/lg',
 )
 
 # optimizer

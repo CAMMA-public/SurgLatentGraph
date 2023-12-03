@@ -124,7 +124,7 @@ train_evaluator = dict(
     num_classes=7,
     task_type='multiclass',
     agg='per_video',
-    outfile_prefix='./results/c80_phase_preds/train/lg_cvs',
+    outfile_prefix='./results/c80_phase_preds/train/lg',
 )
 val_evaluator = dict(
     type='CocoMetricRGD',
@@ -137,7 +137,7 @@ val_evaluator = dict(
     num_classes=7,
     task_type='multiclass',
     agg='per_video',
-    outfile_prefix='./results/c80_phase_preds/val/lg_cvs',
+    outfile_prefix='./results/c80_phase_preds/val/lg',
 )
 
 test_evaluator = dict(
@@ -152,7 +152,7 @@ test_evaluator = dict(
     agg='per_video',
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
-    outfile_prefix='./results/c80_phase_preds/test/lg_cvs',
+    outfile_prefix='./results/c80_phase_preds/test/lg',
 )
 
 # optimizer

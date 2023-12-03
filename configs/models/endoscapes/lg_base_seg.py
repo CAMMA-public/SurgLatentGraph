@@ -25,7 +25,7 @@ test_evaluator = dict(
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
     num_classes=-1, # ds num classes
-    outfile_prefix='./results/endoscapes_preds/test/lg_cvs',
+    outfile_prefix='./results/endoscapes_preds/test/lg',
     classwise=True,
 )
 

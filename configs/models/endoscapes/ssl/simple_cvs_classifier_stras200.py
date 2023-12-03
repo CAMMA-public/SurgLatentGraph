@@ -1,6 +1,6 @@
 import os
 
-_base_ = ['../simple_cvs_classifier.py']
+_base_ = ['../simple_classifier.py']
 
 model = dict(
     backbone=dict(

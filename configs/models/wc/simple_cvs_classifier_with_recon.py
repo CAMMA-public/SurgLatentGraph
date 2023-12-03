@@ -1,6 +1,6 @@
 import os
 
-_base_ = ['simple_cvs_classifier.py']
+_base_ = ['simple_classifier.py']
 
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['model.predictor_heads.reconstruction',

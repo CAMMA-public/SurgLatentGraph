@@ -121,7 +121,7 @@ train_evaluator = dict(
     use_pred_boxes_recon=True,
     metric=[],
     num_classes=3,
-    outfile_prefix='./results/small_wc_preds/train/lg_cvs',
+    outfile_prefix='./results/small_wc_preds/train/lg',
 )
 val_evaluator = dict(
     type='CocoMetricRGD',
@@ -132,7 +132,7 @@ val_evaluator = dict(
     use_pred_boxes_recon=True,
     metric=[],
     num_classes=3,
-    outfile_prefix='./results/small_wc_preds/val/lg_cvs',
+    outfile_prefix='./results/small_wc_preds/val/lg',
 )
 
 test_evaluator = dict(
@@ -145,7 +145,7 @@ test_evaluator = dict(
     num_classes=3,
     #additional_metrics = ['reconstruction'],
     use_pred_boxes_recon=True,
-    outfile_prefix='./results/small_wc_preds/test/lg_cvs',
+    outfile_prefix='./results/small_wc_preds/test/lg',
 )
 
 # optimizer

@@ -24,7 +24,7 @@ test_evaluator = dict(
     metric=['bbox', 'segm'],
     additional_metrics=['reconstruction'],
     use_pred_boxes_recon=False,
-    outfile_prefix='./results/small_wc_preds/test/lg_cvs',
+    outfile_prefix='./results/small_wc_preds/test/lg',
     classwise=True,
     num_classes=-1, # ds num classes
 )
