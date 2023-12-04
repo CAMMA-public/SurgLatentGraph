@@ -577,8 +577,8 @@ class SV2LSTG(BaseDetector):
 
             # box perturb
             if self.training and self.perturb:
-                perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes for l in lg_list],
-                        batch_data_samples[0][0].img_shape)
+                perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes \
+                        for l in lg_list], batch_data_samples[0][0].img_shape)
                 for l, p in zip(lg_list, perturbed_boxes):
                     l.nodes.bboxes = p
 
@@ -657,7 +657,6 @@ class SV2LSTG(BaseDetector):
             feats, graphs, detached_results, results, _, _ = self.lg_detector.extract_lg(
                     batch_inputs.flatten(end_dim=1),
                     [x for y in batch_data_samples for x in y],
-                    force_perturb=self.training and self.perturb,
                     losses=losses)
             N = graphs.nodes.viz_feats.shape[1]
             graphs.nodes.labels = pad_sequence([r.pred_instances.labels for r in results],
