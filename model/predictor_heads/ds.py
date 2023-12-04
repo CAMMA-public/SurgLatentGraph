@@ -267,19 +267,25 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
             # mask all node feats
             f = node_feats[0]
-            perturbed_node_feats[0] = torch.normal(torch.zeros_like(f),
-                    torch.ones_like(f)).to(f.device)
+            if f is not None:
+                perturbed_node_feats[0] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
+
             f = node_feats[1]
-            perturbed_node_feats[1] = torch.normal(torch.zeros_like(f),
-                    torch.ones_like(f)).to(f.device)
+            if f is not None:
+                perturbed_node_feats[1] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
 
             # mask all edge feats
             f = edge_feats[0]
-            perturbed_edge_feats[0] = torch.normal(torch.zeros_like(f),
-                    torch.ones_like(f)).to(f.device)
+            if f is not None:
+                perturbed_edge_feats[0] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
+
             f = edge_feats[1]
-            perturbed_edge_feats[1] = torch.normal(torch.zeros_like(f),
-                    torch.ones_like(f)).to(f.device)
+            if f is not None:
+                perturbed_edge_feats[1] = torch.normal(torch.zeros_like(f),
+                        torch.ones_like(f)).to(f.device)
 
         if self.add_noise:
             # add noise to graph_feats
