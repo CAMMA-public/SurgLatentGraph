@@ -32,4 +32,3 @@ load_from = 'weights/mask_rcnn_r50_fpn_mstrain-poly_3x_coco_20210524_201154-21b5
 optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
 )
-auto_scale_lr = dict(enable=True)
