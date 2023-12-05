@@ -43,3 +43,5 @@ model.lg_detector.roi_extractor.roi_layer.output_size = 1
 # remove unnecessary components
 del _base_.sv2lstg_model
 del _base_.load_from
+
+del _base_.optim_wrapper.paramwise_cfg.custom_keys['semantic_feat_projector']
