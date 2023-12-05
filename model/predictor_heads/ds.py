@@ -37,7 +37,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             input_sem_feat_size: int, final_viz_feat_size: int, final_sem_feat_size: int,
             loss: Union[List, ConfigType], use_img_feats: bool = True, img_feats_only: bool = False,
             use_gnn_feats: bool = True, loss_consensus: str = 'mode', predictor_hidden_dim: int = 1024,
-            num_predictor_layers: int = 2, loss_weight: float = 1.0, add_noise: bool = True,
+            num_predictor_layers: int = 2, loss_weight: float = 1.0, add_noise: bool = False,
             semantic_loss_weight: float = 0.0, viz_loss_weight: float = 0.0,
             img_loss_weight: float = 0.0, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
