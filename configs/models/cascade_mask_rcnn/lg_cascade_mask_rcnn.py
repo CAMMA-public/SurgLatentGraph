@@ -14,7 +14,6 @@ detector.roi_head.bbox_head = [
 ]
 detector.roi_head.mask_head.num_classes = 6
 detector.test_cfg.rcnn.max_per_img = _base_.num_nodes
-detector.test_cfg.rcnn.nms.iou_threshold = 0.3
 
 dp = copy.deepcopy(_base_.model.data_preprocessor)
 dp.pad_size_divisor = 1
