@@ -27,6 +27,7 @@ custom_imports = dict(imports=model_imports + ['evaluator.CocoMetricRGD', 'model
 lg_model = _base_.lg_model
 lg_model.force_encode_semantics = True
 lg_model.force_train_graph_head = True
+lg_model.perturb_factor = 0
 
 # define additional params in ds head
 lg_model.ds_head.type='STDSHead'
