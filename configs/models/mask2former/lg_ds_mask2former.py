@@ -71,3 +71,5 @@ optim_wrapper = dict(
 train_dataloader = dict(batch_size=16)
 val_dataloader = dict(batch_size=16)
 test_dataloader = dict(batch_size=16)
+
+visualizer = dict(detector='mask2former')

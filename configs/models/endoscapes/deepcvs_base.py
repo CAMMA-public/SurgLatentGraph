@@ -18,7 +18,7 @@ custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMe
 
 # additional params
 num_nodes = 16
-layout_noise_dim = 32
+layout_noise_dim = 256
 bottleneck_feat_size = 1024
 recon_input_dim = bottleneck_feat_size + layout_noise_dim
 
@@ -50,7 +50,7 @@ dc_model = dict(
     use_pred_boxes_recon_loss=True,
     reconstruction_head=dict(
         type='ReconstructionHead',
-        layout_noise_dim=layout_noise_dim,
+        bg_img_dim=layout_noise_dim,
         num_classes=len(_base_.metainfo.classes),
         num_nodes=num_nodes,
         bottleneck_feat_size=bottleneck_feat_size,
