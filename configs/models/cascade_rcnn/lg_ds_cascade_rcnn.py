@@ -39,3 +39,5 @@ del _base_.lg_model
 
 # modify load_from
 load_from = _base_.load_from.replace('base', 'cascade_rcnn')
+
+visualizer = dict(detector='cascade_rcnn')
