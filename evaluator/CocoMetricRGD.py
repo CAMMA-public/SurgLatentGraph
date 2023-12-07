@@ -104,14 +104,14 @@ class CocoMetricRGD(CocoMetric):
                 if 'reconstruction' in data_sample:
                     p['reconstruction'] = data_sample['reconstruction']
 
-                if 'gt_edges' in data_sample:
-                    g['gt_edges'] = data_sample['gt_edges']
+                #if 'gt_edges' in data_sample:
+                #    g['gt_edges'] = data_sample['gt_edges']
 
-                    # add det gt also
-                    g['gt_instances'] = data_sample['gt_instances']
+                #    # add det gt also
+                #    g['gt_instances'] = data_sample['gt_instances']
 
-                if 'pred_edges' in data_sample:
-                    p['pred_edges'] = data_sample['pred_edges']
+                #if 'pred_edges' in data_sample:
+                #    p['pred_edges'] = data_sample['pred_edges']
 
                 if 'pred_ds' in data_sample:
                     p['ds'] = data_sample['pred_ds']
