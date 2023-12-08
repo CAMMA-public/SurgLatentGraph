@@ -18,15 +18,15 @@ class LatentGraphVisualizer(DetLocalVisualizer):
         super().__init__(**kwargs)
         self.save_dir = os.path.join('latent_graphs', dataset, detector)
 
-        # create graph dir
-        if not os.path.exists(self.save_dir):
-            os.makedirs(self.save_dir)
-
         self.dataset = dataset
 
         # whether to draw/save
         self.draw = draw
         self.save_graphs = save_graphs
+        if self.save_graphs:
+            # create graph dir
+            if not os.path.exists(self.save_dir):
+                os.makedirs(self.save_dir)
 
         if self.draw:
             viz_dir = os.path.join(results_dir, '{}_preds'.format(dataset), data_prefix)
