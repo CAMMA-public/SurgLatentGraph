@@ -30,14 +30,14 @@ lg_model.force_train_graph_head = True
 lg_model.perturb_factor = 0
 
 # define additional params in ds head
-lg_model.ds_head.type='STDSHead'
-lg_model.ds_head.num_temp_frames=5
-lg_model.ds_head.gnn_cfg.num_layers=5
-lg_model.ds_head.use_node_positional_embedding=True
-lg_model.ds_head.use_temporal_model=True
-lg_model.ds_head.temporal_arch='transformer'
-lg_model.ds_head.pred_per_frame=True
-lg_model.ds_head.edited_graph_loss_weight=1
+lg_model.ds_head.type = 'STDSHead'
+lg_model.ds_head.num_temp_frames = 5
+lg_model.ds_head.gnn_cfg.num_layers = 5
+lg_model.ds_head.use_node_positional_embedding = True
+lg_model.ds_head.use_temporal_model = True
+lg_model.ds_head.temporal_arch = 'transformer'
+lg_model.ds_head.pred_per_frame = True
+lg_model.ds_head.edited_graph_loss_weight = 1
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 st_ds_head = copy.deepcopy(lg_model['ds_head'])
@@ -96,8 +96,8 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
-            'semantic_feat_projector': dict(lr_mult=10),
+            'lg_detector.trainable_backbone': dict(lr_mult=0.1),
+            'semantic_feat_projector': dict(lr_mult=30),
         }
     )
 )

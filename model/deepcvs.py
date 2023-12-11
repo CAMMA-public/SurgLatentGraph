@@ -111,20 +111,26 @@ class DeepCVS(BaseDetector):
 
         return box_layout, layout, one_hot_layout
 
-    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
-        # run detector to get detections
-        results = self.detector.predict(batch_inputs, batch_data_samples)
+    def forward(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tensor:
+        with torch.no_grad():
+            # run detector to get detections
+            results = self.detector.predict(batch_inputs, batch_data_samples)
 
         # get feats
         ds_feats = self.extract_feat(batch_inputs, results)
 
         # reconstruction if recon head is not None
-        recon_imgs, _, _ = self.reconstruct(batch_inputs, results, ds_feats)
+        recon_outputs = self.reconstruct(batch_inputs, results, ds_feats)
 
         if isinstance(self.decoder_predictor, torch.nn.ModuleList):
             ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
         else:
             ds_preds = self.decoder_predictor(ds_feats)
+
+        return ds_preds, recon_outputs
+
+    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
+        ds_preds = self.forward(batch_inputs, batch_data_samples)
 
         for r, dp, r_img in zip(results, ds_preds, recon_imgs):
             r.pred_ds = dp
@@ -154,17 +160,8 @@ class DeepCVS(BaseDetector):
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
-
-        with torch.no_grad():
-            # run detector
-            results = self.detector.predict(batch_inputs, batch_data_samples)
-
-        # get feats
-        ds_feats = self.extract_feat(batch_inputs, results)
-
-        # reconstruction and loss if recon head is not None
-        recon_imgs, img_targets, rescaled_results = self.reconstruct(
-                batch_inputs, results, ds_feats)
+        ds_preds, recon_outputs = self.forward(batch_inputs, batch_data_samples)
+        recon_imgs, img_targets, rescaled_results = recon_outputs
 
         if self.reconstruction_loss is not None:
             if self.use_pred_boxes_recon_loss:
@@ -174,12 +171,6 @@ class DeepCVS(BaseDetector):
 
             recon_losses = self.reconstruction_loss(recon_imgs, img_targets, recon_boxes)
             losses.update(recon_losses)
-
-        # ds prediction and loss
-        if isinstance(self.decoder_predictor, torch.nn.ModuleList):
-            ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
-        else:
-            ds_preds = self.decoder_predictor(ds_feats)
 
         # get gt
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
