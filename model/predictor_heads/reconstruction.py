@@ -111,10 +111,13 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         if 'masks' in rescaled_results[0].pred_instances:
             masks = [r.pred_instances.masks for r in rescaled_results]
             layouts = self._construct_layout(classes, boxes, masks)
-            if 'gt_instances' in rescaled_results[0]:
+            if 'gt_instances' in rescaled_results[0] and 'masks' in rescaled_results[0].gt_instances:
                 gt_masks = [r.gt_instances.masks.to_tensor(masks[0].dtype,
                     masks[0].device) if r.is_det_keyframe else r.pred_instances.masks for r in rescaled_results]
                 gt_layouts = self._construct_layout(gt_classes, gt_boxes, gt_masks)
+            else:
+                gt_layouts = None
+
         else:
             layouts = self._construct_layout(classes, boxes)
             if 'gt_instances' in rescaled_results[0]:
@@ -258,7 +261,11 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             pred_scale_factor = (self.reconstruction_size / Tensor(r.ori_shape)).flip(0).tolist()
             rescaled_pred_bboxes = scale_boxes(r.pred_instances.bboxes, pred_scale_factor)
 
-            gt_actual_size = [r.gt_instances.masks.height, r.gt_instances.masks.width]
+            if self.training:
+                gt_actual_size = r.img_shape
+            else:
+                gt_actual_size = r.ori_shape
+
             gt_scale_factor = (self.reconstruction_size / Tensor(gt_actual_size)).flip(0).tolist()
             rescaled_gt_bboxes = scale_boxes(r.gt_instances.bboxes, gt_scale_factor)
             rescaled_r = DetDataSample(
@@ -276,7 +283,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                     rescaled_r.pred_instances.masks = TF.resize(r.pred_instances.masks,
                             self.reconstruction_size.tolist(), InterpolationMode.NEAREST)
 
-                rescaled_r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
+                if 'masks' in r.gt_instances:
+                    rescaled_r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
 
             rescaled_results.append(rescaled_r)
 

@@ -96,7 +96,7 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector.trainable_backbone': dict(lr_mult=0.1),
+            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
             'semantic_feat_projector': dict(lr_mult=30),
         }
     )

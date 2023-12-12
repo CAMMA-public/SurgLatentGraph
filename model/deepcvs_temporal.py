@@ -29,6 +29,7 @@ class DeepCVSTemporal(DeepCVS):
         self.clip_size = clip_size
         self.temporal_arch = temporal_arch
         self.causal = causal
+        self.per_video = per_video
 
         # replace decoder predictor
         if isinstance(loss, list):
@@ -38,13 +39,13 @@ class DeepCVSTemporal(DeepCVS):
 
     def _create_temporal_model(self):
         if self.temporal_arch.lower() == 'transformer':
-            norm = torch.nn.BatchNorm1d(self.decoder_backbone.feat_dim)
+            norm = torch.nn.LayerNorm(self.decoder_backbone.feat_dim)
             pe = PositionalEncoding(d_model=self.decoder_backbone.feat_dim, batch_first=True)
-            decoder_layer = torch.nn.TransformerDecoderLayer(
+            encoder_layer = torch.nn.TransformerEncoderLayer(
                     d_model=self.decoder_backbone.feat_dim, nhead=8, batch_first=True)
-            temp_model = torch.nn.TransformerDecoder(decoder_layer, num_layers=3,
+            temp_model = torch.nn.TransformerEncoder(encoder_layer, num_layers=6,
                     norm=norm)
-            self.decoder_predictor = CustomSequential(pe, DuplicateItem(), temp_model,
+            self.decoder_predictor = CustomSequential(pe, temp_model,
                     torch.nn.Linear(self.decoder_backbone.feat_dim, self.num_classes))
 
         elif self.temporal_arch.lower() == 'tcn':
@@ -64,8 +65,13 @@ class DeepCVSTemporal(DeepCVS):
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
+        if self.per_video:
+            filtered_batch_data_samples = [[b for ind, b in enumerate(bds) \
+                    if ind in bds.key_frames_inds] for bds in batch_data_samples]
+        else:
+            filtered_batch_data_samples = batch_data_samples
 
-        ds_preds, recon_outputs = self.forward(batch_inputs, batch_data_samples)
+        ds_preds, recon_outputs, _ = self._forward(batch_inputs, filtered_batch_data_samples)
         recon_imgs, img_targets, rescaled_results = recon_outputs
 
         if self.reconstruction_loss is not None:
@@ -102,16 +108,76 @@ class DeepCVSTemporal(DeepCVS):
 
         return losses
 
-    def forward(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tensor:
+    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
         if self.per_video:
             filtered_batch_data_samples = [[b for ind, b in enumerate(bds) \
                     if ind in bds.key_frames_inds] for bds in batch_data_samples]
         else:
             filtered_batch_data_samples = batch_data_samples
 
+        ds_preds, recon_outputs, results = self._forward(batch_inputs,
+                filtered_batch_data_samples)
+        recon_imgs, _, _ = recon_outputs
+
+        # only keep keyframes
+        if self.per_video:
+            # upsample predictions if needed
+            if len(filtered_batch_data_samples[0]) < len(batch_data_samples[0]):
+                # compute upsample factor
+                upsample_factor = int(np.ceil(len(batch_data_samples[0]) / len(filtered_batch_data_samples[0])))
+
+                # pad predictions
+                ds_preds = ds_preds.repeat_interleave(upsample_factor, dim=1)[:,
+                        :len(batch_data_samples[0])]
+
+                # pad results and add ds_preds
+                padded_results = []
+                dummy_instance_data = InstanceData(bboxes=torch.zeros(0, 4),
+                        scores=torch.zeros(0), labels=torch.zeros(0)).to(ds_preds.device)
+
+                for ind, (b, ds) in enumerate(zip(batch_data_samples[0], ds_preds.flatten(end_dim=1))):
+                    if ind % upsample_factor == 0:
+                        r = results[ind // upsample_factor]
+
+                    else:
+                        r = DetDataSample(metainfo=b.metainfo,
+                                pred_instances=dummy_instance_data)
+
+                    r.pred_ds = ds
+                    padded_results.append(r)
+
+            else:
+                for r in results:
+                    for r, p in zip(results, ds_preds.view(-1, ds_preds.shape[-1])):
+                        r.pred_ds = p
+
+        else:
+            results = results[self.clip_size-1::self.clip_size]
+            ds_preds = ds_preds[:, -1] # keep only last frame preds
+            for r, p in zip(results, ds_preds):
+                r.pred_ds = p
+
+        return results
+
+    def _forward(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tensor:
         flat_batch_inputs = batch_inputs.flatten(end_dim=1)
         flat_batch_data_samples = [x for y in batch_data_samples for x in y]
 
-        breakpoint()
+        with torch.no_grad():
+            # run detector to get detections
+            results = self.detector.predict(flat_batch_inputs, flat_batch_data_samples)
 
-        return super().forward(flat_batch_inputs, flat_batch_data_samples)
+        # get feats
+        ds_feats, ds_bb_feats = self.extract_feat(flat_batch_inputs, results)
+
+        # reconstruction if recon head is not None
+        recon_outputs = self.reconstruct(flat_batch_inputs, results, ds_feats, ds_bb_feats)
+
+        # ds prediction
+        if isinstance(self.decoder_predictor, torch.nn.ModuleList):
+            raise NotImplementedError
+        else:
+            ds_preds = self.decoder_predictor(ds_feats.view(
+                -1, self.clip_size, *ds_feats.shape[1:]))
+
+        return ds_preds, recon_outputs, results

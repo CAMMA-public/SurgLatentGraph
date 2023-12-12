@@ -13,6 +13,6 @@ _base_.test_dataloader.dataset.pipeline[0].frame_range = [1 - num_temp_frames, 0
 
 _base_.dc_model.clip_size = num_temp_frames
 
-train_dataloader = dict(batch_size=5)
-val_dataloader = dict(batch_size=5)
-test_dataloader = dict(batch_size=5)
+train_dataloader = dict(batch_size=4)
+val_dataloader = dict(batch_size=4)
+test_dataloader = dict(batch_size=4)

@@ -17,7 +17,6 @@ del _base_.dataset_type
 del _base_.data_root
 del _base_.rand_aug_surg
 del _base_.backend_args
-
 model_imports = copy.deepcopy(_base_.custom_imports.imports)
 del _base_.custom_imports
 custom_imports = dict(imports=model_imports + ['evaluator.CocoMetricRGD',
@@ -35,6 +34,10 @@ _base_.dc_model.data_preprocessor = dict(
     pad_mask=False,
     pad_size_divisor=1,
 )
+
+# turn off reconstruction
+del _base_.dc_model.reconstruction_head
+del _base_.dc_model.reconstruction_loss
 
 # visualizer
 vis_backends = [dict(type='LocalVisBackend')]
