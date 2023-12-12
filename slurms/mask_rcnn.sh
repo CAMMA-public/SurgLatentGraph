@@ -1,1 +1,0 @@
-endoscapes_temp/mask_rcnn.sh
