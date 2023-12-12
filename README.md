@@ -159,7 +159,7 @@ data/mmdet_datasets
 [![COCO-Style Annotations](https://img.shields.io/badge/COCOs%20-teal)](https://github.com/CAMMA-public/Endoscapes)
 
 ## Config Structure
-Each `dataset-detector-downstream_method` combination has it's own configuration. We summarize the config structure below.
+Each `dataset | detector | downstream_method` combination has its own configuration. We summarize the config structure below.
 ```shell
 configs/
 └── models/
