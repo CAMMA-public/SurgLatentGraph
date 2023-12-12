@@ -12,3 +12,4 @@ configs/temporal_models/*.py
 configs/models/ssl
 latent_graphs/
 sam_queries/
+slurms

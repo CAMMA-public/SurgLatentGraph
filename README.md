@@ -1,92 +1,394 @@
-# latentgraph
+<div align="center">
+<a href="http://camma.u-strasbg.fr/">
+<img src="logo.png" width="30%">
+</a>
+</div>
+
+# **Latent Graph Representations for Surgical Scene Understanding**
+This repository contains the code corresponding to our Transactions on Medical Imaging paper _Latent Graph Representations for Critical View of Safety Assessment_ and our MICCAI 2023 paper _Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object- and Anatomy-Driven Reasoning_.
+
+<div align="center">
+<img src="LG_overall.png" width="90%">
+</div>
+
+[1] **Latent Graph Representations for Critical View of Safety Assessment**. _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **IEEE Transactions on Medical Imaging 2023**_
 
 
+[![arXiv](https://img.shields.io/badge/arXiv%20-%202212.04155%20-%20red)](https://arxiv.org/abs/2212.04155)
+[![Paper](https://img.shields.io/badge/Paper%20-%20darkblue)](https://ieeexplore.ieee.org/document/10319763)
 
-## Getting started
+<div align="center">
+<img src="stgraph_arch.png" width="90%">
+</div>
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+[2] **Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object and Anatomy-Driven Reasoning**. _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **MICCAI 2023**_
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+[![arXiv](https://img.shields.io/badge/arXiv%20-%202212.04155%20-%20red)](https://arxiv.org/abs/2212.04155)
+[![Paper](https://img.shields.io/badge/Paper%20-%20darkblue)](https://link.springer.com/chapter/10.1007/978-3-031-43996-4_62)
 
-## Add your files
+## News
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+#### In this repo we provide:
+- Implementations of 3 different object detectors (Faster-RCNN, Cascade-RCNN, Deformable-DETR) and 3 different instance segmentation models (Mask-RCNN, Cascade-Mask-RCNN, Mask2Former) using the **_mmdetection_** framework.
+- Implementations of 4 different object-centric models for CVS prediction introduced in [1]: LatentGraph-CVS (LG-CVS), DeepCVS, LayoutCVS, and ResNet50-DetInit, each of which can be run using any of the aforementioned object detection/segmentation models.
+- Implementation of a simple classifier using **_mmengine + mmdetection_**.
+- Implementations of 2 different spatiotemporal object-centric models introduced in [2]: **S**urgical **V**ideos as **L**atent **S**patio**T**emporal **G**raphs (SV2LSTG), and DeepCVS-Temporal (DC-Temp).
+- Config files and instructions to train/evaluate object detectors/segmentation models on Endoscapes [3] and CholecSeg8k [4].
+- Config files and instructions to train/evaluate the 5 single frame and 2 spatiotemporal methods on three tasks/datasets: CVS Prediction (Endoscapes), Phase Recognition (Cholec80), and Action Triplet Recognition (CholecT50)
+- Trained model checkpoints for all tasks (coming soon).
 
-```
-cd existing_repo
-git remote add origin https://icube-forge.unistra.fr/aditya.murali/latentgraph.git
-git branch -M main
-git push -uf origin main
-```
-
-## Integrate with your tools
-
-- [ ] [Set up project integrations](https://icube-forge.unistra.fr/aditya.murali/latentgraph/-/settings/integrations)
-
-## Collaborate with your team
-
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Automatically merge when pipeline succeeds](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing(SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thank you to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+# Get Started
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+This project uses Pytorch 2.1.0 + CUDA 11.8, DGL 1.1.1, torch-scatter, mmdetection 3.2.0, and mmengine 0.7.4. Please note that you may encounter issues if you diverge from these versions. If you must diverge, please ensure that the DGL and torch-scatter versions match your versions of pytorch, and make sure to use mmengine<=0.7.4.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```sh
+> cd $LATENTGRAPH
+> conda create -n latentgraph python=3.8 && conda activate latentgraph
+# install dependencies 
+(latentgraph) > conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+(latentgraph) > conda install -c dglteam/label/cu113 dgl
+(latentgraph) > pip install torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
+(latentgraph) > pip install -U openmim
+(latentgraph) > mim install mmdet
+(latentgraph) > mim install mmengine==0.7.4
+(latentgraph) > pip install torchmetrics
+(latentgraph) > pip install scikit-learn
+(latentgraph) > pip install prettytable
+(latentgraph) > pip install imagesize
+(latentgraph) > pip install networkx
+(latentgraph) > pip install opencv-python
+(latentgraph) > pip install yapf==0.40.1
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Dataset Setup
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Each dataset needs to be setup in the appropriate format. We adopt the COCO format and modify the annotation files to contain image-level annotations and video ids as tags. We retain the image folder structure, and for all datasets, frames are extracted at 1 fps with the naming format `${VIDEO}_${FRAME}.jpg`. 
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- The directory structure should look as follows.
+```shell
+data/mmdet_datasets
+└── endoscapes/
+    └── train/
+        └── 10947_14050.jpg
+        ...
+        └── 9762_40750.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── val/
+        └── 11057_23575.jpg
+        ...
+        └── 9916_39400.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── test/
+        └── 10983_1225.jpg
+        ...
+        └── 9823_55250.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── train_seg/
+        └── 11088_10825.jpg
+        ...
+        └── 15736_60875.jpg
+        └── annotation_coco.json
+    └── val_seg/
+        └── 11088_10825.jpg
+        ...
+        └── 15736_60875.jpg
+        └── annotation_coco.json
+    └── test_seg/
+        └── 11104_22925.jpg
+        ...
+        └── 13513_34875.jpg
+        └── annotation_coco.json
+    └── train_vids.txt
+    └── val_vids.txt
+    └── test_vids.txt
+    └── train_seg_vids.txt
+    └── val_seg_vids.txt
+    └── test_seg_vids.txt
+└── cholec80/
+    └── train_phase/
+        └── 1_0.jpg
+        └── 1_25.jpg
+        └── 1_50.jpg
+        ...
+        └── 30_0.jpg
+        ...
+        └── 40_55525.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── val_phase/
+        └── 41_0.jpg
+        ...
+        └── 48_45825.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── test_phase/
+        └── 49_0.jpg
+        ...
+        └── 80_43075.jpg
+        └── annotation_coco.json
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── train_vids.txt
+    └── val_vids.txt
+    └── test_vids.txt
+└── cholecT50/
+    └── train/
+        └── 1_0.jpg
+        ...
+        └── 42_92775.jpg
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── val/
+        └── 5_0.jpg
+        ...
+        └── 74_40825.jpg
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+    └── test/
+        └── 92_0.jpg
+        ...
+        └── 111_53625.jpg
+        └── annotation_ds_coco.json
+        └── annotation_coco_vid.json
+```
+### Dataset/Annotation Downloads
+[![Endoscapes](https://img.shields.io/badge/Endoscapes%20-red)](https://github.com/CAMMA-public/Endoscapes)
+[![CholecT50](https://img.shields.io/badge/CholecT50%20-green)](https://github.com/CAMMA-public/cholect50)
+[![Cholec80](https://img.shields.io/badge/Cholec80%20-purple)](https://docs.google.com/forms/d/1GwZFM3-GhEduBs1d5QzbfFksKmS1OqXZAz8keYi-wKI)
+[![COCO-Style Annotations](https://img.shields.io/badge/COCOs%20-teal)](https://github.com/CAMMA-public/Endoscapes)
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+## Config Structure
+Each `dataset | detector | downstream_method` combination has its own configuration. We summarize the config structure below.
+```shell
+configs/
+└── models/
+    └── endoscapes/
+        └── lg_base_box.py
+        └── lg_base_seg.py
+        └── lg_ds_base.py
+        └── lg_save_base.py
+        └── deepcvs_base.py
+        └── simple_classifier.py
+        └── simple_classifier_with_recon.py
+        └── ssl
+            └── simple_classifier_${INIT}.py
+            ... # ResNet50 with different backbone initializations
+    └── c80_phase/
+        └── lg_base_box.py
+        ... # same files as endoscapes
+    └── cholecT50/
+        └── lg_base_box.py
+        ... # same files as endoscapes
+    └── ${DETECTOR}/ # e.g. faster_rcnn
+        └── lg_${DETECTOR}.py
+        └── lg_ds_${DETECTOR}.py
+        └── lg_ds_${DETECTOR}_no_recon.py
+        └── lg_save_${DETECTOR}.py
+        └── lg_ft_save_${DETECTOR}.py
+        └── layout_${DETECTOR}.py
+        └── layout_${DETECTOR}_no_recon.py
+        └── dc_${DETECTOR}.py
+        └── dc_${DETECTOR}_no_recon.py
+        ... # some ablations
+    ... # one folder for each detector
+    └── select_dataset.sh
+└── temporal_models/
+    └── endoscapes/
+        └── sv2lstg_model_base.py
+        └── sv2lstg_5_base.py # sv2lstg
+        └── sv2lstg_10_base.py
+        └── sv2lstg_15_base.py
+        └── sv2lstg_load_graphs_5_base.py # sv2lstg, skip image -> graph encoding and load saved graph
+        └── sv2lstg_load_graphs_10_base.py
+        └── sv2lstg_load_graphs_15_base.py
+        └── dc_temp_model_base.py
+        └── dc_temp_5_base.py # deepcvs-temporal
+        └── dc_temp_10_base.py
+        └── dc_temp_15_base.py
+    └── cholecT50/
+        └── ... # same as endoscapes
+    └── c80_phase/
+        └── ... # same as endoscapes
+        └── sv2lstg_load_graphs_all.py # load all graphs in video -> temporal decoding to predict phase
+    └── ${DETECTOR}/ # e.g. faster_rcnn
+        └── sv2lstg_${DETECTOR}_5.py # use ${DETECTOR} to construct each latent graph, clips of 5 frames
+        └── sv2lstg_${DETECTOR}_10.py
+        └── sv2lstg_${DETECTOR}_15.py
+        └── sv2lstg_lin_probe_${DETECTOR}_5.py # load latent graphs constructed with ${DETECTOR}, linear probing with clips of 5 frames
+        └── sv2lstg_lin_probe_${DETECTOR}_10.py
+        └── sv2lstg_lin_probe_${DETECTOR}_15.py
+    ... # one folder for each detector
+    └── select_dataset.sh
+└── datasets/
+    └── endoscapes/
+        └── endoscapes_instance.py # dataset cfg to load a frame and any associated annotations
+        └── endoscapes_vid_instance.py # dataset cfg to load a clip and any associated annotations
+        └── endoscapes_vid_instance_load_graphs.py # dataset cfg to load a clip, precomputed latent graphs for each frame, and any associated annotations
+    ... # same structure for each dataset
+```
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+## Models
+```shell
+└── model
+    └── lg.py # LG-CVS
+    └── deepcvs.py # DeepCVS
+    └── simple_classifier.py # R50 & R50-DetInit
+    └── sv2lstg.py # SV2LSTG
+    └── deepcvs_temporal.py # DC-Temporal
+    └── predictor_heads
+        └── graph.py # graph head in LG-CVS
+        └── reconstruction.py # reconstruction head for all
+        └── ds.py # downstream classification head in LG-CVS
+        ... # additional model components
+    ... # additional model components
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Training and Testing
+We provide instructions to train each of model on dataset `${DATASET}` using underlying object detector `${DETECTOR}` and clips of length `${CLIP_SIZE}`.
 
-## License
-For open source projects, say how it is licensed.
+### Select Dataset
+Before training any object detector/downstream classification model, the dataset needs to be selected.
+```shell
+cd configs/models
+./select_dataset.sh ${DATASET}
+cd ../..
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### Object Detector
+
+To train the downstream models (with the exception of the simple classifier), an object detector must first be trained.
+We provide example commands for training and testing diffent object detectors below.
+
+**Train**
+```shell
+mim train mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py
+```
+
+**Test**
+```shell
+mim test mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth
+```
+
+### Single-Frame Models
+
+Here, we provide example commands for training/testing each of the single-frame downstream classification methods (LG-CVS, DeepCVS, LayoutCVS, ResNet50-DetInit, ResNet50).
+
+**LG**
+```shell
+mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py
+mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py work_dirs/lg_ds_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR 
+```shell
+# no reconstruction objective
+mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py
+mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py work_dirs/lg_ds_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**DeepCVS**
+```shell
+mim train mmdet configs/models/${DETECTOR}/dc_${DETECTOR}.py
+mim test mmdet configs/models/${DETECTOR}/dc_${DETECTOR}.py work_dirs/dc_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR 
+```shell
+# no reconstruction objective
+mim train mmdet configs/models/${DETECTOR}/dc_${DETECTOR}_no_recon.py
+mim test mmdet configs/models/${DETECTOR}/dc_${DETECTOR}_no_recon.py work_dirs/dc_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**LayoutCVS**
+```shell
+mim train mmdet configs/models/${DETECTOR}/layout_${DETECTOR}.py
+mim test mmdet configs/models/${DETECTOR}/layout_${DETECTOR}.py work_dirs/layout_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR
+```shell
+# no reconstruction objective
+mim train mmdet configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py
+mim test mmdet configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py work_dirs/layout_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**ResNet50-DetInit**
+```shell
+mim train mmdet configs/models/simple_classifier_with_recon.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}
+mim test mmdet configs/models/simple_classifier_with_recon.py work_dirs/R50_DI_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR 
+```shell
+# no reconstruction objective
+mim train mmdet configs/models/simple_classifier.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}_no_recon
+mim test mmdet configs/models/simple_classifier.py work_dirs/R50_DI_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**ResNet50**
+```shell
+mim train mmdet configs/models/simple_classifier.py
+mim test mmdet configs/models/simple_classifier.py work_dirs/simple_classifier/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR 
+```shell
+# WITH reconstruction objective
+mim train mmdet configs/models/simple_classifier_with_recon.py
+mim test mmdet configs/models/simple_classifier_with_recon.py work_dirs/simple_classifier_with_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+### Temporal Models
+Here, we provide example commands for training/testing each of the spatiotemporal downstream classification methods (SV2LSTG, DC-Temporal). Note that we do not use a reconstruction objective for these methods.
+
+**Encoding *S*urgical *V*ideos as *L*atent *S*patio*T*emporal *G*raphs (SV2LSTG)**
+```shell
+mim train mmdet configs/models/${DETECTOR}/sv2lstg_${DETECTOR}_${CLIP_SIZE}.py
+mim test mmdet configs/models/${DETECTOR}/sv2lstg_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_iter_${ITERATION}.pth
+```
+OR
+```shell
+# Linear Probing (No Finetuning Backbone)
+mim train mmdet configs/models/${DETECTOR}/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}.py
+mim test mmdet configs/models/${DETECTOR}/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**DeepCVS-Temporal (DC-Temp)**
+```shell
+mim train mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py
+mim test mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py work_dirs/dc_temp_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+## Pretrained Model Weights
+
+Coming Soon!
+
+## Citation
+
+Please cite the appropriate papers if you make use of this repository.
+
+```bibtex
+@article{murali2023latent,
+  author={Murali, Aditya and Alapatt, Deepak and Mascagni, Pietro and Vardazaryan, Armine and Garcia, Alain and Okamoto, Nariaki and Mutter, Didier and Padoy, Nicolas},
+  journal={IEEE Transactions on Medical Imaging},
+  title={Latent Graph Representations for Critical View of Safety Assessment}, 
+  year={2023},
+  volume={},
+  number={},
+  pages={1-1},
+  doi={10.1109/TMI.2023.3333034}
+}
+
+@inproceedings{murali2023encoding,
+  title={Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object and Anatomy-Driven Reasoning},
+  author={Murali, Aditya and Alapatt, Deepak and Mascagni, Pietro and Vardazaryan, Armine and Garcia, Alain and Okamoto, Nariaki and Mutter, Didier and Padoy, Nicolas},
+  booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+  pages={647--657},
+  year={2023},
+  organization={Springer}
+}
+```
