@@ -180,7 +180,7 @@ default_hooks = dict(
 )
 
 # loading
-load_from = 'weights/cholecT50/lg_base_no_recon.pth'
+load_from = 'weights/cholecT50/lg_base.pth'
 
 # Running settings
 train_cfg = dict(

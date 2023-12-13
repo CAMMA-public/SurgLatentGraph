@@ -159,4 +159,4 @@ default_hooks = dict(
 )
 
 # loading
-load_from = 'weights/wc/lg_base_no_recon.pth'
+load_from = 'weights/wc/lg_base.pth'

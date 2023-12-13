@@ -178,7 +178,7 @@ default_hooks = dict(
 )
 
 # loading
-load_from = 'weights/c80_phase/lg_base_no_recon.pth'
+load_from = 'weights/c80_phase/lg_base.pth'
 
 train_cfg = dict(
     type='EpochBasedTrainLoop',
