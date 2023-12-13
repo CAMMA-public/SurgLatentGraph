@@ -326,7 +326,7 @@ mim train mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py
 
 **Test**
 ```shell
-mim test mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/lg_${DETECTOR}.py work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth
 ```
 
 The downstream classification models expect the trained detector weights to be in the directory `weights/${DATASET}`, so we need to copy the weights there.
@@ -342,61 +342,61 @@ Here, we provide example commands for training/testing each of the single-frame 
 **LG**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py
-mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py work_dirs/lg_ds_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py work_dirs/lg_ds_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR 
 ```shell
 # no reconstruction objective
 mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py
-mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py work_dirs/lg_ds_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py work_dirs/lg_ds_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 **DeepCVS**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/dc_${DETECTOR}.py
-mim test mmdet configs/models/${DETECTOR}/dc_${DETECTOR}.py work_dirs/dc_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/dc_${DETECTOR}.py work_dirs/dc_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR 
 ```shell
 # no reconstruction objective
 mim train mmdet configs/models/${DETECTOR}/dc_${DETECTOR}_no_recon.py
-mim test mmdet configs/models/${DETECTOR}/dc_${DETECTOR}_no_recon.py work_dirs/dc_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/dc_${DETECTOR}_no_recon.py work_dirs/dc_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 **LayoutCVS**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/layout_${DETECTOR}.py
-mim test mmdet configs/models/${DETECTOR}/layout_${DETECTOR}.py work_dirs/layout_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/layout_${DETECTOR}.py work_dirs/layout_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR
 ```shell
 # no reconstruction objective
 mim train mmdet configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py
-mim test mmdet configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py work_dirs/layout_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py work_dirs/layout_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 **ResNet50-DetInit**
 ```shell
 mim train mmdet configs/models/simple_classifier_with_recon.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}
-mim test mmdet configs/models/simple_classifier_with_recon.py work_dirs/R50_DI_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/simple_classifier_with_recon.py work_dirs/R50_DI_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR 
 ```shell
 # no reconstruction objective
 mim train mmdet configs/models/simple_classifier.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}_no_recon
-mim test mmdet configs/models/simple_classifier.py work_dirs/R50_DI_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/simple_classifier.py work_dirs/R50_DI_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 **ResNet50**
 ```shell
 mim train mmdet configs/models/simple_classifier.py
-mim test mmdet configs/models/simple_classifier.py work_dirs/simple_classifier/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/simple_classifier.py work_dirs/simple_classifier/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR 
 ```shell
 # WITH reconstruction objective
 mim train mmdet configs/models/simple_classifier_with_recon.py
-mim test mmdet configs/models/simple_classifier_with_recon.py work_dirs/simple_classifier_with_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/simple_classifier_with_recon.py work_dirs/simple_classifier_with_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 ### Temporal Models
@@ -405,19 +405,19 @@ Here, we provide example commands for training/testing each of the spatiotempora
 **Encoding *S*urgical *V*ideos as *L*atent *S*patio*T*emporal *G*raphs (SV2LSTG)**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/sv2lstg_${DETECTOR}_${CLIP_SIZE}.py
-mim test mmdet configs/models/${DETECTOR}/sv2lstg_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_iter_${ITERATION}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/sv2lstg_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_iter_${ITERATION}.pth
 ```
 OR
 ```shell
 # Linear Probing (No Finetuning Backbone)
 mim train mmdet configs/models/${DETECTOR}/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}.py
-mim test mmdet configs/models/${DETECTOR}/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}.py work_dirs/sv2lstg_lin_probe_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 **DeepCVS-Temporal (DC-Temp)**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py
-mim test mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py work_dirs/dc_temp_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py work_dirs/dc_temp_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
 ## Reproducing Results from Papers
@@ -431,10 +431,10 @@ cd ../..
 
 # first train detectors (Faster-RCNN and Mask-RCNN)
 mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
 
 mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/endoscapes/
@@ -443,10 +443,10 @@ cp work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth weights/en
 
 # train downstream
 mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py # CVS with Box (Best Model Uses Reconstruction)
-mim test mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py work_dirs/lg_ds_faster_rcnn/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_ds_faster_rcnn.py work_dirs/lg_ds_faster_rcnn/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
 
 mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py # CVS with Mask (Best Model does not use Reconstruction)
-mim test mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py work_dirs/lg_ds_mask_rcnn_no_recon/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py work_dirs/lg_ds_mask_rcnn_no_recon/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
 ```
 
 **SV2LSTG** [2]
@@ -460,10 +460,10 @@ cd ../..
 
 # train detectors (can skip if already done for another model)
 mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
 
 mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/endoscapes/
@@ -472,10 +472,10 @@ cp work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth weights/en
 
 # train downstream
 mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_faster_rcnn_10.py # CVS Box
-mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_faster_rcnn_10.py work_dirs/sv2lstg_faster_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/faster_rcnn/sv2lstg_faster_rcnn_10.py work_dirs/sv2lstg_faster_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
 
 mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_mask_rcnn_10.py # CVS Seg
-mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_mask_rcnn_10.py work_dirs/sv2lstg_mask_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/mask_rcnn/sv2lstg_mask_rcnn_10.py work_dirs/sv2lstg_mask_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
 ```
 
 Phase Recognition
@@ -486,10 +486,10 @@ cd ../..
 
 # train object detectors
 mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth
 
 mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/c80_phase/
@@ -497,26 +497,26 @@ cp work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth weights/c
 cp work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth weights/c80_phase/lg_mask_rcnn.pth
 
 # Phase Recognition (Linear Probing / No Finetuning)
-mim test mmdet configs/models/faster_rcnn/lg_save_faster_rcnn.py weights/c80_phase/lg_faster_rcnn.pth # first save single-frame latent graphs
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_save_faster_rcnn.py weights/c80_phase/lg_faster_rcnn.pth # first save single-frame latent graphs
 mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py
-mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 
-mim test mmdet configs/models/mask_rcnn/lg_save_mask_rcnn.py weights/c80_phase/lg_mask_rcnn.pth # first save single-frame latent graphs
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_save_mask_rcnn.py weights/c80_phase/lg_mask_rcnn.pth # first save single-frame latent graphs
 mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py
-mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 
 # Phase Recognition (With Single-Frame Finetuning)
 mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py
 cp work_dirs/lg_ds_faster_rcnn/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_faster_rcnn.pth
-mim test mmdet configs/models/faster_rcnn/lg_ft_save_faster_rcnn.py weights/c80_phase/lg_ds_faster_rcnn.pth
+mim test mmdet --checkpoint configs/models/faster_rcnn/lg_ft_save_faster_rcnn.py weights/c80_phase/lg_ds_faster_rcnn.pth
 mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py
-mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 
 mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py
 cp work_dirs/lg_ds_mask_rcnn_no_recon/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth
-mim test mmdet configs/models/mask_rcnn/lg_ft_save_mask_rcnn.py weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth # first save single-frame latent graphs
+mim test mmdet --checkpoint configs/models/mask_rcnn/lg_ft_save_mask_rcnn.py weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth # first save single-frame latent graphs
 mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py
-mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+mim test mmdet --checkpoint configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 ```
 
 **Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
