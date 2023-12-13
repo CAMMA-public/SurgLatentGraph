@@ -3,7 +3,7 @@ import os
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/youtube_vis.py')
 
 dataset_type = 'VideoDatasetWithDS'
-data_root='data/mmdet_datasets/endoscapes_mmdet'
+data_root='data/mmdet_datasets/endoscapes'
 metainfo = {
     'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
         'gallbladder', 'tool'),

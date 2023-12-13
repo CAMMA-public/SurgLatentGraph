@@ -6,7 +6,7 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Modify dataset related settings
 
-data_root='data/mmdet_datasets/endoscapes_mmdet'
+data_root='data/mmdet_datasets/endoscapes'
 metainfo = {
     'classes': ('cystic_plate', 'calot_triangle', 'cystic_artery', 'cystic_duct',
         'gallbladder', 'tool'),
