@@ -33,6 +33,7 @@ This repository contains the code corresponding to our Transactions on Medical I
 - Implementations of 4 different object-centric models for CVS prediction introduced in [1]: LatentGraph-CVS (LG-CVS), DeepCVS, LayoutCVS, and ResNet50-DetInit, each of which can be run using any of the aforementioned object detection/segmentation models.
 - Implementation of a simple classifier using **_mmengine + mmdetection_**.
 - Implementations of 2 different spatiotemporal object-centric models introduced in [2]: **S**urgical **V**ideos as **L**atent **S**patio**T**emporal **G**raphs (SV2LSTG), and DeepCVS-Temporal (DC-Temp).
+- Annotation files and instructions to setup 3 different datasets: Endoscapes, Cholec80 (with CholecSeg8k segmentation masks), and CholecT50
 - Config files and instructions to train/evaluate object detectors/segmentation models on Endoscapes [3] and CholecSeg8k [4].
 - Config files and instructions to train/evaluate the 5 single frame and 2 spatiotemporal methods on three tasks/datasets: CVS Prediction (Endoscapes), Phase Recognition (Cholec80), and Action Triplet Recognition (CholecT50)
 - Trained model checkpoints for all tasks (coming soon).
@@ -518,7 +519,7 @@ mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_al
 mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 ```
 
-**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets. It is the same case for CholecT50, following the CholecT50 train/val/test videos to split the dataset.
+**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
 
 ## Pretrained Model Weights
 
