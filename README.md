@@ -109,7 +109,7 @@ cd cholecT50 && mkdir frames
 unzip endoscapes.zip && rm endoscapes.zip
 ```
 
-- The final directory structure should be as follows, with all symbolic links pointing to downloaded/extracted frames.
+The final directory structure should be as follows, with all symbolic links pointing to downloaded/extracted frames.
 ```shell
 data/mmdet_datasets
 └── endoscapes/
