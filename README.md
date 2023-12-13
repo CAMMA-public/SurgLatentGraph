@@ -77,7 +77,7 @@ All three files follow the normal COCO format, with three additional image level
 [![Endoscapes](https://img.shields.io/badge/Endoscapes%20-red)](https://github.com/CAMMA-public/Endoscapes)
 [![CholecT50](https://img.shields.io/badge/CholecT50%20-green)](https://github.com/CAMMA-public/cholect50)
 [![Cholec80](https://img.shields.io/badge/Cholec80%20-purple)](https://docs.google.com/forms/d/1GwZFM3-GhEduBs1d5QzbfFksKmS1OqXZAz8keYi-wKI)
-[![COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://github.com/CAMMA-public/Endoscapes)
+[![COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://seafile.unistra.fr/d/64a5c16f34ed4569bc4e/)
 
 The Cholec80 and CholecT50 dataset download links contain entire surgical videos. To use them with this repository, the frames need to be extracted and named in the correct format, and our modified COCO-style annotations need to be downloaded. To guide this process, we provide example dataset folders with symbolic links in place of images, re-organized metadata for each dataset (`all_metadata.csv`), and the JSON-style annotations using the COCO Style Annotations link.
 
@@ -90,20 +90,28 @@ cd data/mmdet_datasets
 unzip cholec80.zip && rm cholec80.zip
 cd cholec80 && mkdir frames
 # TODO: Extract frames at 25 fps and organize into the following directory structure
-# - video01
-#   - 0.jpg
-#   - 1.jpg
+# - frames
+#   - video01
+#       - 0.jpg
+#       - 1.jpg
+#       ...
 #   ...
-# ...
+
+# create symlinks
+python copy_images.py
 
 unzip cholecT50.zip && rm cholecT50.zip
 cd cholecT50 && mkdir frames
 # TODO: Extract frames at 25 fps and organize into the following directory structure
-# - video01
-#   - 0.jpg
-#   - 1.jpg
+# - frames
+#   - video01
+#       - 0.jpg
+#       - 1.jpg
+#       ...
 #   ...
-# ...
+
+# create symlinks
+python copy_images.py
 
 # For Endoscapes, the dataset is released in the same format we use in this repository, so you can just extract the files directly.
 unzip endoscapes.zip && rm endoscapes.zip
@@ -189,18 +197,21 @@ data/mmdet_datasets
         └── 1_0.jpg
         ...
         └── 42_92775.jpg
+        └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
     └── val/
         └── 5_0.jpg
         ...
         └── 74_40825.jpg
+        └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
     └── test/
         └── 92_0.jpg
         ...
         └── 111_53625.jpg
+        └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
 ```
