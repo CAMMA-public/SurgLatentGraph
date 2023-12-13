@@ -63,9 +63,53 @@ This project uses Pytorch 2.1.0 + CUDA 11.8, DGL 1.1.1, torch-scatter, mmdetecti
 
 ## Dataset Setup
 
-Each dataset needs to be setup in the appropriate format. We adopt the COCO format and modify the annotation files to contain image-level annotations and video ids as tags. We retain the image folder structure, and for all datasets, frames are extracted at 1 fps with the naming format `${VIDEO}_${FRAME}.jpg`. 
+Each dataset needs to be set up in the appropriate format. All of our models require frames to be extracted (at 1 fps) and use a modified COCO-style annotation structure. Each split of each dataset contains three JSON files:
+- `annotation_coco.json` is used to train object detectors, and includes only frames which have bounding box/segmentation ground truth.
+- `annotation_ds_coco.json` is used to train the single-frame downstream models, and includes all frames with labels for the downstream task.
+- `annotation_coco_vid.json` is used to train the spatiotemporal downstream models, and includes all frames at 1 fps from each dataset, regardless of whether they contain downstream labels.
 
-- The directory structure should look as follows.
+All three files follow the normal COCO format, with three additional image level tags:
+- `is_det_keyframe` is a boolean value indicating whether the given frame contains ground-truth bounding box annotations.
+- `is_ds_keyframe` is a boolean value indicating whether the given frame contains a ground-truth downstream annotation.
+- `ds` contains the downstream annotation, which in our cases, can either be a list (CholecT50 triplet, Endoscapes CVS) for multilabel tasks or an integer (Cholec80 Phase) for single-frame tasks. In practice, for frames where `is_ds_keyframe` is `False`, we include the label from the last labeled frame in the video (ensures causality).
+
+### Dataset/Annotation Downloads
+[![Endoscapes](https://img.shields.io/badge/Endoscapes%20-red)](https://github.com/CAMMA-public/Endoscapes)
+[![CholecT50](https://img.shields.io/badge/CholecT50%20-green)](https://github.com/CAMMA-public/cholect50)
+[![Cholec80](https://img.shields.io/badge/Cholec80%20-purple)](https://docs.google.com/forms/d/1GwZFM3-GhEduBs1d5QzbfFksKmS1OqXZAz8keYi-wKI)
+[![COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://github.com/CAMMA-public/Endoscapes)
+
+The Cholec80 and CholecT50 dataset download links contain entire surgical videos. To use them with this repository, the frames need to be extracted and named in the correct format, and our modified COCO-style annotations need to be downloaded. To guide this process, we provide example dataset folders with symbolic links in place of images, re-organized metadata for each dataset (`all_metadata.csv`), and the JSON-style annotations using the COCO Style Annotations link.
+
+**Example Setup**
+```shell
+mkdir -p data/mmdet_datasets/
+cd data/mmdet_datasets
+
+# TODO: Download the annotations for each dataset using the COCO-style Annotations link.
+unzip cholec80.zip && rm cholec80.zip
+cd cholec80 && mkdir frames
+# TODO: Extract frames at 25 fps and organize into the following directory structure
+# - video01
+#   - 0.jpg
+#   - 1.jpg
+#   ...
+# ...
+
+unzip cholecT50.zip && rm cholecT50.zip
+cd cholecT50 && mkdir frames
+# TODO: Extract frames at 25 fps and organize into the following directory structure
+# - video01
+#   - 0.jpg
+#   - 1.jpg
+#   ...
+# ...
+
+# For Endoscapes, the dataset is released in the same format we use in this repository, so you can just extract the files directly.
+unzip endoscapes.zip && rm endoscapes.zip
+```
+
+- The final directory structure should be as follows, with all symbolic links pointing to downloaded/extracted frames.
 ```shell
 data/mmdet_datasets
 └── endoscapes/
@@ -160,11 +204,6 @@ data/mmdet_datasets
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
 ```
-### Dataset/Annotation Downloads
-[![Endoscapes](https://img.shields.io/badge/Endoscapes%20-red)](https://github.com/CAMMA-public/Endoscapes)
-[![CholecT50](https://img.shields.io/badge/CholecT50%20-green)](https://github.com/CAMMA-public/cholect50)
-[![Cholec80](https://img.shields.io/badge/Cholec80%20-purple)](https://docs.google.com/forms/d/1GwZFM3-GhEduBs1d5QzbfFksKmS1OqXZAz8keYi-wKI)
-[![COCO-Style Annotations](https://img.shields.io/badge/COCOs%20-teal)](https://github.com/CAMMA-public/Endoscapes)
 
 ## Config Structure
 Each `dataset | detector | downstream_method` combination has its own configuration. We summarize the config structure below.
