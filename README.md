@@ -23,7 +23,7 @@ This repository contains the code corresponding to our Transactions on Medical I
 
 [2] **Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object and Anatomy-Driven Reasoning**. _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **MICCAI 2023**_
 
-[![arXiv](https://img.shields.io/badge/arXiv%20-%202212.04155%20-%20red)](https://arxiv.org/abs/2212.04155)
+[![arXiv](https://img.shields.io/badge/arXiv%20-%202312.06829%20-%20red)](https://arxiv.org/abs/2312.06829)
 [![Paper](https://img.shields.io/badge/Paper%20-%20darkblue)](https://link.springer.com/chapter/10.1007/978-3-031-43996-4_62)
 
 ## News
@@ -278,6 +278,12 @@ mim train mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py
 mim test mmdet configs/models/${DETECTOR}/lg_${DETECTOR}.py work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth
 ```
 
+The downstream classification models expect the trained detector weights to be in the directory `weights/${DATASET}`, so we need to copy the weights there.
+```shell
+mkdir -p weights/${DATASET}/
+cp work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth weights/${DATASET}/lg_${DETECTOR}.pth
+```
+
 ### Single-Frame Models
 
 Here, we provide example commands for training/testing each of the single-frame downstream classification methods (LG-CVS, DeepCVS, LayoutCVS, ResNet50-DetInit, ResNet50).
@@ -363,6 +369,107 @@ mim train mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py
 mim test mmdet configs/models/${DETECTOR}/dc_temp_${DETECTOR}_${CLIP_SIZE}.py work_dirs/dc_temp_${DETECTOR}_${CLIP_SIZE}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
+## Reproducing Results from Papers
+Here, we provide the training commands to reproduce the main results from each of our works [1, 2]. The commands follow the same format as above, we simply include them for clarity.
+
+**LG-CVS** [1]
+```shell
+cd configs/models
+./select_dataset.sh endoscapes
+cd ../..
+
+# first train detectors (Faster-RCNN and Mask-RCNN)
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+
+# copy weights
+mkdir -p weights/endoscapes/
+cp work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth weights/endoscapes/lg_faster_rcnn.pth
+cp work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth weights/endoscapes/lg_mask_rcnn.pth
+
+# train downstream
+mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py # CVS with Box (Best Model Uses Reconstruction)
+mim test mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py work_dirs/lg_ds_faster_rcnn/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+
+mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py # CVS with Mask (Best Model does not use Reconstruction)
+mim test mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py work_dirs/lg_ds_mask_rcnn_no_recon/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+```
+
+**SV2LSTG** [2]
+
+CVS Prediction
+```shell
+# select dataset
+cd configs/temporal_models/
+./select_dataset.sh endoscapes
+cd ../..
+
+# train detectors (can skip if already done for another model)
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+
+# copy weights
+mkdir -p weights/endoscapes/
+cp work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth weights/endoscapes/lg_faster_rcnn.pth
+cp work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth weights/endoscapes/lg_mask_rcnn.pth
+
+# train downstream
+mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_faster_rcnn_10.py # CVS Box
+mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_faster_rcnn_10.py work_dirs/sv2lstg_faster_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+
+mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_mask_rcnn_10.py # CVS Seg
+mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_mask_rcnn_10.py work_dirs/sv2lstg_mask_rcnn_10/best_endoscapes_ds_average_precision_epoch_${EPOCH}.pth
+```
+
+Phase Recognition
+```shell
+cd configs/temporal_models
+./select_dataset.sh c80_phase
+cd ../..
+
+# train object detectors
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth
+
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth
+
+# copy weights
+mkdir -p weights/c80_phase/
+cp work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth weights/c80_phase/lg_faster_rcnn.pth
+cp work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth weights/c80_phase/lg_mask_rcnn.pth
+
+# Phase Recognition (Linear Probing / No Finetuning)
+mim test mmdet configs/models/faster_rcnn/lg_save_faster_rcnn.py weights/c80_phase/lg_faster_rcnn.pth # first save single-frame latent graphs
+mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py
+mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+
+mim test mmdet configs/models/mask_rcnn/lg_save_mask_rcnn.py weights/c80_phase/lg_mask_rcnn.pth # first save single-frame latent graphs
+mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py
+mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+
+# Phase Recognition (With Single-Frame Finetuning)
+mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.pth
+cp work_dirs/lg_ds_faster_rcnn/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_faster_rcnn.pth
+mim test mmdet configs/models/faster_rcnn/lg_ft_save_faster_rcnn.py weights/c80_phase/lg_ds_faster_rcnn.pth
+mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py
+mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+
+mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.pth
+cp work_dirs/lg_ds_mask_rcnn_no_recon/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth
+mim test mmdet configs/models/mask_rcnn/lg_ft_save_mask_rcnn.py weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth # first save single-frame latent graphs
+mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py
+mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
+```
+
+**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets. It is the same case for CholecT50, following the CholecT50 train/val/test videos to split the dataset.
+
 ## Pretrained Model Weights
 
 Coming Soon!
@@ -392,3 +499,10 @@ Please cite the appropriate papers if you make use of this repository.
   organization={Springer}
 }
 ```
+
+## References
+[1] **Latent Graph Representations for Critical View of Safety Assessment.** _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **IEEE Transactions on Medical Imaging 2023**_
+
+[2] **Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object and Anatomy-Driven Reasoning.** _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **MICCAI 2023**_
+
+[3] **Cholecseg8k: a semantic segmentation dataset for laparoscopic cholecystectomy based on cholec80.** _Hong, W. Y., et al._ arXiv preprint arXiv:2012.12453 (2020).
