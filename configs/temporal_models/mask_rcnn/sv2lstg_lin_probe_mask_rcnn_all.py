@@ -1,7 +1,7 @@
 import copy
 
 _base_ = [
-    '../sv2lstg_load_graphs_5_base.py',
+    '../sv2lstg_load_graphs_all_base.py'
     os.path.expandvars('$MMDETECTION/configs/_base_/models/mask-rcnn_r50_fpn.py'),
 ]
 
@@ -24,7 +24,6 @@ model.lg_detector.init_cfg = dict(
     type='Pretrained',
     checkpoint=_base_.load_from.replace('base', 'mask_rcnn'),
 )
-
 
 model.lg_detector.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)
 model.lg_detector.roi_extractor.roi_layer.output_size = 1
