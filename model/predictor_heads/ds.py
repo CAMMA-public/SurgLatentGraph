@@ -580,7 +580,7 @@ class STDSHead(DSHead):
             temp_model = torch.nn.TransformerEncoder(encoder_layer, num_layers=6,
                     norm=torch.nn.LayerNorm(2048))
             if self.graph_pooling_window != -1:
-                model = CustomSequential(pe, temp_model)
+                self.img_feat_temporal_model = CustomSequential(pe, temp_model)
             else:
                 self.img_feat_temporal_model = CustomSequential(pe, temp_model,
                         torch.nn.MaxPool2d((self.num_temp_frames, 1)),
