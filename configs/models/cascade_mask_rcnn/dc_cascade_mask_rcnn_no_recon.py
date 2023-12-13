@@ -1,4 +1,4 @@
-_base_ = ['dc_cascade_rcnn.py']
+_base_ = ['dc_cascade_mask_rcnn.py']
 
 model = dict(
     reconstruction_head = None,
