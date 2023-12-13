@@ -44,9 +44,16 @@ This repository contains the code corresponding to our Transactions on Medical I
 This project uses Pytorch 2.1.0 + CUDA 11.8, DGL 1.1.1, torch-scatter, mmdetection 3.2.0, and mmengine 0.7.4. Please note that you may encounter issues if you diverge from these versions. If you must diverge, please ensure that the DGL and torch-scatter versions match your versions of pytorch, and make sure to use mmengine<=0.7.4.
 
 ```sh
-> cd $LATENTGRAPH
-> conda create -n latentgraph python=3.8 && conda activate latentgraph
+# clone mmdetection and export environment variable
+> cd $HOME && git clone https://github.com/open-mmlab/mmdetection.git
+> export MMDETECTION=$HOME/mmdetection
+
+# clone SurgLatentGraph
+> cd $HOME && git clone https://github.com/CAMMA-public/SurgLatentGraph.git
+> cd SurgLatentGraph
+
 # install dependencies 
+> conda create -n latentgraph python=3.8 && conda activate latentgraph
 (latentgraph) > conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 (latentgraph) > conda install -c dglteam/label/cu113 dgl
 (latentgraph) > pip install torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
