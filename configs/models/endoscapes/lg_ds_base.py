@@ -96,7 +96,6 @@ train_eval_dataloader = dict(
         ann_file='train/annotation_ds_coco.json',
         test_mode=True,
     ),
-    drop_last=False,
 )
 val_dataloader = dict(
     batch_size=32,

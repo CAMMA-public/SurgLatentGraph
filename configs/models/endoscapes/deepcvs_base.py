@@ -65,6 +65,7 @@ dc_model = dict(
         aspect_ratio=[2, 3],
         use_seg_recon=True,
         use_pred_boxes_whiteout=True,
+        img_feat_size=512,
     ),
     reconstruction_loss=dict(
         type='ReconstructionLoss',
@@ -85,30 +86,30 @@ dc_model = dict(
 
 # dataset
 train_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
+        filter_cfg=dict(filter_empty_gt=False),
     ),
 )
 train_eval_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
         ann_file='train/annotation_ds_coco.json',
-        test_mode=True,
     ),
     drop_last=False,
 )
 val_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
         ann_file='val/annotation_ds_coco.json',
     ),
 )
 test_dataloader = dict(
-    batch_size=32,
+    batch_size=16,
     num_workers=2,
     dataset=dict(
         ann_file='test/annotation_ds_coco.json',

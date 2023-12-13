@@ -25,11 +25,11 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         img_aspect_ratio (tuple[int]): aspect ratio of reconstructed image
     """
     def __init__(self, decoder_cfg: ConfigType, aspect_ratio: Union[Tuple, List],
-            viz_feat_size: int, semantic_feat_size: int, bottleneck_feat_size: int, num_classes: int,
-            use_visual: bool = True, use_semantics: bool = True, use_img: bool = True,
-            use_gnn_feats: bool = True, use_seg_recon: bool = False, num_nodes: int = 16,
-            use_pred_boxes_whiteout: bool = False, bg_img_dim: int = 256,
-            init_cfg: OptMultiConfig = None) -> None:
+            viz_feat_size: int, semantic_feat_size: int, bottleneck_feat_size: int,
+            num_classes: int, use_visual: bool = True, use_semantics: bool = True,
+            use_img: bool = True, use_gnn_feats: bool = True, use_seg_recon: bool = False,
+            num_nodes: int = 16, use_pred_boxes_whiteout: bool = False, bg_img_dim: int = 256,
+            img_feat_size: int = 2048, init_cfg: OptMultiConfig = None) -> None:
 
         super().__init__(init_cfg=init_cfg)
         self.num_classes = num_classes
@@ -65,7 +65,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         if self.use_img:
             # img feature bottleneck settings
             self.img_feat_bottleneck = nn.Sequential(
-                nn.Conv2d(2048, bottleneck_feat_size, 3),
+                nn.Conv2d(img_feat_size, bottleneck_feat_size, 3),
                 nn.BatchNorm2d(bottleneck_feat_size),
                 nn.ReLU(),
                 nn.AdaptiveAvgPool2d(self.reconstruction_size),
@@ -111,10 +111,13 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
         if 'masks' in rescaled_results[0].pred_instances:
             masks = [r.pred_instances.masks for r in rescaled_results]
             layouts = self._construct_layout(classes, boxes, masks)
-            if 'gt_instances' in rescaled_results[0]:
+            if 'gt_instances' in rescaled_results[0] and 'masks' in rescaled_results[0].gt_instances:
                 gt_masks = [r.gt_instances.masks.to_tensor(masks[0].dtype,
                     masks[0].device) if r.is_det_keyframe else r.pred_instances.masks for r in rescaled_results]
                 gt_layouts = self._construct_layout(gt_classes, gt_boxes, gt_masks)
+            else:
+                gt_layouts = None
+
         else:
             layouts = self._construct_layout(classes, boxes)
             if 'gt_instances' in rescaled_results[0]:
@@ -127,7 +130,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
         # first combine gnn feats and pre-gnn viz feats
         if self.use_visual:
-            if self.use_gnn_feats:
+            if self.use_gnn_feats and graph is not None:
                 node_viz_feats = self.node_viz_feat_projector(torch.cat([feats.instance_feats,
                     graph.nodes.gnn_viz_feats], -1).flatten(end_dim=1))
                 node_viz_feats = node_viz_feats.view(*feats.instance_feats.shape[:-1],
@@ -258,7 +261,11 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             pred_scale_factor = (self.reconstruction_size / Tensor(r.ori_shape)).flip(0).tolist()
             rescaled_pred_bboxes = scale_boxes(r.pred_instances.bboxes, pred_scale_factor)
 
-            gt_actual_size = [r.gt_instances.masks.height, r.gt_instances.masks.width]
+            if self.training:
+                gt_actual_size = r.img_shape
+            else:
+                gt_actual_size = r.ori_shape
+
             gt_scale_factor = (self.reconstruction_size / Tensor(gt_actual_size)).flip(0).tolist()
             rescaled_gt_bboxes = scale_boxes(r.gt_instances.bboxes, gt_scale_factor)
             rescaled_r = DetDataSample(
@@ -276,7 +283,8 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                     rescaled_r.pred_instances.masks = TF.resize(r.pred_instances.masks,
                             self.reconstruction_size.tolist(), InterpolationMode.NEAREST)
 
-                rescaled_r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
+                if 'masks' in r.gt_instances:
+                    rescaled_r.gt_instances.masks = r.gt_instances.masks.resize(self.reconstruction_size.tolist())
 
             rescaled_results.append(rescaled_r)
 

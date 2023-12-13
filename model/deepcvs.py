@@ -111,20 +111,27 @@ class DeepCVS(BaseDetector):
 
         return box_layout, layout, one_hot_layout
 
-    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
-        # run detector to get detections
-        results = self.detector.predict(batch_inputs, batch_data_samples)
+    def _forward(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> Tensor:
+        with torch.no_grad():
+            # run detector to get detections
+            results = self.detector.predict(batch_inputs, batch_data_samples)
 
         # get feats
-        ds_feats = self.extract_feat(batch_inputs, results)
+        ds_feats, ds_bb_feats = self.extract_feat(batch_inputs, results)
 
         # reconstruction if recon head is not None
-        recon_imgs, _, _ = self.reconstruct(batch_inputs, results, ds_feats)
+        recon_outputs = self.reconstruct(batch_inputs, results, ds_feats, ds_bb_feats)
 
         if isinstance(self.decoder_predictor, torch.nn.ModuleList):
             ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
         else:
             ds_preds = self.decoder_predictor(ds_feats)
+
+        return ds_preds, recon_outputs, results
+
+    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
+        ds_preds, recon_outputs, results = self._forward(batch_inputs, batch_data_samples)
+        recon_imgs, _, _ = recon_outputs
 
         for r, dp, r_img in zip(results, ds_preds, recon_imgs):
             r.pred_ds = dp
@@ -136,7 +143,8 @@ class DeepCVS(BaseDetector):
 
         return results
 
-    def reconstruct(self, batch_inputs: Tensor, results: SampleList, ds_feats: Tensor) -> Tensor:
+    def reconstruct(self, batch_inputs: Tensor, results: SampleList, ds_feats: Tensor,
+            ds_bb_feats: List[Tensor]) -> Tensor:
         if self.reconstruction_head is None:
             return [None] * len(results), None, None
 
@@ -144,27 +152,18 @@ class DeepCVS(BaseDetector):
             raise NotImplementedError("Reconstruction Head not implemented for gt dets")
 
         feats = BaseDataElement()
-        feats.bb_feats = ds_feats
+        feats.bb_feats = ds_bb_feats
         feats.instance_feats = ds_feats.unsqueeze(1).repeat(1, 16, 1)
         feats.semantic_feats = None
         reconstructed_imgs, img_targets, rescaled_results = \
-                self.reconstruction_head.predict(results, feats, batch_inputs)
+                self.reconstruction_head.predict(results, feats, None, batch_inputs)
 
         return reconstructed_imgs, img_targets, rescaled_results
 
     def loss(self, batch_inputs: Tensor, batch_data_samples: SampleList):
         losses = {}
-
-        with torch.no_grad():
-            # run detector
-            results = self.detector.predict(batch_inputs, batch_data_samples)
-
-        # get feats
-        ds_feats = self.extract_feat(batch_inputs, results)
-
-        # reconstruction and loss if recon head is not None
-        recon_imgs, img_targets, rescaled_results = self.reconstruct(
-                batch_inputs, results, ds_feats)
+        ds_preds, recon_outputs, _ = self._forward(batch_inputs, batch_data_samples)
+        recon_imgs, img_targets, rescaled_results = recon_outputs
 
         if self.reconstruction_loss is not None:
             if self.use_pred_boxes_recon_loss:
@@ -174,12 +173,6 @@ class DeepCVS(BaseDetector):
 
             recon_losses = self.reconstruction_loss(recon_imgs, img_targets, recon_boxes)
             losses.update(recon_losses)
-
-        # ds prediction and loss
-        if isinstance(self.decoder_predictor, torch.nn.ModuleList):
-            ds_preds = torch.stack([p(ds_feats) for p in self.decoder_predictor], 1)
-        else:
-            ds_preds = self.decoder_predictor(ds_feats)
 
         # get gt
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(
@@ -262,10 +255,9 @@ class DeepCVS(BaseDetector):
             decoder_input = torch.cat([batch_inputs, layout], 1)
 
         # ds prediction
-        ds_feats = F.adaptive_avg_pool2d(self.decoder_backbone(decoder_input)[-1],
-                1).squeeze(-1).squeeze(-1)
+        #ds_feats = F.adaptive_avg_pool2d(self.decoder_backbone(decoder_input)[-1],
+        #        1).squeeze(-1).squeeze(-1)
+        bb_feats = self.decoder_backbone(decoder_input)
+        ds_feats = F.adaptive_avg_pool2d(bb_feats[-1], 1).squeeze(-1).squeeze(-1)
 
-        return ds_feats
-
-    def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
-        raise NotImplementedError
+        return ds_feats, bb_feats

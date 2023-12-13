@@ -390,7 +390,7 @@ class STDSHead(DSHead):
         # construct temporal model
         self.temporal_arch = temporal_arch
         if self.use_temporal_model:
-            self.img_feat_temporal_model = self._create_temporal_model()
+            self._create_temporal_model()
 
     def predict(self, graph: BaseDataElement, feats: BaseDataElement) -> Tensor:
         # get dims
@@ -447,12 +447,10 @@ class STDSHead(DSHead):
         # add positional embedding to node feats
         node_feats = torch.cat(node_feats, -1)
         if self.use_node_positional_embedding:
-            # use node_to_fic_id to arrange pos_embeds
             pos_embed = self.node_pe(torch.zeros(1, T, node_feats.shape[-1]).to(node_feats.device))
 
             # add to node_feats
-            node_feats = F.dropout(node_feats + pos_embed.unsqueeze(2), 0.1,
-                    training=self.training)
+            node_feats = node_feats + pos_embed.unsqueeze(2)
 
         graph.nodes.feats = node_feats
         graph.edges.feats = torch.cat(edge_feats, -1)
@@ -486,7 +484,7 @@ class STDSHead(DSHead):
 
             elif self.use_positional_embedding:
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
-                img_feats = F.dropout(img_feats + pos_embed, 0.1, training=self.training)
+                img_feats = img_feats + pos_embed
 
             # project img feats and fuse with graph feats
             img_feats = self.img_feat_projector(img_feats.flatten(end_dim=1)).view(B, T, -1)
@@ -577,18 +575,19 @@ class STDSHead(DSHead):
     def _create_temporal_model(self):
         if self.temporal_arch.lower() == 'transformer':
             pe = PositionalEncoding(d_model=2048, batch_first=True)
-            decoder_layer = torch.nn.TransformerDecoderLayer(d_model=2048, nhead=8,
+            encoder_layer = torch.nn.TransformerEncoderLayer(d_model=2048, nhead=8,
                     batch_first=True, dropout=0)
-            temp_model = torch.nn.TransformerDecoder(decoder_layer, num_layers=2)
+            temp_model = torch.nn.TransformerEncoder(encoder_layer, num_layers=6,
+                    norm=torch.nn.LayerNorm(2048))
             if self.graph_pooling_window != -1:
-                model = CustomSequential(pe, DuplicateItem(), temp_model)
+                self.img_feat_temporal_model = CustomSequential(pe, temp_model)
             else:
-                model = CustomSequential(pe, DuplicateItem(), temp_model,
+                self.img_feat_temporal_model = CustomSequential(pe, temp_model,
                         torch.nn.MaxPool2d((self.num_temp_frames, 1)),
                         SqueezeItem(1))
 
         elif self.temporal_arch.lower() == 'tcn':
-            model = MSTCN(2, 8, 32, 2048, 2048, self.causal)
+            self.img_feat_temporal_model = MSTCN(2, 8, 32, 2048, 2048, self.causal)
 
         else:
             if self.temporal_arch.lower() == 'gru':
@@ -599,13 +598,12 @@ class STDSHead(DSHead):
                 raise NotImplementedError("Temporal architecture " + self.temporal_arch + " not implemented.")
 
             if self.graph_pooling_window != -1:
-                model = torch.nn.Sequential(temp_model, SelectItem(0))
+                self.img_feat_temporal_model = torch.nn.Sequential(temp_model,
+                        SelectItem(0))
             else:
-                model = torch.nn.Sequential(temp_model, SelectItem(0),
-                        torch.nn.MaxPool2d((self.num_temp_frames, 1)),
+                self.img_feat_temporal_model = torch.nn.Sequential(temp_model,
+                        SelectItem(0), torch.nn.MaxPool2d((self.num_temp_frames, 1)),
                         SqueezeItem(1))
-
-        return model
 
     def _ds_predict(self, final_feats):
         if isinstance(self.ds_predictor, torch.nn.ModuleList):

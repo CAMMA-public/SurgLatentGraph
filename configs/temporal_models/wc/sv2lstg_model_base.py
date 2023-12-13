@@ -16,6 +16,7 @@ del _base_.test_data_prefix
 del _base_.dataset_type
 del _base_.data_root
 del _base_.rand_aug_surg
+del _base_.backend_args
 
 model_imports = copy.deepcopy(_base_.custom_imports.imports)
 del _base_.custom_imports
@@ -74,7 +75,7 @@ visualizer = dict(
 
 # Running settings (modify train_cfg here)
 train_cfg = dict(
-    max_epochs=5,
+    max_epochs=10,
 )
 
 val_cfg = dict(type='ValLoopKeyframeEval')
@@ -91,22 +92,23 @@ custom_hooks = [
 # optimizer
 optim_wrapper = dict(
     _delete_=True,
-    optimizer=dict(type='AdamW', lr=0.0001),
+    optimizer=dict(type='AdamW', lr=0.00001),
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'semantic_feat_projector': dict(lr_mult=10),
+            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
+            'semantic_feat_projector': dict(lr_mult=30),
         }
     )
 )
 
 # evaluators
 train_evaluator = dict(
-    outfile_prefix='./results/c80_phase_preds/train/sv2lstg',
+    outfile_prefix='./results/wc_preds/train/sv2lstg',
 )
 val_evaluator = dict(
-    outfile_prefix='./results/c80_phase_preds/val/sv2lstg',
+    outfile_prefix='./results/wc_preds/val/sv2lstg',
 )
 test_evaluator = dict(
-    outfile_prefix='./results/c80_phase_preds/test/sv2lstg',
+    outfile_prefix='./results/wc_preds/test/sv2lstg',
 )

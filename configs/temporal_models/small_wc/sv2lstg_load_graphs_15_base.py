@@ -1,6 +1,6 @@
 _base_ = [
     'sv2lstg_model_base.py',
-    '../datasets/small_wc/small_wc_vid_instance_load_graphs.py',
+    '../datasets/small_wc/endoscapes_vid_instance_load_graphs.py',
 ]
 
 num_temp_frames = 15

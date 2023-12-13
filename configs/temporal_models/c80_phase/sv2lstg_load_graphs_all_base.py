@@ -19,3 +19,7 @@ optim_wrapper = dict(
     optimizer=dict(lr=0.001),
     clip_grad=dict(max_norm=10, norm_type=2),
 )
+
+train_cfg = dict(
+    max_epochs=10,
+)

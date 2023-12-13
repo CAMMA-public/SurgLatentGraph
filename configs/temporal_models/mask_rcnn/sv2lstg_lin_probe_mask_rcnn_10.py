@@ -18,7 +18,6 @@ model = copy.deepcopy(_base_.sv2lstg_model)
 
 # configure lg detector
 model.lg_detector.detector = detector
-model.lg_detector.sem_feat_use_masks = False
 
 # weight init
 model.lg_detector.init_cfg = dict(
