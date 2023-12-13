@@ -176,4 +176,4 @@ default_hooks = dict(
 )
 
 # loading
-load_from = 'weights/endoscapes/lg_base_no_recon.pth'
+load_from = 'weights/endoscapes/lg_base.pth'
