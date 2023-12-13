@@ -430,11 +430,11 @@ cd configs/models
 cd ../..
 
 # first train detectors (Faster-RCNN and Mask-RCNN)
-mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
 
-mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/endoscapes/
@@ -459,11 +459,11 @@ cd configs/temporal_models/
 cd ../..
 
 # train detectors (can skip if already done for another model)
-mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_endoscapes_bbox_mAP_epoch_${EPOCH}.pth
 
-mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_endoscapes_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/endoscapes/
@@ -485,11 +485,11 @@ cd configs/temporal_models
 cd ../..
 
 # train object detectors
-mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth
-mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.pth work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/faster_rcnn/lg_faster_rcnn.py
+mim test mmdet configs/models/faster_rcnn/lg_faster_rcnn.py work_dirs/lg_faster_rcnn/best_c80_phase_bbox_mAP_epoch_${EPOCH}.pth
 
-mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth
-mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.pth work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth
+mim train mmdet configs/models/mask_rcnn/lg_mask_rcnn.py
+mim test mmdet configs/models/mask_rcnn/lg_mask_rcnn.py work_dirs/lg_mask_rcnn/best_c80_phase_segm_mAP_epoch_${EPOCH}.pth
 
 # copy weights
 mkdir -p weights/c80_phase/
@@ -506,13 +506,13 @@ mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_al
 mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 
 # Phase Recognition (With Single-Frame Finetuning)
-mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.pth
+mim train mmdet configs/models/faster_rcnn/lg_ds_faster_rcnn.py
 cp work_dirs/lg_ds_faster_rcnn/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_faster_rcnn.pth
 mim test mmdet configs/models/faster_rcnn/lg_ft_save_faster_rcnn.py weights/c80_phase/lg_ds_faster_rcnn.pth
 mim train mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py
 mim test mmdet configs/temporal_models/faster_rcnn/sv2lstg_lin_probe_faster_rcnn_all.py work_dirs/sv2lstg_lin_probe_faster_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 
-mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.pth
+mim train mmdet configs/models/mask_rcnn/lg_ds_mask_rcnn_no_recon.py
 cp work_dirs/lg_ds_mask_rcnn_no_recon/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth
 mim test mmdet configs/models/mask_rcnn/lg_ft_save_mask_rcnn.py weights/c80_phase/lg_ds_mask_rcnn_no_recon.pth # first save single-frame latent graphs
 mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py
