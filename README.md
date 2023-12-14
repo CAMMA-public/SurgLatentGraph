@@ -532,6 +532,15 @@ mim test mmdet --checkpoint configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_
 
 Coming Soon!
 
+## License
+The code, models, and datasets released here are available for non-commercial scientific research purposes as defined in the [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). By downloading and using this code you agree to the terms in the [LICENSE](LICENSE). Third-party codes are subject to their respective licenses.
+
+## Acknowledgement
+This work was supported by French state funds managed by the ANR within the National AI Chair program under Grant ANR-20-CHIA-
+0029-01 (Chair AI4ORSafety) and within the Investments for the future program under Grants ANR-10-IDEX-0002-02 (IdEx Unistra) and ANR-
+10-IAHU-02 (IHU Strasbourg). This work was granted access to the HPC resources of IDRIS under the allocation 2021-AD011011640R1
+made by GENCI.
+
 ## Citation
 
 Please cite the appropriate papers if you make use of this repository.
