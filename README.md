@@ -151,19 +151,19 @@ data/mmdet_datasets
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
     └── train_seg/
-        └── 11088_10825.jpg
+        └── 100_27200.jpg
         ...
-        └── 15736_60875.jpg
+        └── 98_65650.jpg
         └── annotation_coco.json
     └── val_seg/
-        └── 11088_10825.jpg
+        └── 126_11550.jpg
         ...
-        └── 15736_60875.jpg
+        └── 159_60800.jpg
         └── annotation_coco.json
     └── test_seg/
-        └── 11104_22925.jpg
+        └── 165_23650.jpg
         ...
-        └── 13513_34875.jpg
+        └── 189_34800.jpg
         └── annotation_coco.json
     └── train_vids.txt
     └── val_vids.txt
