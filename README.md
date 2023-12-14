@@ -130,23 +130,23 @@ The final directory structure should be as follows, with all symbolic links poin
 data/mmdet_datasets
 └── endoscapes/
     └── train/
-        └── 10947_14050.jpg
+        └── 1_14050.jpg
         ...
-        └── 9762_40750.jpg
+        └── 120_40750.jpg
         └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
     └── val/
-        └── 11057_23575.jpg
+        └── 121_23575.jpg
         ...
-        └── 9916_39400.jpg
+        └── 161_39400.jpg
         └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
     └── test/
-        └── 10983_1225.jpg
+        └── 162_1225.jpg
         ...
-        └── 9823_55250.jpg
+        └── 201_55250.jpg
         └── annotation_coco.json
         └── annotation_ds_coco.json
         └── annotation_coco_vid.json
