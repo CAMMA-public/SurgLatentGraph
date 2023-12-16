@@ -16,6 +16,7 @@ del _base_.test_data_prefix
 del _base_.dataset_type
 del _base_.data_root
 del _base_.rand_aug_surg
+del _base_.backend_args
 
 model_imports = copy.deepcopy(_base_.custom_imports.imports)
 del _base_.custom_imports
@@ -37,6 +38,7 @@ lg_model.ds_head.use_temporal_model = True
 lg_model.ds_head.temporal_arch = 'transformer'
 lg_model.ds_head.pred_per_frame = True
 lg_model.ds_head.edited_graph_loss_weight = 1
+lg_model.ds_head.loss.reduction = 'none'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 st_ds_head = copy.deepcopy(lg_model['ds_head'])
