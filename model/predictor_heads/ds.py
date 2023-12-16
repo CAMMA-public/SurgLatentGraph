@@ -355,7 +355,7 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 class STDSHead(DSHead):
     def __init__(self, num_temp_frames: int, graph_pooling_window: int = 1,
             use_temporal_model: bool = False, temporal_arch: str = 'transformer',
-            pred_per_frame: bool = False, per_video: bool = False,
+            pred_per_frame: bool = False, pseudolabel_loss_weight: float = 0.25, per_video: bool = False,
             use_node_positional_embedding: bool = True, use_positional_embedding: bool = False,
             edited_graph_loss_weight: float = 0, reassign_edges: bool = True,
             combine_nodes: bool = True, causal: bool = False, gnn_cfg: ConfigType = None,
@@ -369,6 +369,7 @@ class STDSHead(DSHead):
         self.use_temporal_model = use_temporal_model
         self.graph_pooling_window = graph_pooling_window
         self.pred_per_frame = pred_per_frame
+        self.pseudolabel_loss_weight = pseudolabel_loss_weight
         self.per_video = per_video
         self.edited_graph_loss_weight = edited_graph_loss_weight
         self.reassign_edges = reassign_edges
@@ -480,7 +481,7 @@ class STDSHead(DSHead):
                     tcn_output = self.img_feat_temporal_model(img_feats.permute(0, 2, 1))
                     img_feats = tcn_output.sum(0).permute(0, 2, 1) # sum across stages
                 else:
-                    img_feats = self.img_feat_temporal_model(img_feats)
+                    img_feats = img_feats + self.img_feat_temporal_model(img_feats) # temporal model and skip connection
 
             elif self.use_positional_embedding:
                 pos_embed = self.pe(torch.zeros(1, T, img_feats.shape[-1]).to(img_feats.device))
@@ -538,11 +539,17 @@ class STDSHead(DSHead):
         if not self.pred_per_frame:
             # keep only last gt per clip
             ds_gt = ds_gt[:, -1]
+            is_ds_keyframe = None
         else:
             ds_gt = ds_gt.flatten(end_dim=1)
             ds_preds = ds_preds.flatten(end_dim=1)
             for k, v in perturbed_ds_preds.items():
                 perturbed_ds_preds[k] = v.flatten(end_dim=1)
+
+            # use is_ds_keyframe to downweight contribution of pseudolabels
+            is_ds_keyframe = Tensor([b.is_ds_keyframe for vds in batch_data_samples for b in vds]).float().to(ds_gt.device)
+            is_ds_keyframe[is_ds_keyframe == 0] = self.pseudolabel_loss_weight
+            is_ds_keyframe = is_ds_keyframe / is_ds_keyframe.sum()
 
         perturbed_ds_loss = {}
         if isinstance(self.loss_fn, torch.nn.ModuleList):
@@ -554,6 +561,11 @@ class STDSHead(DSHead):
 
         else:
             ds_loss = self.loss_fn(ds_preds, ds_gt)
+            if is_ds_keyframe is not None:
+                ds_loss = (ds_loss * is_ds_keyframe.unsqueeze(-1)).sum(0).mean()
+            else:
+                ds_loss = ds_loss.mean()
+
             for k, v in perturbed_ds_preds.items():
                 if k == 'graph_viz':
                     wt = self.viz_loss_weight
@@ -565,6 +577,11 @@ class STDSHead(DSHead):
                     wt = self.edited_graph_loss_weight
 
                 loss_val = self.loss_fn(v, ds_gt)
+                if is_ds_keyframe is not None:
+                    loss_val = (loss_val * is_ds_keyframe.unsqueeze(-1)).sum(0).mean()
+                else:
+                    loss_val = loss_val.mean()
+
                 perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
 
         loss = {'ds_loss': ds_loss * self.loss_weight}
@@ -611,7 +628,7 @@ class STDSHead(DSHead):
             ds_preds = torch.stack([p(ds_feats) for p in self.ds_predictor], 1)
         else:
             if final_feats.ndim > 2:
-                ds_preds = self.ds_predictor(final_feats.view(-1, *final_feats.shape[2:]))
+                ds_preds = self.ds_predictor(final_feats.flatten(end_dim=1))
                 ds_preds = ds_preds.view(*final_feats.shape[:2], -1)
             else:
                 ds_preds = self.ds_predictor(final_feats)
