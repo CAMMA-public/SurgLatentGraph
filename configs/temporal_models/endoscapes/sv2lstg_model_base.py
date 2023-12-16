@@ -38,6 +38,8 @@ lg_model.ds_head.use_temporal_model = True
 lg_model.ds_head.temporal_arch = 'transformer'
 lg_model.ds_head.pred_per_frame = True
 lg_model.ds_head.edited_graph_loss_weight = 1
+lg_model.ds_head.loss.reduction = 'none'
+#lg_model.ds_head.semantic_loss_weight = 1
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 st_ds_head = copy.deepcopy(lg_model['ds_head'])
@@ -96,8 +98,7 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
     paramwise_cfg=dict(
         custom_keys={
-            'lg_detector.trainable_backbone': dict(lr_mult=0.25),
-            'semantic_feat_projector': dict(lr_mult=30),
+            'semantic_feat_projector': dict(lr_mult=10),
         }
     )
 )
