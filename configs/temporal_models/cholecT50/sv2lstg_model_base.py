@@ -16,6 +16,7 @@ del _base_.test_data_prefix
 del _base_.dataset_type
 del _base_.data_root
 del _base_.rand_aug_surg
+del _base_.backend_args
 
 model_imports = copy.deepcopy(_base_.custom_imports.imports)
 del _base_.custom_imports
@@ -26,16 +27,18 @@ custom_imports = dict(imports=model_imports + ['evaluator.CocoMetricRGD', 'model
 lg_model = _base_.lg_model
 lg_model.force_encode_semantics = True
 lg_model.force_train_graph_head = True
+lg_model.perturb_factor = 0
 
 # define additional params in ds head
-lg_model.ds_head.type='STDSHead'
-lg_model.ds_head.num_temp_frames=5
-lg_model.ds_head.gnn_cfg.num_layers=5
-lg_model.ds_head.use_node_positional_embedding=True
-lg_model.ds_head.use_temporal_model=True
-lg_model.ds_head.temporal_arch='transformer'
-lg_model.ds_head.pred_per_frame=True
-lg_model.ds_head.edited_graph_loss_weight=1
+lg_model.ds_head.type = 'STDSHead'
+lg_model.ds_head.num_temp_frames = 5
+lg_model.ds_head.gnn_cfg.num_layers = 5
+lg_model.ds_head.use_node_positional_embedding = True
+lg_model.ds_head.use_temporal_model = True
+lg_model.ds_head.temporal_arch = 'transformer'
+lg_model.ds_head.pred_per_frame = True
+lg_model.ds_head.edited_graph_loss_weight = 1
+lg_model.ds_head.loss.reduction = 'none'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 st_ds_head = copy.deepcopy(lg_model['ds_head'])

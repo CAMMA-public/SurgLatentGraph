@@ -38,6 +38,7 @@ lg_model.ds_head.use_temporal_model = True
 lg_model.ds_head.temporal_arch = 'transformer'
 lg_model.ds_head.pred_per_frame = True
 lg_model.ds_head.edited_graph_loss_weight = 1
+lg_model.ds_head.loss.reduction = 'none'
 
 # remove unnecessary parts of lg_model (only need detector and graph head)
 st_ds_head = copy.deepcopy(lg_model['ds_head'])
