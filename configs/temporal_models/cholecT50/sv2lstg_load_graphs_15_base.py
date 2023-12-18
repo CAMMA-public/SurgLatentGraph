@@ -17,13 +17,13 @@ _base_.sv2lstg_model.data_preprocessor = dict(type='SavedLGPreprocessor')
 default_hooks = dict(
     checkpoint=dict(
         by_epoch=False,
-        interval=140,
+        interval=640,
     ),
 )
 
 train_cfg = dict(
     _delete_=True,
     type='IterBasedTrainLoop',
-    max_iters=1400,
-    val_interval=140,
+    max_iters=6400,
+    val_interval=640,
 )
