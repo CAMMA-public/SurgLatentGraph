@@ -20,13 +20,13 @@ test_dataloader = dict(batch_size=10)
 default_hooks = dict(
     checkpoint=dict(
         by_epoch=False,
-        interval=200,
+        interval=640,
     ),
 )
 
 train_cfg = dict(
     _delete_=True,
     type='IterBasedTrainLoop',
-    max_iters=2000,
-    val_interval=200,
+    max_iters=6400,
+    val_interval=640,
 )
