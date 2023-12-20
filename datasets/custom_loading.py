@@ -21,6 +21,13 @@ import imagesize
 
 @TRANSFORMS.register_module()
 class LoadAnnotationsWithDS(LoadAnnotations):
+    def _load_masks(self, results: dict) -> dict:
+        if len(results['instances']) > 0 and 'mask' in results['instances'][0]:
+            return super()._load_masks(results)
+        else:
+            # only load masks if image contains them
+            return results
+
     def _load_ds(self, results: dict) -> None:
         """Private function to load downstream annotations.
 
