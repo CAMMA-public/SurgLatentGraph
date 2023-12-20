@@ -84,8 +84,9 @@ All three files follow the normal COCO format, with three additional image level
 ### Dataset/Annotation Downloads
 [![Endoscapes](https://img.shields.io/badge/Endoscapes%20-red)](https://github.com/CAMMA-public/Endoscapes)
 [![CholecT50](https://img.shields.io/badge/CholecT50%20-green)](https://github.com/CAMMA-public/cholect50)
+[![CholecT50 COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://s3.unistra.fr/camma_public/datasets/COCO-Style_Annots/cholecT50.zip)
 [![Cholec80](https://img.shields.io/badge/Cholec80%20-purple)](https://docs.google.com/forms/d/1GwZFM3-GhEduBs1d5QzbfFksKmS1OqXZAz8keYi-wKI)
-[![COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://seafile.unistra.fr/d/64a5c16f34ed4569bc4e/)
+[![Cholec80 COCO-Style Annotations](https://img.shields.io/badge/COCO%20Style%20Annotations%20-teal)](https://s3.unistra.fr/camma_public/datasets/COCO-Style_Annots/cholec80.zip)
 
 The Cholec80 and CholecT50 dataset download links contain entire surgical videos. To use them with this repository, the frames need to be extracted and named in the correct format, and our modified COCO-style annotations need to be downloaded. To guide this process, we provide example dataset folders with symbolic links in place of images, re-organized metadata for each dataset (`all_metadata.csv`), and the JSON-style annotations using the COCO Style Annotations link.
 
