@@ -9,7 +9,7 @@ data
 **/*.log
 configs/models/*.py
 configs/temporal_models/*.py
-configs/models/ssl
+configs/models/ssl*
 configs/models/small_wc
 configs/models/wc
 configs/temporal_models/small_wc
