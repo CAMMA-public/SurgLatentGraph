@@ -98,32 +98,53 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
 
     def predict(self, results: Tuple, feats: BaseDataElement, graph: BaseDataElement,
             imgs: Tensor) -> Tensor:
+        device = feats.instance_feats.device
+
         # first, rescale results
         rescaled_results = self._rescale_results(results)
 
         # extract raw semantic feats for layout construction
         classes = [r.pred_instances.labels for r in rescaled_results]
         boxes = [r.pred_instances.bboxes for r in rescaled_results]
-        if 'gt_instances' in results[0]:
-            gt_classes = [r.gt_instances.labels if r.is_det_keyframe else r.pred_instances.labels for r in rescaled_results]
-            gt_boxes = [r.gt_instances.bboxes if r.is_det_keyframe else r.pred_instances.bboxes for r in rescaled_results]
+        gt_classes, gt_boxes = [], []
 
-        if 'masks' in rescaled_results[0].pred_instances:
+        use_masks = 'masks' in rescaled_results[0].pred_instances
+        if use_masks:
             masks = [r.pred_instances.masks for r in rescaled_results]
+            gt_masks = []
             layouts = self._construct_layout(classes, boxes, masks)
-            if 'gt_instances' in rescaled_results[0] and 'masks' in rescaled_results[0].gt_instances:
-                gt_masks = [r.gt_instances.masks.to_tensor(masks[0].dtype,
-                    masks[0].device) if r.is_det_keyframe else r.pred_instances.masks for r in rescaled_results]
-                gt_layouts = self._construct_layout(gt_classes, gt_boxes, gt_masks)
-            else:
-                gt_layouts = None
-
         else:
             layouts = self._construct_layout(classes, boxes)
-            if 'gt_instances' in rescaled_results[0]:
-                gt_layouts = self._construct_layout(gt_classes, gt_boxes)
+
+        for ind, r in enumerate(rescaled_results):
+            # replace pred values with GT if is det keyframe and respective labels are available
+            if r.is_det_keyframe and len(r.gt_instances) > 0:
+                gt_classes.append(r.gt_instances.labels)
+                gt_boxes.append(r.gt_instances.bboxes)
+                if use_masks and 'masks' in r.gt_instances:
+                    gt_masks.append(r.gt_instances.masks.to_tensor(device=device, dtype=int))
+                else:
+                    gt_masks.append(r.pred_instances.masks)
+                    gt_classes[ind] = r.pred_instances.labels
+                    gt_boxes[ind] = r.pred_instances.bboxes
+
+            elif r.is_det_keyframe:
+                gt_classes.append(Tensor([]).to(device))
+                gt_boxes.append(Tensor([]).to(device))
+                if use_masks:
+                    gt_masks.append(torch.zeros([0, *self.reconstruction_size]).to(device))
+
             else:
-                gt_layouts = None
+                gt_classes.append(r.pred_instances.labels)
+                gt_boxes.append(r.pred_instances.bboxes)
+                if use_masks:
+                    gt_masks.append(r.pred_instances.masks)
+
+        # compute gt_layouts
+        if use_masks:
+            gt_layouts = self._construct_layout(gt_classes, gt_boxes, gt_masks)
+        else:
+            gt_layouts = self._construct_layout(gt_classes, gt_boxes)
 
         # gather features to bottleneck
         bottleneck_input = []
@@ -181,7 +202,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
             mask_layout = pad_sequence(mask_layouts, batch_first=True)
 
             # to construct layout, one hot encode mask_layout, sum across instance dim
-            mask_ohl = F.one_hot(mask_layout, self.num_classes + 1)
+            mask_ohl = F.one_hot(mask_layout.long(), self.num_classes + 1)
             if mask_ohl.shape[1] == 0:
                 layout = torch.zeros(*mask_ohl.transpose(1, -1).shape[:-1]).to(mask_ohl.device).float()
             else:
