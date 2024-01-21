@@ -344,20 +344,35 @@ class LGDetector(BaseDetector):
 
     def extract_feat(self, batch_inputs: Tensor, results: SampleList, force_perturb: bool = False) -> BaseDataElement:
         feats = BaseDataElement()
-        if self.use_gt_dets:
-            boxes = [r.gt_instances.bboxes.to(batch_inputs.device) for r in results]
-            classes = [r.gt_instances.labels.to(batch_inputs.device) for r in results]
-            scores = [torch.ones_like(c) for c in classes]
+
+        # load pred/gt dense labels
+        use_masks = 'masks' in results[0].pred_instances
+        if self.use_gt_dets and self.training: # only use gt dets when training
+            boxes = [r.gt_instances.bboxes.to(batch_inputs.device) \
+                    if (r.is_det_keyframe and len(r.gt_instances) > 0) \
+                    else Tensor([]).to(batch_inputs.device) if r.is_det_keyframe \
+                    else r.pred_instances.bboxes for r in results]
+            classes = [r.gt_instances.labels.to(batch_inputs.device) \
+                    if (r.is_det_keyframe and len(r.gt_instances) > 0) \
+                    else Tensor([]).to(batch_inputs.device) if r.is_det_keyframe \
+                    else r.pred_instances.labels for r in results]
+            scores = [torch.ones_like(r.pred_instances.labels) \
+                    if (r.is_det_keyframe and len(r.gt_instances) > 0) \
+                    else Tensor([]).to(batch_inputs.device) if r.is_det_keyframe \
+                    else r.pred_instances.scores for r in results]
             masks = None
-            if 'masks' in results[0].gt_instances:
-                masks = [r.gt_instances.masks.to(batch_inputs.device) for r in results]
+            if use_masks:
+                masks = [r.gt_instances.masks.to(batch_inputs.device) \
+                        if (r.is_det_keyframe and len(r.gt_instances) > 0) \
+                        else torch.zeros([0, *r.ori_shape]).to(device) \
+                        if r.is_det_keyframe else r.pred_instances.masks for r in results]
 
         else:
             boxes = [r.pred_instances.bboxes for r in results]
             classes = [r.pred_instances.labels for r in results]
             scores = [r.pred_instances.scores for r in results]
             masks = None
-            if 'masks' in results[0].pred_instances:
+            if use_masks:
                 masks = [r.pred_instances.masks.to(batch_inputs.device) for r in results]
 
         # apply box perturbation
@@ -440,13 +455,18 @@ class LGDetector(BaseDetector):
     def compute_semantic_feat(self, results: SampleList, feats: BaseDataElement,
             graph: BaseDataElement) -> Tensor:
         device = feats.instance_feats.device
-        if self.use_gt_dets:
-            boxes = [r.gt_instances.bboxes.to(device) for r in results]
-            classes = [r.gt_instances.labels.to(device) for r in results]
-            scores = [torch.ones_like(c) for c in classes]
+        if self.use_gt_dets and self.training:
+            boxes = [r.gt_instances.bboxes.to(device) if r.is_det_keyframe \
+                    else r.pred_instances.bboxes for r in results]
+            classes = [r.gt_instances.labels.to(device) if r.is_det_keyframe \
+                    else r.pred_instances.labels for r in results]
+            scores = [torch.ones_like(r.gt_instances.classes) if r.is_det_keyframe \
+                    else r.pred_instances.scores for r in results]
             masks = None
             if 'masks' in results[0].gt_instances:
-                masks = [r.gt_instances.masks.to(device) for r in results]
+                masks = [r.gt_instances.masks.to(device) \
+                        if r.is_det_keyframe and 'masks' in r.gt_instances \
+                        else r.pred_instances.masks for r in results]
 
         else:
             boxes = [r.pred_instances.bboxes for r in results]

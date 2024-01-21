@@ -1,6 +1,0 @@
-mv sv2lstg_lin_probe_mask_rcnn_10.py sv2lstg_lin_probe_faster_rcnn_10.py
-mv sv2lstg_lin_probe_mask_rcnn_15.py sv2lstg_lin_probe_faster_rcnn_15.py
-mv sv2lstg_lin_probe_mask_rcnn_5.py sv2lstg_lin_probe_faster_rcnn_5.py
-mv sv2lstg_mask_rcnn_10.py sv2lstg_faster_rcnn_10.py
-mv sv2lstg_mask_rcnn_15.py sv2lstg_faster_rcnn_15.py
-mv sv2lstg_mask_rcnn_5.py sv2lstg_faster_rcnn_5.py
