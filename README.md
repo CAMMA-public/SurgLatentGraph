@@ -343,6 +343,11 @@ mkdir -p weights/${DATASET}/
 cp work_dirs/lg_${DETECTOR}/best_${DATASET}_{bbox/segm}_mAP_epoch_${BEST_VAL_EPOCH}.pth weights/${DATASET}/lg_${DETECTOR}.pth
 ```
 
+Finally, we will extract and save just the backbone weights from the trained object detector, which will be useful for later experiments.
+```shell
+python weights/extract_bb_weights.py weights/${DATASET}/lg_${DETECTOR}.pth
+```
+
 ### Single-Frame Models
 
 Here, we provide example commands for training/testing each of the single-frame downstream classification methods (LG-CVS, DeepCVS, LayoutCVS, ResNet50-DetInit, ResNet50).
@@ -385,13 +390,13 @@ mim test mmdet configs/models/${DETECTOR}/layout_${DETECTOR}_no_recon.py --check
 
 **ResNet50-DetInit**
 ```shell
-mim train mmdet configs/models/simple_classifier_with_recon.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}
+mim train mmdet configs/models/simple_classifier_with_recon.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}_bb.pth --work-dir work_dirs/R50_DI_${DETECTOR}
 mim test mmdet configs/models/simple_classifier_with_recon.py --checkpoint work_dirs/R50_DI_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 OR 
 ```shell
 # no reconstruction objective
-mim train mmdet configs/models/simple_classifier.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}.pth --work-dir work_dirs/R50_DI_${DETECTOR}_no_recon
+mim train mmdet configs/models/simple_classifier.py --cfg-options load_from=weights/${DATASET}/lg_{$DETECTOR}_bb.pth --work-dir work_dirs/R50_DI_${DETECTOR}_no_recon
 mim test mmdet configs/models/simple_classifier.py --checkpoint work_dirs/R50_DI_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
