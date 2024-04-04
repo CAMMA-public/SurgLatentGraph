@@ -54,7 +54,7 @@ This project uses Pytorch 2.1.0 + CUDA 11.8, DGL 1.1.1, torch-scatter, mmdetecti
 
 # download pretrained weights
 > cd weights
-> wget https://seafile.unistra.fr/f/71eedc8ce9b44708ab01/?dl=1 && unzip coco_init_wts.zip && cd ..
+> wget -O coco_init_wts.zip https://seafile.unistra.fr/f/71eedc8ce9b44708ab01/?dl=1 && unzip coco_init_wts.zip && cd ..
 
 # add surglatentgraph to PYTHONPATH to enable registry to find custom modules (note that this can be added to the .bashrc file for future use)
 > export PYTHONPATH="$PYTHONPATH:$HOME/SurgLatentGraph"
