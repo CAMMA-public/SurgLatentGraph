@@ -63,7 +63,7 @@ This project uses Pytorch 2.1.0 + CUDA 11.8, DGL 1.1.1, torch-scatter, mmdetecti
 > conda create -n latentgraph python=3.8 && conda activate latentgraph
 (latentgraph) > conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
 (latentgraph) > conda install -c dglteam/label/cu113 dgl
-(latentgraph) > pip install torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
+(latentgraph) > pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.1+cu117.html
 (latentgraph) > pip install -U openmim
 (latentgraph) > mim install mmdet
 (latentgraph) > mim install mmengine==0.7.4
