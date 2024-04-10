@@ -123,7 +123,7 @@ class ReconstructionHead(BaseModule, metaclass=ABCMeta):
                 gt_boxes.append(r.gt_instances.bboxes)
                 if use_masks and 'masks' in r.gt_instances:
                     gt_masks.append(r.gt_instances.masks.to_tensor(device=device, dtype=int))
-                else:
+                elif use_masks:
                     gt_masks.append(r.pred_instances.masks)
                     gt_classes[ind] = r.pred_instances.labels
                     gt_boxes[ind] = r.pred_instances.bboxes
