@@ -46,7 +46,7 @@ class LatentGraphVisualizer(DetLocalVisualizer):
 
     def _init_graph_viz_info(self):
         # Define self.colors
-        cvs_datasets = ['endoscapes', 'wc', 'small_wc', 'italy']
+        cvs_datasets = ['endoscapes', 'wc', 'small_wc', 'italy', 'sages', 'sages_weighted']
         c8k_datasets = ['c80_phase', 'cholecT50']
         if self.dataset in cvs_datasets:
             self.figsize = 15
@@ -154,14 +154,18 @@ class LatentGraphVisualizer(DetLocalVisualizer):
 
         if self.draw:
             # extract img prefix
-            img_prefix = data_sample.img_path.split('/')[-1].replace('.jpg', '')
+            if data_sample is not None:
+                img_prefix = data_sample.img_path.split('/')[-1].replace('.jpg', '')
+            else:
+                img_prefix = name.split('/')[-1].replace('.jpg', '')
 
             # draw detections
             super().add_datasample(name, image, data_sample,
                     out_file=os.path.join(self.det_viz_dir, img_prefix + '.jpg'), **kwargs)
 
-            # now draw graph
-            self.graphs_to_networkx(data_sample, img_prefix, pred_score_thr) # convert graphs to networkx
+            if data_sample is not None:
+                # now draw graph
+                self.graphs_to_networkx(data_sample, img_prefix, pred_score_thr) # convert graphs to networkx
 
     def graphs_to_networkx(self, data_sample: DetDataSample, img_prefix: str,
             pred_score_thr: float):

@@ -1,6 +1,7 @@
 results
 work_dirs
 weights/**/*.pth
+weights/endoscapes
 weights/ssl_weights
 weights/trained_ssl
 data
@@ -18,3 +19,4 @@ latent_graphs/
 extracted_feats/
 sam_queries/
 slurms
+.ipynb_checkpoints/
