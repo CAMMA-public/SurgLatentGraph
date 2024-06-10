@@ -153,7 +153,7 @@ auto_scale_lr = dict(enable=False)
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='sages_weighted/ds_average_precision'),
-    visualization=dict(draw=False),
+    visualization=dict(draw=True),
 )
 
 # loading
@@ -161,8 +161,8 @@ load_from = 'weights/sages/lg_base.pth'
 
 # visualization
 visualizer = dict(
-    type='LatentGraphVisualizer',
+    type='CVSVisualizer',
     dataset='sages_weighted',
-    data_prefix='test',
+    data_prefix='test/lg',
     draw=True,
 )

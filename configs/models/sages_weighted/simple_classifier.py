@@ -114,6 +114,14 @@ train_cfg = dict(
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
+# visualization
+visualizer = dict(
+    type='CVSVisualizer',
+    dataset='sages_weighted',
+    data_prefix='test/r50',
+    draw=False,
+)
+
 # hooks
 default_hooks = dict(
     checkpoint=dict(save_best='sages_weighted/ds_average_precision'),

@@ -6,7 +6,7 @@ _base_ = ['lg_base_box.py']
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks',
-    'visualizer.LatentGraphVisualizer', 'evaluator.CVSMetric'], allow_failed_imports=False)
+    'visualizer.CVSVisualizer', 'evaluator.CVSMetric'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64
 bg_img_dim = 256
@@ -38,7 +38,7 @@ lg_model.ds_head = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[3.00572519, 1.7958951 , 2.28592163],
+        class_weight=[3.00572519, 1.7958951, 2.28592163],
     ),
     loss_weight=1.0,
     num_predictor_layers=3,
@@ -153,7 +153,7 @@ auto_scale_lr = dict(enable=False)
 custom_hooks = [dict(type="CopyDetectorBackbone"), dict(type="FreezeHook")]
 default_hooks = dict(
     checkpoint=dict(save_best='sages/ds_average_precision'),
-    visualization=dict(draw=False),
+    visualization=dict(draw=True),
 )
 
 # loading
@@ -161,8 +161,8 @@ load_from = 'weights/sages/lg_base.pth'
 
 # visualization
 visualizer = dict(
-    type='LatentGraphVisualizer',
+    type='CVSVisualizer',
     dataset='sages',
-    data_prefix='test',
+    data_prefix='test/lg',
     draw=True,
 )

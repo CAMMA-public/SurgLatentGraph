@@ -31,7 +31,7 @@ model = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[3.00572519, 1.7958951 , 2.28592163],
+        class_weight=[3.00572519, 1.7958951, 2.28592163],
     ),
     num_classes=3,
     data_preprocessor=dict(
@@ -114,7 +114,17 @@ train_cfg = dict(
 val_cfg = dict(type='ValLoop')
 test_cfg = dict(type='TestLoop')
 
+# visualization
+visualizer = dict(
+    type='CVSVisualizer',
+    dataset='sages',
+    data_prefix='test/r50',
+    draw=False,
+)
+
 # hooks
 default_hooks = dict(
     checkpoint=dict(save_best='sages/ds_average_precision'),
+    visualization=dict(draw=True),
 )
+
