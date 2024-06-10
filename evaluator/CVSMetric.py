@@ -146,6 +146,10 @@ class CVSMetric(BaseMetric):
         return eval_results
 
     def results2json(self):
+        # make results dir if needed
+        if not os.path.exists(self.outfile_prefix):
+            os.makedirs(self.outfile_prefix)
+
         # save preds, gt, rounded gt
         pred_path = os.path.join(self.outfile_prefix, 'pred_ds.txt')
         gt_path = os.path.join(self.outfile_prefix, 'gt_ds.txt')
