@@ -5,7 +5,8 @@ _base_ = ['lg_base_box.py']
 
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.LatentGraphVisualizer'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.LatentGraphVisualizer',
+    'evaluator.CVSMetric'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64
 bg_img_dim = 256
@@ -112,38 +113,25 @@ test_dataloader = dict(
 
 # evaluators
 train_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages_weighted',
-    data_root=_base_.data_root,
-    data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'weighted_train/annotation_ds_coco.json'),
-    use_pred_boxes_recon=True,
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
+    prefix='sages_weighted',
     outfile_prefix='./results/sages_weighted_preds/train/lg',
 )
 val_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages_weighted',
-    data_root=_base_.data_root,
-    data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'weighted_val/annotation_ds_coco.json'),
-    use_pred_boxes_recon=True,
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
+    prefix='sages_weighted',
     outfile_prefix='./results/sages_weighted_preds/val/lg',
 )
 
 test_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages_weighted',
-    data_root=_base_.data_root,
-    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'weighted_test/annotation_ds_coco.json'),
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
-    #additional_metrics = ['reconstruction'],
-    use_pred_boxes_recon=True,
+    prefix='sages_weighted',
     outfile_prefix='./results/sages_weighted_preds/test/lg',
 )
 

@@ -118,38 +118,25 @@ test_dataloader = dict(
 
 # evaluators
 train_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages',
-    data_root=_base_.data_root,
-    data_prefix=_base_.train_eval_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'train/annotation_ds_coco.json'),
-    use_pred_boxes_recon=True,
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
+    prefix='sages',
     outfile_prefix='./results/sages_preds/train/deepcvs',
 )
 val_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages',
-    data_root=_base_.data_root,
-    data_prefix=_base_.val_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'val/annotation_ds_coco.json'),
-    use_pred_boxes_recon=True,
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
+    prefix='sages',
     outfile_prefix='./results/sages_preds/val/deepcvs',
 )
 
 test_evaluator = dict(
-    type='CocoMetricRGD',
-    prefix='sages',
-    data_root=_base_.data_root,
-    data_prefix=_base_.test_dataloader.dataset.data_prefix.img,
-    ann_file=os.path.join(_base_.data_root, 'test/annotation_ds_coco.json'),
-    metric=[],
+    _delete_=True,
+    type='CVSMetric',
     num_classes=3,
-    #additional_metrics = ['reconstruction'],
-    use_pred_boxes_recon=True,
+    prefix='sages',
     outfile_prefix='./results/sages_preds/test/deepcvs',
 )
 
