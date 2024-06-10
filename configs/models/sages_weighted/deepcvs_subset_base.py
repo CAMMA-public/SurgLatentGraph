@@ -12,7 +12,7 @@ val_data_prefix = _base_.val_dataloader.dataset.data_prefix.img
 test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMetricRGD',
+custom_imports = dict(imports=orig_imports + ['model.deepcvs', 'evaluator.CocoMetricRGD', 'evaluator.CVSMetric',
     'hooks.custom_hooks', 'model.predictor_heads.reconstruction', 'model.predictor_heads.modules.loss'],
     allow_failed_imports=False)
 
