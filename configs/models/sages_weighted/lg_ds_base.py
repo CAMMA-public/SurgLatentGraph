@@ -157,7 +157,7 @@ default_hooks = dict(
 )
 
 # loading
-load_from = 'weights/sages_weighted/lg_base.pth'
+load_from = 'weights/sages/lg_base.pth'
 
 # visualization
 visualizer = dict(
