@@ -40,7 +40,8 @@ class CVSVisualizer(DetLocalVisualizer):
             viz_img = self._image
 
         else:
-            viz_img = image
+            # tile image horizontally twice
+            viz_img = torch.cat([image, image], dim=1)
 
         # add CVS
         self.draw_cvs(viz_img, data_sample)
