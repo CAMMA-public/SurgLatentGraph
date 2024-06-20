@@ -28,16 +28,15 @@ class CVSVisualizer(DetLocalVisualizer):
             data_sample: Optional['DetDataSample'] = None,
             out_file: Optional[str] = None, **kwargs):
 
-        if self.draw:
-            # extract img prefix
-            if data_sample is not None:
-                img_prefix = data_sample.img_path.split('/')[-1].replace('.jpg', '')
-            else:
-                img_prefix = name.split('/')[-1].replace('.jpg', '')
+        # extract img prefix
+        if data_sample is not None:
+            img_prefix = data_sample.img_path.split('/')[-1].replace('.jpg', '')
+        else:
+            img_prefix = name.split('/')[-1].replace('.jpg', '')
 
+        if self.draw:
             # draw detections
             super().add_datasample(name, image, data_sample, out_file=None, **kwargs)
-
             viz_img = self._image
 
         else:
