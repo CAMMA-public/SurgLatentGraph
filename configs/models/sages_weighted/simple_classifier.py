@@ -13,7 +13,8 @@ test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
 custom_imports = dict(imports=orig_imports + ['model.simple_classifier',
-    'evaluator.CocoMetricRGD', 'evaluator.CVSMetric'], allow_failed_imports=False)
+    'evaluator.CocoMetricRGD', 'evaluator.CVSMetric', 'visualizer.CVSVisualizer'],
+    allow_failed_imports=False)
 
 model = dict(
     type='SimpleClassifier',
@@ -125,4 +126,5 @@ visualizer = dict(
 # hooks
 default_hooks = dict(
     checkpoint=dict(save_best='sages_weighted/ds_average_precision'),
+    visualization=dict(draw=True),
 )

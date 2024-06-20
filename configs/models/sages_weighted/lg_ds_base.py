@@ -5,7 +5,7 @@ _base_ = ['lg_base_box.py']
 
 # import freeze hook
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.LatentGraphVisualizer',
+custom_imports = dict(imports=orig_imports + ['hooks.custom_hooks', 'visualizer.CVSVisualizer',
     'evaluator.CVSMetric'], allow_failed_imports=False)
 # recon params
 bottleneck_feat_size = 64

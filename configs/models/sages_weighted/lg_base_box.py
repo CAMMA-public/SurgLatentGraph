@@ -12,7 +12,8 @@ val_data_prefix = _base_.val_dataloader.dataset.data_prefix.img
 test_data_prefix = _base_.test_dataloader.dataset.data_prefix.img
 
 orig_imports = _base_.custom_imports.imports
-custom_imports = dict(imports=orig_imports + ['model.lg', 'evaluator.CocoMetricRGD'], allow_failed_imports=False)
+custom_imports = dict(imports=orig_imports + ['model.lg', 'evaluator.CocoMetricRGD',
+    'visualizer.LatentGraphVisualizer'], allow_failed_imports=False)
 
 # feat sizes
 viz_feat_size = 256
