@@ -46,7 +46,7 @@ dc_model = dict(
     loss=dict(
         type='CrossEntropyLoss',
         use_sigmoid=True,
-        class_weight=[3.18825911, 1.8, 2.54854369],
+        class_weight=[3.034, 1.8896, 2.7056],
     ),
     use_pred_boxes_recon_loss=True,
     reconstruction_head=dict(
