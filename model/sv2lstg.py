@@ -578,7 +578,8 @@ class SV2LSTG(BaseDetector):
             # box perturb
             if self.training and self.perturb:
                 perturbed_boxes = self.lg_detector.box_perturbation([l.nodes.bboxes \
-                        for l in lg_list], batch_data_samples[0][0].img_shape)
+                        for l in lg_list], batch_data_samples[0][0].img_shape,
+                        clip_size=self.clip_size)
                 for l, p in zip(lg_list, perturbed_boxes):
                     l.nodes.bboxes = p
 

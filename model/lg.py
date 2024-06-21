@@ -288,7 +288,8 @@ class LGDetector(BaseDetector):
         return results
 
     def extract_lg(self, batch_inputs: Tensor, batch_data_samples: SampleList,
-            force_perturb: bool = False, losses: dict = None) -> Tuple[BaseDataElement]:
+            force_perturb: bool = False, losses: dict = None,
+            clip_size: int = -1) -> Tuple[BaseDataElement]:
         # run detector to get detections
         with torch.no_grad():
             detector_is_training = self.detector.training
@@ -298,7 +299,7 @@ class LGDetector(BaseDetector):
             self.detector.training = detector_is_training
 
         # get bb and fpn features
-        feats = self.extract_feat(batch_inputs, detached_results, force_perturb=force_perturb)
+        feats = self.extract_feat(batch_inputs, detached_results, force_perturb, clip_size)
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
@@ -342,7 +343,8 @@ class LGDetector(BaseDetector):
 
         return results
 
-    def extract_feat(self, batch_inputs: Tensor, results: SampleList, force_perturb: bool = False) -> BaseDataElement:
+    def extract_feat(self, batch_inputs: Tensor, results: SampleList, force_perturb: bool,
+            clip_size: int) -> BaseDataElement:
         feats = BaseDataElement()
 
         # load pred/gt dense labels
@@ -377,7 +379,7 @@ class LGDetector(BaseDetector):
 
         # apply box perturbation
         if (self.training or force_perturb) and self.perturb_factor > 0:
-            boxes = self.box_perturbation(boxes, results[0].ori_shape)
+            boxes = self.box_perturbation(boxes, results[0].ori_shape, clip_size)
 
         # run bbox feat extractor and add instance feats to feats
         if self.roi_extractor is not None:
@@ -543,7 +545,7 @@ class LGDetector(BaseDetector):
 
         return polygon_masks
 
-    def box_perturbation(self, boxes: List[Tensor], image_shape: Tuple):
+    def box_perturbation(self, boxes: List[Tensor], image_shape: Tuple, clip_size: int):
         boxes_per_img = [len(b) for b in boxes]
         perturb_factor = min(self.perturb_factor, 1)
         xmin, ymin, xmax, ymax = torch.cat(boxes).unbind(1)
@@ -552,11 +554,20 @@ class LGDetector(BaseDetector):
         h = xmax - xmin
         w = ymax - ymin
 
-        # generate random numbers drawn from (-h, h), (-w, w), multiply by perturb factor
-        perturb = perturb_factor * (torch.rand(4).to(boxes[0]) * torch.stack([h, w], dim=1).repeat(1, 2) - \
-                torch.stack([h, w], dim=1).repeat(1, 2))
+        # if clip size is given (e.g. not -1), then apply same perturbation to all imgs in clip
+        if clip_size != -1:
+            num_clips = int(len(boxes) / clip_size)
+            boxes_per_clip = torch.stack(boxes_per_img).view(-1, clip_size).sum(-1)
+            perturb_amount = torch.rand(num_clips, 4).to(boxes[0]).repeat_interleave(boxes_per_clip)
+            perturb = perturb_factor * (perturb_amount * torch.stack([h, w], dim=1).repeat(1, 2) - \
+                    torch.stack([h, w], dim=1).repeat(1, 2))
 
-        perturbed_boxes = torch.cat(boxes) + perturb
+        else:
+            # generate random numbers drawn from (-h, h), (-w, w), multiply by perturb factor
+            perturb = perturb_factor * (torch.rand(h.shape[0], 4).to(boxes[0]) * \
+                    torch.stack([h, w], dim=1).repeat(1, 2) - \
+                    torch.stack([h, w], dim=1).repeat(1, 2))
+            perturbed_boxes = torch.cat(boxes) + perturb
 
         # ensure boxes are valid (clamp from 0 to img shape)
         perturbed_boxes = torch.maximum(torch.zeros_like(perturbed_boxes), perturbed_boxes)
