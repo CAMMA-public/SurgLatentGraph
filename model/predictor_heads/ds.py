@@ -38,8 +38,9 @@ class DSHead(BaseModule, metaclass=ABCMeta):
             loss: Union[List, ConfigType], use_img_feats: bool = True, img_feats_only: bool = False,
             use_gnn_feats: bool = True, loss_consensus: str = 'mode', predictor_hidden_dim: int = 1024,
             num_predictor_layers: int = 2, loss_weight: float = 1.0, add_noise: bool = False,
-            semantic_loss_weight: float = 0.0, viz_loss_weight: float = 0.0,
-            img_loss_weight: float = 0.0, init_cfg: OptMultiConfig = None) -> None:
+            use_disentanglement_loss: bool = True, semantic_loss_weight: float = 0.0,
+            viz_loss_weight: float = 0.0, img_loss_weight: float = 0.0,
+            init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # set viz and sem dims for projecting node/edge feats in input graph
@@ -66,9 +67,14 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         # feature perturb
         self.add_noise = add_noise
-        self.viz_loss_weight = viz_loss_weight
-        self.semantic_loss_weight = semantic_loss_weight
-        self.img_loss_weight = img_loss_weight
+        if use_disentanglement_loss:
+            self.viz_loss_weight = viz_loss_weight
+            self.semantic_loss_weight = semantic_loss_weight
+            self.img_loss_weight = img_loss_weight
+        else:
+            self.viz_loss_weight = 0
+            self.semantic_loss_weight = 0
+            self.img_loss_weight = 0
 
         # construct gnn
         gnn_cfg.input_dim_node = self.graph_feat_projected_dim

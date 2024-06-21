@@ -1,6 +1,7 @@
 results
 work_dirs
 weights/**/*.pth
+weights/**/*.sh
 weights/ssl_weights
 weights/trained_ssl
 data
