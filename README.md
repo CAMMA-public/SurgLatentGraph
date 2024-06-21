@@ -5,7 +5,7 @@
 </div>
 
 # **Latent Graph Representations for Surgical Scene Understanding**
-This repository contains the code corresponding to our Transactions on Medical Imaging paper _Latent Graph Representations for Critical View of Safety Assessment_ and our MICCAI 2023 paper _Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object- and Anatomy-Driven Reasoning_.
+This repository contains the code corresponding to our Transactions on Medical Imaging paper _Latent Graph Representations for Critical View of Safety Assessment_, our MICCAI paper _Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object- and Anatomy-Driven Reasoning_, and our IPCAI/IJCARS paper _Optimizing Latent Graph Representations for Unseen Domain Generalization_.
 
 <div align="center">
 <img src="LG_overall.png" width="90%">
@@ -26,15 +26,24 @@ This repository contains the code corresponding to our Transactions on Medical I
 [![arXiv](https://img.shields.io/badge/arXiv%20-%202312.06829%20-%20red)](https://arxiv.org/abs/2312.06829)
 [![Paper](https://img.shields.io/badge/Paper%20-%20darkblue)](https://link.springer.com/chapter/10.1007/978-3-031-43996-4_62)
 
+<div align="center">
+<img src="LG-DG.png" width="90%">
+</div>
+
+[3] **Optimizing Latent Graph Representations for Unseen Domain Generalization**. _Siddhant Satyanaik*, Aditya Murali*, Deepak Alapatt, Xin Wang, Pietro Mascagni, Nicolas Padoy. **IJCARS 2024**_
+
+[![arXiv](https://img.shields.io/badge/arXiv%20-%202312.06829%20-%20red)](https://arxiv.org/abs/2403.06953)
+[![Paper](https://img.shields.io/badge/Paper%20-%20darkblue)](https://link.springer.com/article/10.1007/s11548-024-03121-2)
+
 ## News
 
 #### In this repo we provide:
 - Implementations of 3 different object detectors (Faster-RCNN, Cascade-RCNN, Deformable-DETR) and 3 different instance segmentation models (Mask-RCNN, Cascade-Mask-RCNN, Mask2Former) using the **_mmdetection_** framework.
-- Implementations of 4 different object-centric models for CVS prediction introduced in [1]: LatentGraph-CVS (LG-CVS), DeepCVS, LayoutCVS, and ResNet50-DetInit, each of which can be run using any of the aforementioned object detection/segmentation models.
+- Implementations of 5 different object-centric models for fine-grained classification (e.g. CVS prediction). These comprise 4 methods introduced in [1]: LatentGraph-CVS (LG-CVS), DeepCVS, LayoutCVS, and ResNet50-DetInit, each of which can be run using any of the aforementioned object detection/segmentation models, as well as a 5th method, LatentGraph-DomainGen (LG-DG) introduced in [3].
 - Implementation of a simple classifier using **_mmengine + mmdetection_**.
 - Implementations of 2 different spatiotemporal object-centric models introduced in [2]: **S**urgical **V**ideos as **L**atent **S**patio**T**emporal **G**raphs (SV2LSTG), and DeepCVS-Temporal (DC-Temp).
 - Annotation files and instructions to setup 3 different datasets: Endoscapes, Cholec80 (with CholecSeg8k segmentation masks), and CholecT50
-- Config files and instructions to train/evaluate object detectors/segmentation models on Endoscapes [3] and CholecSeg8k [4].
+- Config files and instructions to train/evaluate object detectors/segmentation models on Endoscapes2023 [4] and CholecSeg8k [5].
 - Config files and instructions to train/evaluate the 5 single frame and 2 spatiotemporal methods on three tasks/datasets: CVS Prediction (Endoscapes), Phase Recognition (Cholec80), and Action Triplet Recognition (CholecT50)
 - Trained model checkpoints for all tasks (coming soon).
 
@@ -305,7 +314,7 @@ configs/
 ## Models
 ```shell
 └── model
-    └── lg.py # LG-CVS
+    └── lg.py # LG-DG/LG-CVS
     └── deepcvs.py # DeepCVS
     └── simple_classifier.py # R50 & R50-DetInit
     └── sv2lstg.py # SV2LSTG
@@ -357,9 +366,9 @@ python weights/extract_bb_weights.py weights/${DATASET}/lg_${DETECTOR}.pth
 
 ### Single-Frame Models
 
-Here, we provide example commands for training/testing each of the single-frame downstream classification methods (LG-CVS, DeepCVS, LayoutCVS, ResNet50-DetInit, ResNet50).
+Here, we provide example commands for training/testing each of the single-frame downstream classification methods (LG-DG, LG-CVS, DeepCVS, LayoutCVS, ResNet50-DetInit, ResNet50).
 
-**LG**
+**LG-DG**
 ```shell
 mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py
 mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py --checkpoint work_dirs/lg_ds_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
@@ -368,6 +377,18 @@ OR
 ```shell
 # no reconstruction objective
 mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py
+mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py --checkpoint work_dirs/lg_ds_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+
+**LG-CVS**
+```shell
+mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py --cfg-options "model.ds_head.use_disentanglement_loss=False"
+mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}.py --checkpoint work_dirs/lg_ds_${DETECTOR}/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
+```
+OR 
+```shell
+# no reconstruction objective
+mim train mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py --cfg-options "model.ds_head.use_disentanglement_loss=False"
 mim test mmdet configs/models/${DETECTOR}/lg_ds_${DETECTOR}_no_recon.py --checkpoint work_dirs/lg_ds_${DETECTOR}_no_recon/best_${DATASET}_ds_${SELECTION_METRIC}_epoch_${EPOCH}.pth
 ```
 
@@ -539,7 +560,7 @@ mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_al
 mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py --checkpoint work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 ```
 
-**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
+**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [5], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
 
 ## Pretrained Model Weights
 
@@ -578,6 +599,15 @@ Please cite the appropriate papers if you make use of this repository.
   year={2023},
   organization={Springer}
 }
+
+@article{satyanaik2024optimizing,
+  title={Optimizing latent graph representations of surgical scenes for unseen domain generalization},
+  author={Satyanaik, Siddhant and Murali, Aditya and Alapatt, Deepak and Wang, Xin and Mascagni, Pietro and Padoy, Nicolas},
+  journal={International Journal of Computer Assisted Radiology and Surgery},
+  pages={1--8},
+  year={2024},
+  publisher={Springer}
+}
 ```
 
 ## References
@@ -585,4 +615,8 @@ Please cite the appropriate papers if you make use of this repository.
 
 [2] **Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object and Anatomy-Driven Reasoning.** _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Didier Mutter, Nicolas Padoy. **MICCAI 2023**_
 
-[3] **Cholecseg8k: a semantic segmentation dataset for laparoscopic cholecystectomy based on cholec80.** _Hong, W. Y., et al._ arXiv preprint arXiv:2012.12453 (2020).
+[3] **Optimizing Latent Graph Representations for Unseen Domain Generalization**. _Siddhant Satyanaik*, Aditya Murali*, Deepak Alapatt, Xin Wang, Pietro Mascagni, Nicolas Padoy. **IJCARS 2024**_
+
+[4] **The Endoscapes Dataset for Surgical Scene Segmentation, Object Detection, and Critical View of Safety Assessment: Official Splits and Benchmark.** _Aditya Murali, Deepak Alapatt, Pietro Mascagni, Armine Vardazaryan, Alain Garcia, Nariaki Okamoto, Guido Costamagna, Didier Mutter, Jacques Marescaux, Bernard Dallemagne, Nicolas Padoy. arXiv preprint arXiv:2312.12429 (2023)_
+
+[5] **Cholecseg8k: a semantic segmentation dataset for laparoscopic cholecystectomy based on cholec80.** _Hong, W. Y., et al. arXiv preprint arXiv:2012.12453 (2020)_
