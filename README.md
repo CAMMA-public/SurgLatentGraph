@@ -553,7 +553,7 @@ mim train mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_al
 mim test mmdet configs/temporal_models/mask_rcnn/sv2lstg_lin_probe_mask_rcnn_all.py --checkpoint work_dirs/sv2lstg_lin_probe_mask_rcnn_all/best_c80_phase_ds_video_f1_epoch_${EPOCH}.pth
 ```
 
-**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [3], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
+**Note**: When training/testing object detectors on the dataset `c80_phase`, this corresponds to using the 8080 frames and segmentation masks introduced in CholecSeg8k [5], with the train/val/test sets comprising frames belonging to videos from the Cholec80 train/val/test sets (5360 train, 720 val, and 2000 test). For CholecT50, we simply use the same detector, as none of the CholecSeg8k frames correspond to the CholecT50 test set, making evaluation impossible. As a result, we do not provide the `annotation_coco.json` file for CholecT50.
 
 ## Pretrained Model Weights
 
