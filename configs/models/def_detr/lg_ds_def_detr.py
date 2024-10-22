@@ -4,7 +4,7 @@ import copy
 # modify base for different detectors
 _base_ = [
     '../lg_ds_base.py',
-    os.path.expandvars('$MMDETECTION/configs/deformable_detr/deformable-detr_r50_16xb2-50e_coco_no_base.py'),
+    '../../_base_/deformable-detr_r50_16xb2-50e_coco_no_base.py',
 ]
 custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.def_detr_with_queries'],
         allow_failed_imports=False)

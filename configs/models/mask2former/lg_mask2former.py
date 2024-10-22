@@ -2,7 +2,7 @@ import copy
 import os
 
 _base_=['../lg_base_seg.py',
-    os.path.expandvars('$MMDETECTION/configs/mask2former/mask2former_r50_8xb2-lsj-50e_coco-panoptic_no_base.py'),
+    '../../_base_/mask2former_r50_8xb2-lsj-50e_coco-panoptic_no_base.py',
 ]
 custom_imports = dict(imports=_base_.custom_imports.imports + ['model.modified_detectors.mask2former_with_queries'],
         allow_failed_imports=False)

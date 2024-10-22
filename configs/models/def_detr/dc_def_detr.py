@@ -4,7 +4,7 @@ import copy
 # modify base for different detectors
 _base_ = [
     '../deepcvs_base.py',
-    os.path.expandvars('$MMDETECTION/configs/deformable_detr/deformable-detr_r50_16xb2-50e_coco_no_base.py'),
+    '../../_base_/deformable-detr_r50_16xb2-50e_coco_no_base.py',
 ]
 
 # extract detector, data preprocessor config from base
