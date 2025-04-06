@@ -10,7 +10,10 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     ca-certificates \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Install Miniconda
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh && \
@@ -19,7 +22,7 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 ENV PATH=/opt/conda/bin:$PATH
 
 # Create a conda environment with Python 3.8
-RUN conda create -n latentgraph python=3.8 -y
+RUN conda create -n latentgraph python=3.9 -y
 
 # Install PyTorch with CUDA 11.8 support and DGL
 RUN conda install -n latentgraph pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y && \
@@ -28,31 +31,20 @@ RUN conda install -n latentgraph pytorch torchvision torchaudio pytorch-cuda=11.
 # Use the latentgraph environment for subsequent commands
 SHELL ["conda", "run", "-n", "latentgraph", "/bin/bash", "-c"]
 
-# Clone mmdetection and set MMDETECTION environment variable
-RUN cd $HOME && git clone https://github.com/open-mmlab/mmdetection.git && \
-    export MMDETECTION=$HOME/mmdetection
+# Set a working directory (this will be used as the mount point)
+WORKDIR /workspace
 
-# Clone SurgLatentGraph repository
-RUN cd $HOME && git clone https://github.com/Valientever/SurgLatentGraph.git
-
-# Set working directory to SurgLatentGraph
-WORKDIR $HOME/SurgLatentGraph
-
-# Download pretrained weights
-RUN cd weights && \
-    wget -O coco_init_wts.zip "https://seafile.unistra.fr/f/71eedc8ce9b44708ab01/?dl=1" && \
-    unzip coco_init_wts.zip && \
-    cd ..
-
-# Add SurgLatentGraph to PYTHONPATH
-ENV PYTHONPATH="$PYTHONPATH:$HOME/SurgLatentGraph"
+# Add the project directory to PYTHONPATH (so your code can be imported)
+ENV PYTHONPATH="/workspace:${PYTHONPATH}"
 
 # Install additional Python dependencies
 RUN pip install torch-scatter -f https://data.pyg.org/whl/torch-2.0.1+cu117.html && \
     pip install -U openmim && \
     mim install mmdet && \
     mim install mmengine==0.7.4 && \
-    pip install torchmetrics scikit-learn prettytable imagesize networkx opencv-python yapf==0.40.1
+    pip install torchmetrics scikit-learn prettytable imagesize networkx opencv-python yapf==0.40.1 && \
+    pip install ipdb
 
 # Set default command to launch bash when the container starts
-CMD ["bash"]
+CMD ["bash", "-c", "source /opt/conda/etc/profile.d/conda.sh && conda activate latentgraph && exec bash"]
+

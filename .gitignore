@@ -19,3 +19,4 @@ latent_graphs/
 extracted_feats/
 sam_queries/
 slurms
+mmdetection/
