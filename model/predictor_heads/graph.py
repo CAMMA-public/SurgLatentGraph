@@ -262,14 +262,30 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # update graph structure
         graph.edges.edges_per_img = dgl_g.batch_num_edges()
-        graph.edges.batch_index = torch.arange(len(graph.edges.edges_per_img)).to(
-                graph.edges.edges_per_img.device).repeat_interleave(graph.edges.edges_per_img).view(-1, 1)
+        device = graph.edges.batch_index.device
+        graph.edges.batch_index = torch.arange(len(graph.edges.edges_per_img), 
+                                        device=device).repeat_interleave(
+                                            graph.edges.edges_per_img).view(-1, 1)
 
-        batch_edge_offset = torch.cat([torch.zeros(1),
-                dgl_g.batch_num_nodes()[:-1]], 0).cumsum(0).to(graph.edges.batch_index.device)
-        edge_flats = torch.stack(dgl_g.edges(), 1) - \
-                batch_edge_offset[graph.edges.batch_index].view(-1, 1)
-        graph.edges.edge_flats = torch.cat([graph.edges.batch_index, edge_flats], 1).long()
+        # build batch_edge_offset entirely on the right device
+        device = graph.edges.batch_index.device
+        batch_edge_offset = torch.cat([
+            torch.zeros(1, dtype=torch.int64, device=device),
+            dgl_g.batch_num_nodes()[:-1].to(device=device, dtype=torch.int64)
+        ], dim=0).cumsum(dim=0)
+
+        edge_flats = torch.stack(dgl_g.edges(), 1).to(device) - \
+                    batch_edge_offset[graph.edges.batch_index].view(-1, 1)
+        graph.edges.edge_flats = torch.cat([graph.edges.batch_index, edge_flats], 1)
+
+        # graph.edges.batch_index = torch.arange(len(graph.edges.edges_per_img)).to(
+        #         graph.edges.edges_per_img.device).repeat_interleave(graph.edges.edges_per_img).view(-1, 1)
+
+        # batch_edge_offset = torch.cat([torch.zeros(1),
+        #         dgl_g.batch_num_nodes()[:-1]], 0).cumsum(0).to(graph.edges.batch_index.device)
+        # edge_flats = torch.stack(dgl_g.edges(), 1) - \
+        #         batch_edge_offset[graph.edges.batch_index].view(-1, 1)
+        # graph.edges.edge_flats = torch.cat([graph.edges.batch_index, edge_flats], 1).long()
 
         # update edge data (skip connection to orig edge feats)
         graph.edges.boxes = dgl_g.edata['boxes'].split(graph.edges.edges_per_img.tolist())

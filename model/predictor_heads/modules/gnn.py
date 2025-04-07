@@ -126,8 +126,12 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 g.edata[k] = v.view(-1, v.shape[-1])
 
             # add in batch info
-            g.set_batch_num_nodes(Tensor(graph.nodes.nodes_per_img))
-            g.set_batch_num_edges(graph.edges.edges_per_img)
+            # g.set_batch_num_nodes(Tensor(graph.nodes.nodes_per_img))
+            # g.set_batch_num_nodes(torch.tensor(graph.nodes.nodes_per_img, dtype=torch.int64))
+            g.set_batch_num_nodes(torch.tensor(graph.nodes.nodes_per_img, dtype=torch.int64).to(g.device))
+            # g.set_batch_num_edges(graph.edges.edges_per_img)
+            g.set_batch_num_edges(torch.tensor(graph.edges.edges_per_img, dtype=torch.int64).to(g.device))
+
 
         # add self loops
         g = g.remove_self_loop()
