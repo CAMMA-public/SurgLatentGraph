@@ -1,6 +1,7 @@
 import copy
 import os
 import time
+import argparse
 
 _base_=['../lg_base_box.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/models/faster-rcnn_r50_fpn.py'),
@@ -8,9 +9,19 @@ _base_=['../lg_base_box.py',
 
 # Make sure custom hooks are imported
 custom_imports = dict(
-    imports=['datasets.custom_loading', 'model.lg', 'evaluator.CocoMetricRGD', 'hooks.custom_hooks'],
+    imports=['datasets.custom_loading', 'model.lg', 'evaluator.CocoMetricRGD', 'hooks.custom_hooks', 'model.corruption_preprocessor'],
     allow_failed_imports=False
 )
+
+# Try to get corruption type from command line arguments
+def get_corruption_arg():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--corruption', type=str, default='none', help='Corruption type to apply')
+    
+    args, _ = parser.parse_known_args()
+    return args.corruption
+
+corruption_type = get_corruption_arg()
 
 # Set unique output directory based on timestamp
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
@@ -30,9 +41,16 @@ dp.pad_size_divisor = 1
 del _base_.model
 del detector.data_preprocessor
 
+# Wrap the data preprocessor with our corruption preprocessor
+corruption_dp = dict(
+    type='CorruptionDataPreprocessor',
+    base_preprocessor=dp,
+    corruption_type=corruption_type,
+)
+
 # extract lg config, set detector
 model = copy.deepcopy(_base_.lg_model)
-model.data_preprocessor = dp
+model.data_preprocessor = corruption_dp
 model.reconstruction_img_stats=dict(mean=dp.mean, std=dp.std)
 model.detector = detector
 model.roi_extractor = copy.deepcopy(detector.roi_head.bbox_roi_extractor)

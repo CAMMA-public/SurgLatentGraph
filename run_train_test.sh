@@ -6,15 +6,21 @@
 # Options:
 #   --mode [train|test|both]      : Specify whether to run training, testing, or both (default: both)
 #   --model [faster|ds_faster|all]: Specify which model to run (default: all)
-#   --epochs N                    : Number of epochs for training (default: 20)
+#   --epochs, --epoch N           : Number of epochs for training (default: 20)
+#   --train-corruption TYPE       : Apply corruption during training (default: none)
+#   --test-corruption TYPE        : Apply corruption during testing (default: none)
 #   --help                        : Show this help message
+#
+# Corruption options: none, gaussian_noise, motion_blur, defocus_blur, uneven_illumination, smoke_effect, random_corruptions
 
 # Default values
 MODE="both"
 MODEL="all"
 EPOCHS=20
+TRAIN_CORRUPTION="none"
+TEST_CORRUPTION="none"
+CPU_COUNT=$(nproc --all 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-RESULTS_DIR="results/endoscapes_training_${TIMESTAMP}"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -36,10 +42,26 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
-        --epochs)
+        --epochs|--epoch)
             EPOCHS="$2"
             if ! [[ "$EPOCHS" =~ ^[0-9]+$ ]]; then
                 echo "Error: Epochs must be a positive integer"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --train-corruption)
+            TRAIN_CORRUPTION="$2"
+            if [[ ! "$TRAIN_CORRUPTION" =~ ^(none|gaussian_noise|motion_blur|defocus_blur|uneven_illumination|smoke_effect|random_corruptions)$ ]]; then
+                echo "Error: Train corruption must be one of: none, gaussian_noise, motion_blur, defocus_blur, uneven_illumination, smoke_effect, random_corruptions"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --test-corruption)
+            TEST_CORRUPTION="$2"
+            if [[ ! "$TEST_CORRUPTION" =~ ^(none|gaussian_noise|motion_blur|defocus_blur|uneven_illumination|smoke_effect|random_corruptions)$ ]]; then
+                echo "Error: Test corruption must be one of: none, gaussian_noise, motion_blur, defocus_blur, uneven_illumination, smoke_effect, random_corruptions"
                 exit 1
             fi
             shift 2
@@ -50,8 +72,23 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  --mode [train|test|both]       : Specify whether to run training, testing, or both (default: both)"
             echo "  --model [faster|ds_faster|all] : Specify which model to run (default: all)"
-            echo "  --epochs N                     : Number of epochs for training (default: 20)"
-            echo "  --help                         : Show this help message"
+            echo "  --epochs, --epoch N            : Number of epochs for training (default: 20)"
+            echo "  --train-corruption TYPE        : Apply corruption during training (default: none)"
+            echo "  --test-corruption TYPE         : Apply corruption during testing (default: none)"
+            echo ""
+            echo "Corruption types:"
+            echo "  none               : No corruption (clean data)"
+            echo "  gaussian_noise     : Add Gaussian noise to images"
+            echo "  motion_blur        : Apply motion blur effect"
+            echo "  defocus_blur       : Apply defocus blur (Gaussian blur)"
+            echo "  uneven_illumination: Apply uneven illumination effect"
+            echo "  smoke_effect       : Apply smoke effect"
+            echo "  random_corruptions : Randomly apply one of the above corruptions"
+            echo ""
+            echo "Examples:"
+            echo "  ./run_train_test.sh --mode train --model faster --train-corruption none"
+            echo "  ./run_train_test.sh --mode test --model all --test-corruption gaussian_noise"
+            echo "  ./run_train_test.sh --mode both --epoch 10 --train-corruption none --test-corruption motion_blur"
             exit 0
             ;;
         *)
@@ -62,46 +99,84 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Create result directories
-mkdir -p "${RESULTS_DIR}"
+# Create descriptive folder names based on training settings
+if [[ "$TRAIN_CORRUPTION" == "none" ]]; then
+    TRAIN_DESC="clean"
+else
+    TRAIN_DESC="${TRAIN_CORRUPTION}"
+fi
+
+# Create main results directory based on training settings
+# Format: results/{epochs}_epoch_cpu{cpu_count}_{model}_{train_desc}
+# This resembles the Cholec80 folder format like "11_epoch_w28"
+if [[ "$MODEL" == "all" ]]; then
+    MODEL_DESC="all_models"
+else
+    MODEL_DESC="${MODEL}"
+fi
+
+MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}"
+mkdir -p "${MAIN_RESULTS_DIR}"
+
+# Create a symbolic link to the latest training results directory
+ln -sf "${MAIN_RESULTS_DIR}" "results/latest_training"
+
+# Test results will be in subdirectories named after the test corruption
+if [[ "$TEST_CORRUPTION" == "none" ]]; then
+    TEST_DIR_NAME="clean"
+else
+    TEST_DIR_NAME="${TEST_CORRUPTION}"
+fi
+
+# Create test results directory
+TEST_RESULTS_DIR="${MAIN_RESULTS_DIR}/${TEST_DIR_NAME}_predicts"
+mkdir -p "${TEST_RESULTS_DIR}"
+
+# Create model-specific directories
 if [[ "$MODEL" == "faster" || "$MODEL" == "all" ]]; then
-    mkdir -p "${RESULTS_DIR}/lg_faster_rcnn/checkpoints"
-    mkdir -p "${RESULTS_DIR}/lg_faster_rcnn/test_results/metrics_summary"
+    mkdir -p "${MAIN_RESULTS_DIR}/lg_faster_rcnn/checkpoints"
+    mkdir -p "${TEST_RESULTS_DIR}/lg_faster_rcnn/metrics_summary"
 fi
 if [[ "$MODEL" == "ds_faster" || "$MODEL" == "all" ]]; then
-    mkdir -p "${RESULTS_DIR}/lg_ds_faster_rcnn/checkpoints"
-    mkdir -p "${RESULTS_DIR}/lg_ds_faster_rcnn/test_results/metrics_summary"
+    mkdir -p "${MAIN_RESULTS_DIR}/lg_ds_faster_rcnn/checkpoints"
+    mkdir -p "${TEST_RESULTS_DIR}/lg_ds_faster_rcnn/metrics_summary"
 fi
-mkdir -p "weights/endoscapes/"
 
-# Create a symbolic link to the latest results directory
-ln -sf "${RESULTS_DIR}" "results/latest"
+# Create ground truth directory for test data
+mkdir -p "${TEST_RESULTS_DIR}/gt"
+
+# Create weights directory if it doesn't exist
+mkdir -p "weights/endoscapes/"
 
 # Function to run training
 run_training() {
     local model_type=$1
     local config_path="configs/models/faster_rcnn/lg_${model_type}_rcnn.py"
-    local model_dir="${RESULTS_DIR}/lg_${model_type}_rcnn"
+    local model_dir="${MAIN_RESULTS_DIR}/lg_${model_type}_rcnn"
     
     echo "===================== TRAINING: lg_${model_type}_rcnn ====================="
-    echo "Starting training with $EPOCHS epochs..."
+    echo "Starting training with $EPOCHS epochs and corruption: $TRAIN_CORRUPTION"
     
+    # Add corruption argument for training
     mim train mmdet ${config_path} \
         --cfg-options train_cfg.max_epochs=$EPOCHS \
         work_dir="${model_dir}" \
         default_hooks.checkpoint.out_dir="${model_dir}/checkpoints" \
-        test_evaluator.outfile_prefix="${model_dir}/test_results"
+        test_evaluator.outfile_prefix="${model_dir}/test_results" \
+        corruption="${TRAIN_CORRUPTION}"
 }
 
 # Function to run testing
 run_testing() {
     local model_type=$1
     local config_path="configs/models/faster_rcnn/lg_${model_type}_rcnn.py"
-    local model_dir="${RESULTS_DIR}/lg_${model_type}_rcnn"
+    local model_dir="${MAIN_RESULTS_DIR}/lg_${model_type}_rcnn"
+    local test_model_dir="${TEST_RESULTS_DIR}/lg_${model_type}_rcnn"
     local ckpt_dir="${model_dir}/checkpoints"
-    local metrics_dir="${model_dir}/test_results/metrics_summary"
+    local metrics_dir="${test_model_dir}/metrics_summary"
     
     echo "===================== TESTING: lg_${model_type}_rcnn ====================="
+    echo "Testing with corruption: $TEST_CORRUPTION"
     
     # Find the best checkpoint
     local best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" | head -1)
@@ -123,21 +198,39 @@ run_testing() {
         echo "Found checkpoint: $best_ckpt"
         echo "Running test with checkpoint..."
         
+        # Create test output directories
+        mkdir -p "${metrics_dir}"
+        
         # Create a file to directly capture the test output
         TEST_OUTPUT_FILE="${metrics_dir}/test_terminal_output.txt"
         
-        # Run the test command and tee the output to capture it
+        # Add corruption argument for testing and save the raw output
         mim test mmdet ${config_path} \
             --checkpoint "$best_ckpt" \
-            --cfg-options test_evaluator.outfile_prefix="${model_dir}/test_results" \
-            | tee "${TEST_OUTPUT_FILE}"
+            --cfg-options test_evaluator.outfile_prefix="${test_model_dir}" \
+            corruption="${TEST_CORRUPTION}" \
+            &> "${TEST_OUTPUT_FILE}" 
+            
+        # Also display the output in the terminal
+        cat "${TEST_OUTPUT_FILE}"
         
-        # Copy the best checkpoint to the weights directory
+        # Save a copy of raw output for debugging
+        cp "${TEST_OUTPUT_FILE}" "${metrics_dir}/raw_test_output.txt"
+        
+        # Copy the best checkpoint to the weights directory with corruption info
         echo "Copying checkpoint to weights/endoscapes/"
-        cp "$best_ckpt" "weights/endoscapes/lg_${model_type}_rcnn.pth"
+        
+        # Create a unique name for this model based on corruption settings
+        if [[ "$TRAIN_CORRUPTION" == "none" ]]; then
+            WEIGHT_SUFFIX="clean"
+        else
+            WEIGHT_SUFFIX="${TRAIN_CORRUPTION}"
+        fi
+        
+        cp "$best_ckpt" "weights/endoscapes/lg_${model_type}_rcnn_train-${WEIGHT_SUFFIX}.pth"
         
         # Create metrics summary after testing
-        extract_metrics "${model_dir}" "${TEST_OUTPUT_FILE}"
+        extract_metrics "${test_model_dir}" "${TEST_OUTPUT_FILE}" "${TEST_CORRUPTION}"
     else
         echo "No checkpoint found for testing lg_${model_type}_rcnn"
         if [ "$MODE" == "both" ]; then
@@ -151,141 +244,204 @@ run_testing() {
 extract_metrics() {
     local model_dir=$1
     local terminal_output_file=$2
+    local test_corruption=$3
     local model_name=$(basename "${model_dir}")
-    local test_results_dir="${model_dir}/test_results"
-    local metrics_dir="${test_results_dir}/metrics_summary"
+    local metrics_dir="${model_dir}/metrics_summary"
     
-    echo "===================== EXTRACTING METRICS: ${model_name} ====================="
+    echo "===================== EXTRACTING METRICS: ${model_name} with ${test_corruption} ====================="
     
-    if [ -d "${test_results_dir}" ]; then
-        # Create metrics summary file (keeping the existing format)
+    if [ -d "${model_dir}" ]; then
+        # Create directories if they don't exist
+        mkdir -p "${metrics_dir}"
+        
+        # Create metrics summary file
         {
             echo "===== Metrics Summary for ${model_name} ====="
             echo "Timestamp: $(date)"
+            echo ""
+            echo "=== Test Configuration ==="
+            echo "Train Corruption: ${TRAIN_CORRUPTION}"
+            echo "Test Corruption: ${test_corruption}"
             echo ""
             echo "=== Test Performance Metrics ==="
             
             # Extract metrics from terminal output if available
             if [ -f "${terminal_output_file}" ]; then
-                # Look for test results line with metrics
+                # Look for metrics in different formats
+                echo "Analyzing test output for metrics..."
+                
+                # Try different patterns for metrics - this handles both mmdet output formats
+                # Pattern 1: Standard mmdet format with Epoch(test)
                 if grep -q "Epoch(test)" "${terminal_output_file}"; then
-                    # Get the last line with test metrics
-                    grep "Epoch(test)" "${terminal_output_file}" | tail -n 1 | sed 's/.*INFO - //' >> "${metrics_dir}/raw_metrics.txt"
+                    echo "Found metrics in standard mmdet format (Epoch(test))"
+                    
+                    # Extract the line with metrics
+                    grep "Epoch(test)" "${terminal_output_file}" | tail -n 1 > "${metrics_dir}/raw_metrics.txt"
                     cat "${metrics_dir}/raw_metrics.txt"
+                
+                # Pattern 2: Alternative format with bbox_mAP
+                elif grep -q "bbox_mAP" "${terminal_output_file}"; then
+                    echo "Found metrics in alternative format (bbox_mAP)"
                     
-                    # Extract DS average precision metrics if they exist
-                    if grep -q "ds_average_precision" "${terminal_output_file}"; then
-                        echo ""
-                        echo "=== DS Average Precision Metrics ==="
-                        grep -o "endoscapes/ds_average_precision[^[:space:]]*: [0-9.]*" "${terminal_output_file}" > "${metrics_dir}/ds_metrics.txt"
-                        cat "${metrics_dir}/ds_metrics.txt"
-                    fi
+                    # Extract lines with metrics
+                    grep -A5 "bbox_mAP" "${terminal_output_file}" > "${metrics_dir}/raw_metrics.txt"
+                    cat "${metrics_dir}/raw_metrics.txt"
+                
+                # Pattern 3: Look for any lines with metric values
+                elif grep -q -E "[0-9]+\.[0-9]+" "${terminal_output_file}"; then
+                    echo "Found numeric values that might be metrics"
                     
-                    # Extract bbox mAP metrics if they exist
-                    if grep -q "bbox_mAP" "${terminal_output_file}"; then
-                        echo ""
-                        echo "=== Detection Performance ==="
-                        grep -o "endoscapes/bbox_mAP[^[:space:]]*: [0-9.]*" "${terminal_output_file}" > "${metrics_dir}/bbox_metrics.txt"
-                        cat "${metrics_dir}/bbox_metrics.txt"
-                    fi
+                    # Extract lines with numeric values (potential metrics)
+                    grep -E "[0-9]+\.[0-9]+" "${terminal_output_file}" | head -20 > "${metrics_dir}/raw_metrics.txt"
+                    cat "${metrics_dir}/raw_metrics.txt"
+                
                 else
-                    echo "No test metrics found in terminal output."
+                    echo "No recognizable metrics found in test output."
+                    echo "See ${terminal_output_file} for raw test output."
+                    # Save the first 50 lines as a sample
+                    head -50 "${terminal_output_file}" > "${metrics_dir}/output_sample.txt"
+                fi
+                
+                # Extract DS average precision metrics if they exist
+                if grep -q "ds_average_precision" "${terminal_output_file}"; then
+                    echo ""
+                    echo "=== DS Average Precision Metrics ==="
+                    grep -a -o -E "ds_average_precision[^[:space:]]*: [0-9.]+" "${terminal_output_file}" > "${metrics_dir}/ds_metrics.txt"
+                    cat "${metrics_dir}/ds_metrics.txt"
+                fi
+                
+                # Extract bbox mAP metrics if they exist
+                if grep -q "bbox_mAP" "${terminal_output_file}"; then
+                    echo ""
+                    echo "=== Detection Performance ==="
+                    grep -a -o -E "bbox_mAP[^[:space:]]*: [0-9.]+" "${terminal_output_file}" > "${metrics_dir}/bbox_metrics.txt"
+                    cat "${metrics_dir}/bbox_metrics.txt"
                 fi
             else
-                echo "No terminal output file found."
+                echo "No terminal output file found at ${terminal_output_file}"
             fi
             
             echo ""
             echo "=== Model Configuration ==="
             echo "Model: ${model_name}"
             echo "Epochs trained: ${EPOCHS}"
-            echo "Checkpoint: $(basename "$(readlink -f "weights/endoscapes/lg_${model_name}.pth" 2>/dev/null || echo "not found")")"
+            echo "Checkpoint: $(basename "$(readlink -f "weights/endoscapes/lg_${model_name}_train-${TRAIN_DESC}.pth" 2>/dev/null || echo "not found")")"
             
             echo ""
-            echo "Full results available in: ${test_results_dir}"
+            echo "Full results available in: ${model_dir}"
         } > "${metrics_dir}/complete_metrics.txt"
         
-        # Create a tabular format metrics file
+        # Create a minimal results file (similar to your Cholec80 example)
         {
-            echo "===== Performance Metrics for ${model_name} ====="
-            echo "Timestamp: $(date +"%Y-%m-%d %H:%M:%S")"
+            echo "===== Evaluation Results for ${model_name} ====="
+            echo "Train Setting: ${EPOCHS}_epoch_cpu${CPU_COUNT}_${TRAIN_DESC}"
+            echo "Test Setting: ${test_corruption}"
             echo ""
-            echo "┌───────────────────────────────────┬─────────┐"
-            echo "│ Metric                            │   Value │"
-            echo "├───────────────────────────────────┼─────────┤"
             
-            # Extract metrics for tabular format
+            # Extract metrics for CSV - more flexible regex patterns
             if [ -f "${terminal_output_file}" ]; then
-                # Look for test results line with metrics
-                if grep -q "Epoch(test)" "${terminal_output_file}"; then
-                    # Get the last line with test metrics
-                    METRICS_LINE=$(grep "Epoch(test)" "${terminal_output_file}" | tail -n 1)
-                    
-                    # DS average precision metrics
-                    if echo "$METRICS_LINE" | grep -q "ds_average_precision"; then
-                        # Extract overall DS AP
-                        DS_AP=$(echo "$METRICS_LINE" | grep -o "endoscapes/ds_average_precision: [0-9.]*" | grep -o "[0-9.]*")
-                        printf "│ %-35s │ %7.4f │\n" "DS Average Precision" "$DS_AP"
-                        echo "├───────────────────────────────────┼─────────┤"
-                        
-                        # Extract class-specific DS AP metrics
-                        DS_AP_C1=$(echo "$METRICS_LINE" | grep -o "endoscapes/ds_average_precision_C1: [0-9.]*" | grep -o "[0-9.]*")
-                        DS_AP_C2=$(echo "$METRICS_LINE" | grep -o "endoscapes/ds_average_precision_C2: [0-9.]*" | grep -o "[0-9.]*")
-                        DS_AP_C3=$(echo "$METRICS_LINE" | grep -o "endoscapes/ds_average_precision_C3: [0-9.]*" | grep -o "[0-9.]*")
-                        
-                        [ -n "$DS_AP_C1" ] && printf "│ %-35s │ %7.4f │\n" "DS AP - Class 1" "$DS_AP_C1"
-                        [ -n "$DS_AP_C2" ] && printf "│ %-35s │ %7.4f │\n" "DS AP - Class 2" "$DS_AP_C2"
-                        [ -n "$DS_AP_C3" ] && printf "│ %-35s │ %7.4f │\n" "DS AP - Class 3" "$DS_AP_C3"
-                    fi
-                    
-                    # BBOX mAP metrics
-                    if echo "$METRICS_LINE" | grep -q "bbox_mAP"; then
-                        # Header separator if DS metrics were already added
-                        if ! echo "$METRICS_LINE" | grep -q "ds_average_precision"; then
-                            echo "├───────────────────────────────────┼─────────┤"
-                        fi
-                        
-                        # Extract overall mAP
-                        BBOX_MAP=$(echo "$METRICS_LINE" | grep -o "endoscapes/bbox_mAP: [0-9.]*" | grep -o "[0-9.]*")
-                        printf "│ %-35s │ %7.4f │\n" "Detection mAP" "$BBOX_MAP"
-                        
-                        # Extract IoU-specific mAP metrics
-                        BBOX_MAP_50=$(echo "$METRICS_LINE" | grep -o "endoscapes/bbox_mAP_50: [0-9.]*" | grep -o "[0-9.]*")
-                        BBOX_MAP_75=$(echo "$METRICS_LINE" | grep -o "endoscapes/bbox_mAP_75: [0-9.]*" | grep -o "[0-9.]*")
-                        
-                        [ -n "$BBOX_MAP_50" ] && printf "│ %-35s │ %7.4f │\n" "Detection mAP@0.5" "$BBOX_MAP_50"
-                        [ -n "$BBOX_MAP_75" ] && printf "│ %-35s │ %7.4f │\n" "Detection mAP@0.75" "$BBOX_MAP_75"
-                    fi
-                    
-                    # Add timing information
-                    DATA_TIME=$(echo "$METRICS_LINE" | grep -o "data_time: [0-9.]*" | grep -o "[0-9.]*")
-                    PROC_TIME=$(echo "$METRICS_LINE" | grep -o "time: [0-9.]*" | grep -o "[0-9.]*")
-                    
-                    echo "├───────────────────────────────────┼─────────┤"
-                    [ -n "$DATA_TIME" ] && printf "│ %-35s │ %7.4f │\n" "Data loading time (s)" "$DATA_TIME"
-                    [ -n "$PROC_TIME" ] && printf "│ %-35s │ %7.4f │\n" "Processing time (s)" "$PROC_TIME"
-                else
-                    printf "│ %-35s │ %7s │\n" "No test metrics found" "N/A"
+                # Look for bbox_mAP with more flexible pattern matching
+                BBOX_MAP=$(grep -ao -E "bbox_mAP.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                BBOX_MAP_50=$(grep -ao -E "bbox_mAP_50.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                BBOX_MAP_75=$(grep -ao -E "bbox_mAP_75.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                
+                # Look for ds_average_precision with more flexible pattern matching
+                DS_AP=$(grep -ao -E "ds_average_precision.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C1=$(grep -ao -E "ds_average_precision_C1.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C2=$(grep -ao -E "ds_average_precision_C2.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C3=$(grep -ao -E "ds_average_precision_C3.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                
+                # Print metrics if found
+                if [ -n "$DS_AP" ]; then
+                    echo "Overall DS Average Precision: $DS_AP"
+                    [ -n "$DS_AP_C1" ] && echo "Class 1 DS AP: $DS_AP_C1"
+                    [ -n "$DS_AP_C2" ] && echo "Class 2 DS AP: $DS_AP_C2"
+                    [ -n "$DS_AP_C3" ] && echo "Class 3 DS AP: $DS_AP_C3"
+                fi
+                
+                if [ -n "$BBOX_MAP" ]; then
+                    echo "Detection mAP: $BBOX_MAP"
+                    [ -n "$BBOX_MAP_50" ] && echo "Detection mAP@0.5: $BBOX_MAP_50"
+                    [ -n "$BBOX_MAP_75" ] && echo "Detection mAP@0.75: $BBOX_MAP_75"
+                fi
+                
+                # If no metrics were found
+                if [ -z "$DS_AP" ] && [ -z "$BBOX_MAP" ]; then
+                    echo "No metrics available. Check raw test output for details."
                 fi
             else
-                printf "│ %-35s │ %7s │\n" "No terminal output found" "N/A"
+                echo "No test output file found."
+            fi
+        } > "${model_dir}/eval_results.txt"
+        
+        # Create a simplified metrics CSV for this test
+        {
+            echo "Metric,Value"
+            
+            # More flexible extraction of metrics for CSV
+            if [ -f "${terminal_output_file}" ]; then
+                # Get bbox metrics with more flexible pattern matching
+                BBOX_MAP=$(grep -ao -E "bbox_mAP.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                BBOX_MAP_50=$(grep -ao -E "bbox_mAP_50.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                BBOX_MAP_75=$(grep -ao -E "bbox_mAP_75.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                
+                # Get ds metrics with more flexible pattern matching
+                DS_AP=$(grep -ao -E "ds_average_precision.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C1=$(grep -ao -E "ds_average_precision_C1.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C2=$(grep -ao -E "ds_average_precision_C2.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                DS_AP_C3=$(grep -ao -E "ds_average_precision_C3.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1)
+                
+                # Write all available metrics to CSV
+                [ -n "$DS_AP" ] && echo "DS_Average_Precision,$DS_AP"
+                [ -n "$DS_AP_C1" ] && echo "DS_AP_Class1,$DS_AP_C1"
+                [ -n "$DS_AP_C2" ] && echo "DS_AP_Class2,$DS_AP_C2" 
+                [ -n "$DS_AP_C3" ] && echo "DS_AP_Class3,$DS_AP_C3"
+                [ -n "$BBOX_MAP" ] && echo "Detection_mAP,$BBOX_MAP"
+                [ -n "$BBOX_MAP_50" ] && echo "Detection_mAP_50,$BBOX_MAP_50" 
+                [ -n "$BBOX_MAP_75" ] && echo "Detection_mAP_75,$BBOX_MAP_75"
+                
+                # Add run configuration 
+                echo "Epochs,$EPOCHS"
+                echo "Train_Corruption,$TRAIN_CORRUPTION"
+                echo "Test_Corruption,$test_corruption"
+                echo "CPU_Count,$CPU_COUNT"
+                echo "Timestamp,$(date +%Y%m%d-%H%M%S)"
+            else
+                echo "Error,No test output file found"
+            fi
+        } > "${model_dir}/metrics.csv"
+        
+        # Update the global comparison CSV file
+        {
+            # CSV header (only if file doesn't exist)
+            if [ ! -f "results/corruption_comparison.csv" ]; then
+                echo "model,train_corruption,test_corruption,epochs,cpu_count,timestamp,ds_ap,ds_ap_c1,ds_ap_c2,ds_ap_c3,bbox_map,bbox_map50,bbox_map75" > "results/corruption_comparison.csv"
             fi
             
-            echo "└───────────────────────────────────┴─────────┘"
-            echo ""
-            echo "Model: ${model_name}"
-            echo "Epochs: ${EPOCHS}"
-            echo "Date: $(date +"%Y-%m-%d")"
-        } > "${metrics_dir}/tabular_metrics.txt"
+            # Extract metrics with more flexible regex
+            if [ -f "${terminal_output_file}" ]; then
+                # Get all metrics with more flexible pattern matching
+                DS_AP=$(grep -ao -E "ds_average_precision.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                DS_AP_C1=$(grep -ao -E "ds_average_precision_C1.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                DS_AP_C2=$(grep -ao -E "ds_average_precision_C2.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                DS_AP_C3=$(grep -ao -E "ds_average_precision_C3.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                
+                BBOX_MAP=$(grep -ao -E "bbox_mAP.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                BBOX_MAP_50=$(grep -ao -E "bbox_mAP_50.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                BBOX_MAP_75=$(grep -ao -E "bbox_mAP_75.*?[0-9]+\.[0-9]+" "${terminal_output_file}" | grep -o -E "[0-9]+\.[0-9]+" | head -1 || echo "NA")
+                
+                # Add entry to CSV
+                echo "${model_name},${TRAIN_CORRUPTION},${test_corruption},${EPOCHS},${CPU_COUNT},$(date +"%Y%m%d-%H%M%S"),${DS_AP},${DS_AP_C1},${DS_AP_C2},${DS_AP_C3},${BBOX_MAP},${BBOX_MAP_50},${BBOX_MAP_75}" >> "results/corruption_comparison.csv"
+            fi
+        }
         
-        # Copy tabular metrics directly to the test_results folder for easier access
-        cp "${metrics_dir}/tabular_metrics.txt" "${test_results_dir}/"
-        
-        echo "Metrics summaries created:"
-        echo "- ${metrics_dir}/complete_metrics.txt (detailed metrics)"
-        echo "- ${test_results_dir}/tabular_metrics.txt (tabular format)"
+        echo "Metrics files created:"
+        echo "- ${model_dir}/eval_results.txt (summary report)"
+        echo "- ${model_dir}/metrics.csv (CSV format)"
+        echo "- ${metrics_dir}/complete_metrics.txt (detailed report)"
+        echo "- Updated results/corruption_comparison.csv with new entry"
     else
-        echo "No test results found for ${model_name}"
+        echo "No model directory found for ${model_name}"
     fi
 }
 
@@ -313,7 +469,16 @@ fi
 
 echo "====================================================================="
 echo "Operations completed successfully."
-echo "Results are saved in: ${RESULTS_DIR}"
-echo "Best checkpoints are copied to weights/endoscapes/"
-echo "Metrics summaries are available in: ${RESULTS_DIR}/*/test_results/"
+echo ""
+echo "Training Results Directory: ${MAIN_RESULTS_DIR}"
+echo "  - Train corruption: ${TRAIN_CORRUPTION}"
+echo "  - Epochs: ${EPOCHS}"
+echo ""
+echo "Testing Results Directory: ${TEST_RESULTS_DIR}"
+echo "  - Test corruption: ${TEST_CORRUPTION}"
+echo ""
+echo "Results Summary:"
+echo "  - Checkpoints saved to: ${MAIN_RESULTS_DIR}/*/checkpoints/"
+echo "  - Metrics available in: ${TEST_RESULTS_DIR}/*/eval_results.txt"
+echo "  - Consolidated metrics: results/corruption_comparison.csv"
 echo "====================================================================="

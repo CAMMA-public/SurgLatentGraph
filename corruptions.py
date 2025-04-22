@@ -1,53 +1,44 @@
-import torch
-import numpy as np
 import cv2
-from PIL import Image
-from scipy.ndimage import gaussian_filter
+import numpy as np
+import torch
 import os
-import random
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
+import random
 
-# Device configuration
+# Try to import noise module, but provide a fallback if it's not available
+try:
+    import noise
+    NOISE_MODULE_AVAILABLE = True
+except ImportError:
+    NOISE_MODULE_AVAILABLE = False
+    print("Warning: 'noise' module not found, Perlin noise corruptions won't be available.")
+    print("To enable full functionality, install with: pip install noise")
+
+# Define the device (GPU if available, otherwise CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def add_gaussian_noise(image, mean=0, std=0.5):
     """
-    Adds Gaussian noise to a PyTorch image tensor.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        mean (float): Mean of the Gaussian noise
-        std (float): Standard deviation of the Gaussian noise
-        
-    Returns:
-        torch.Tensor: Noisy image tensor
+    Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
-    # Generate Gaussian noise with same shape
     noise = torch.randn_like(image, dtype=torch.float32) * std + mean
     noisy_image = image.float() + noise
-    
-    # Clip values if needed
+
     if image.dtype == torch.uint8:
         noisy_image = torch.clamp(noisy_image, 0, 255).to(torch.uint8)
-    
+
     return noisy_image
 
 def apply_motion_blur(image, kernel_size=15):
-    """
-    Applies motion blur to an image tensor.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        kernel_size (int): Size of the motion blur kernel
-        
-    Returns:
-        torch.Tensor: Motion-blurred image tensor
-    """
     # Check if the input is batched (5D: B, T, C, H, W)
     is_batched = len(image.shape) == 5
     if is_batched:
         batch_size, timesteps, channels, height, width = image.shape
         image = image.view(-1, channels, height, width)  # Reshape to (B*T, C, H, W)
+
+    # Save original for visualization
+    original_tensor = image.clone()
 
     # Convert to (H, W, C) format for OpenCV processing
     image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (B*T, H, W, C)
@@ -60,7 +51,7 @@ def apply_motion_blur(image, kernel_size=15):
     blurred_np = np.array([cv2.filter2D(img, -1, kernel) for img in image_np])
 
     # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()
+    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # (B*T, C, H, W)
 
     # Reshape back if input was 5D
     if is_batched:
@@ -69,29 +60,21 @@ def apply_motion_blur(image, kernel_size=15):
     return blurred_tensor
 
 def apply_defocus_blur(image, kernel_size=15):
-    """
-    Applies defocus blur (Gaussian blur) to an image tensor.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        kernel_size (int): Size of the Gaussian blur kernel
-        
-    Returns:
-        torch.Tensor: Defocus-blurred image tensor
-    """
     is_batched = len(image.shape) == 5
     if is_batched:
         batch_size, timesteps, channels, height, width = image.shape
         image = image.view(-1, channels, height, width)  # Flatten batch & time
 
+    original_tensor = image.clone()
+
     # Convert to (H, W, C) format for OpenCV
-    image_np = image.permute(0, 2, 3, 1).cpu().numpy()
+    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # Shape: (B*T, H, W, C)
 
     # Apply Gaussian blur to each frame
     blurred_np = np.array([cv2.GaussianBlur(img, (kernel_size, kernel_size), 0) for img in image_np])
 
     # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()
+    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # Shape: (B*T, C, H, W)
 
     # Reshape back if input was 5D
     if is_batched:
@@ -100,16 +83,6 @@ def apply_defocus_blur(image, kernel_size=15):
     return blurred_tensor
 
 def uneven_illumination(image, strength=0.5):
-    """
-    Applies uneven illumination to an image tensor.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        strength (float): Strength of the illumination effect
-        
-    Returns:
-        torch.Tensor: Image tensor with uneven illumination
-    """
     # Check if input is 5D (batch + time)
     is_batched = (image.dim() == 5)
     if is_batched:
@@ -121,7 +94,10 @@ def uneven_illumination(image, strength=0.5):
         c, h, w = image.shape
         b, t = 1, 1  # For convenient unflattening logic at the end
 
+    original_tensor = image.clone()
+
     # Convert to (N, H, W, C) for OpenCV-like operations
+    # N = B*T for batched input, or 1 for single input
     image_np = image.permute(0, 2, 3, 1).cpu().numpy().astype(np.float32)
     N = image_np.shape[0]  # number of images/frames
 
@@ -155,47 +131,38 @@ def uneven_illumination(image, strength=0.5):
 
     return result_tensor
 
+# Function to generate Perlin noise for corruption
 def generate_perlin_noise(height, width, scale=10, intensity=0.5):
-    """
-    Generates Perlin noise for smoke effect.
+    if intensity is None:
+        raise ValueError("Error: 'intensity' cannot be None. Please provide a valid float value.")
     
-    Args:
-        height (int): Height of the output noise
-        width (int): Width of the output noise
-        scale (float): Scale of the noise
-        intensity (float): Intensity of the noise
-        
-    Returns:
-        numpy.ndarray: Perlin noise array
-    """
-    noise_pattern = np.zeros((height, width), dtype=np.float32)
-    
-    # Using a simpler approach since pnoise2 requires additional dependencies
-    for y in range(height):
-        for x in range(width):
-            noise_pattern[y, x] = np.sin(x/scale) * np.sin(y/scale)
-            noise_pattern[y, x] += 0.5 * np.sin(x/(scale*0.5)) * np.sin(y/(scale*0.5))
-            noise_pattern[y, x] += 0.25 * np.sin(x/(scale*0.25)) * np.sin(y/(scale*0.25))
+    if not NOISE_MODULE_AVAILABLE:
+        # Fallback to simple random noise if noise module is not available
+        print("Warning: Using random noise instead of Perlin noise (noise module not available)")
+        random_noise = np.random.rand(height, width).astype(np.float32)
+        random_noise = random_noise * intensity
+        return random_noise
+
+    perlin_noise = np.zeros((height, width), dtype=np.float32)
+
+    for i in range(height):
+        for j in range(width):
+            perlin_noise[i, j] = noise.pnoise2(i / scale, j / scale, octaves=6)
 
     # Normalize to [0,1] and apply intensity
-    noise_pattern = (noise_pattern - noise_pattern.min()) / (noise_pattern.max() - noise_pattern.min())
-    noise_pattern = noise_pattern * intensity
-    
-    return noise_pattern
+    perlin_noise = (perlin_noise - perlin_noise.min()) / (perlin_noise.max() - perlin_noise.min())
+    perlin_noise = perlin_noise * intensity
+    return perlin_noise
 
+# Function to add realistic corruption (smoke effect)
 def add_smoke_effect(image, intensity=0.7):
     """
-    Apply a realistic smoke effect to an image tensor.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        intensity (float): Intensity of the smoke effect
-        
-    Returns:
-        torch.Tensor: Image tensor with smoke effect
+    Apply a realistic smoke effect to an image tensor while handling different tensor shapes.
     """
     if not isinstance(image, torch.Tensor):
         raise TypeError("Input image must be a PyTorch tensor")
+    if intensity is None:
+        raise ValueError("Error: 'intensity' must be a valid float value.")
 
     image = image.to(device).clone()
     is_sequence = False
@@ -219,7 +186,7 @@ def add_smoke_effect(image, intensity=0.7):
         noise_3ch = np.expand_dims(noise_3ch, axis=0)
         noise_3ch = np.repeat(noise_3ch, batch_size, axis=0)
 
-    # Add weighted smoke effect
+    assert noise_3ch.shape == image_np.shape, f"Shape mismatch: noise {noise_3ch.shape} vs image {image_np.shape}"
     corrupted = cv2.addWeighted(image_np, 1.0 - intensity, noise_3ch, intensity, 0)
     corrupted = np.clip(corrupted, 0, 1)
 
@@ -233,15 +200,13 @@ def add_smoke_effect(image, intensity=0.7):
 
     return corrupted_tensor
 
+# Global counter for verification
+corruption_tracker = {"total": 0, "corrupted": 0, "uncorrupted": 0}
+
 def random_corrupt(image):
     """
     Applies a single random corruption to an image with a 50% probability.
-    
-    Args:
-        image (torch.Tensor): Input image tensor
-        
-    Returns:
-        torch.Tensor: Possibly corrupted image tensor
+    Keeps track of how many images are corrupted.
     """
     corruption_methods = [
         add_gaussian_noise,
@@ -251,22 +216,26 @@ def random_corrupt(image):
         add_smoke_effect
     ]
 
+    corruption_tracker["total"] += 1  # Track total processed images
     if random.random() < 0.5:  # 50% chance to apply corruption
         corruption_method = random.choice(corruption_methods)
-        return corruption_method(image)
+        image = corruption_method(image)
+        corruption_tracker["corrupted"] += 1  # Track corrupted images
     else:
-        return image
+        corruption_tracker["uncorrupted"] += 1  # Track uncorrupted images
+    return image  # Return the (possibly corrupted) image
 
+# Main function to apply corruptions - renamed to 'corrupt' to match what the preprocessor expects
 def corrupt(image, corruption_type):
     """
-    Main function to apply a specific corruption to an image.
+    Apply the specified corruption type to the image.
     
     Args:
-        image (torch.Tensor): Input image tensor
-        corruption_type (str): Type of corruption to apply
+        image: PyTorch tensor of shape (B, C, H, W) or (B, T, C, H, W)
+        corruption_type: String specifying which corruption to apply
         
     Returns:
-        torch.Tensor: Corrupted image tensor
+        Corrupted image with the same shape as input
     """
     if corruption_type == 'gaussian_noise':
         return add_gaussian_noise(image)
@@ -277,10 +246,15 @@ def corrupt(image, corruption_type):
     elif corruption_type == 'uneven_illumination':
         return uneven_illumination(image)
     elif corruption_type == 'smoke_effect':
-        return add_smoke_effect(image)
-    elif corruption_type == 'random_corruptions':
+        return add_smoke_effect(image, intensity=0.7)
+    elif corruption_type == 'random':
         return random_corrupt(image)
     elif corruption_type == 'none' or corruption_type is None:
         return image
     else:
-        raise ValueError(f"Invalid corruption type '{corruption_type}'. Choose from: 'gaussian_noise', 'motion_blur', 'defocus_blur', 'uneven_illumination', 'smoke_effect', 'random_corruptions', 'none'.")
+        raise ValueError(f"Invalid corruption type '{corruption_type}'. Choose from: 'gaussian_noise', 'motion_blur', 'defocus_blur', 'uneven_illumination', 'smoke_effect', 'random', 'none'.")
+
+# Keep the original 'corruption' function for backwards compatibility
+def corruption(image, corruption_type):
+    """Alias for the corrupt function to maintain backward compatibility"""
+    return corrupt(image, corruption_type)
