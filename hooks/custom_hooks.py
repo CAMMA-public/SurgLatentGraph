@@ -4,6 +4,18 @@ from prettytable import PrettyTable
 import torch
 
 @HOOKS.register_module()
+class CorruptionLoggerHook(Hook):
+    def __init__(self, corruption_type='none'):
+        self.corruption_type = corruption_type
+
+    def before_train(self, runner) -> None:
+        print(f"\nTraining with corruption: {self.corruption_type}")
+        
+    def after_train_epoch(self, runner) -> None:
+        # Log corruption information to the logger
+        runner.logger.info(f"Completed epoch with corruption: {self.corruption_type}")
+
+@HOOKS.register_module()
 class FreezeHook(Hook):
     def __init__(self, freeze_detector: bool = True, freeze_graph_head: bool = False,
             freeze_projectors: bool = False):

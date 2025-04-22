@@ -35,6 +35,7 @@ SHELL ["conda", "run", "-n", "latentgraph", "/bin/bash", "-c"]
 
 WORKDIR /workspace
 ENV PYTHONPATH="/workspace:${PYTHONPATH}"
+# ENV MMDETECTION=/workspace/mmdetection
 
 # Install additional Python dependencies:
 # - torch-scatter (for PyTorch 2.1.0 + CUDA 11.8)
@@ -45,8 +46,8 @@ RUN pip install torch-scatter -f https://data.pyg.org/whl/torch2.1.0+cu118.html 
     mim install mmengine==0.7.4 && \
     pip install torchmetrics scikit-learn prettytable imagesize networkx opencv-python yapf==0.40.1 && \
     pip install ipdb && \
-    pip install dgl -f https://data.dgl.ai/wheels/torch-2.1/cu118/repo.html
-
+    pip install dgl -f https://data.dgl.ai/wheels/torch-2.1/cu118/repo.html && \
+    pip install seaborn tabulate
 # Install mmcv (version 2.1.0 compatible with mmdetection 3.2.0)
 RUN pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.1.0/index.html
 

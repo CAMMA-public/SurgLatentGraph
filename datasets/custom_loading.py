@@ -18,6 +18,7 @@ import torch
 from collections import defaultdict
 from io import BytesIO
 import imagesize
+from PIL import Image, ImageFilter
 
 @TRANSFORMS.register_module()
 class LoadAnnotationsWithDS(LoadAnnotations):
@@ -63,12 +64,30 @@ class LoadTrackAnnotationsWithDS(LoadTrackAnnotations):
 
 @TRANSFORMS.register_module()
 class LoadLG(LoadImageFromFile):
-    def __init__(self, saved_graph_dir: str = '', load_keyframes_only: bool = False,
-            skip_keys: List = [], **kwargs):
+    def __init__(self, 
+                 saved_graph_dir: str = '', 
+                 load_keyframes_only: bool = False,
+                 skip_keys: List = [], 
+                 corruption_type: str = None,
+                 corruption_severity: float = 0.5,
+                 **kwargs):
         super(LoadLG, self).__init__(**kwargs)
         self.saved_graph_dir = saved_graph_dir
         self.load_keyframes_only = load_keyframes_only
         self.skip_keys = skip_keys
+        
+        # Corruption settings
+        self.corruption_type = corruption_type
+        self.corruption_severity = corruption_severity
+        
+        # Import corruption module if needed
+        if self.corruption_type is not None:
+            try:
+                from corruptions import corrupt
+                self.corrupt_func = corrupt
+            except ImportError:
+                print("Warning: corruptions module not found. No corruption will be applied.")
+                self.corruption_type = None
 
     def transform(self, results: dict) -> dict:
         if self.load_keyframes_only and not results['key_frame_flags']:
@@ -90,10 +109,13 @@ class LoadLG(LoadImageFromFile):
 
             results['lg'] = lg.to_tensor()
 
-        # img size
-        results['img_shape'] = imagesize.get(results['img_path'])[::-1]
-        results['ori_shape'] = results['img_shape']
-
+        # Load the image
+        results = super().transform(results)
+        
+        # TODO: APPLY CORRUPTION HERE
+        if self.corruption_type is not None and hasattr(self, 'corrupt_func'):
+            results['img'] = self.corrupt_func(results['img'], self.corruption_type)
+        
         return results
 
 @DATASETS.register_module()

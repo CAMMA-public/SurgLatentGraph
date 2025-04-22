@@ -1,9 +1,24 @@
 import copy
 import os
+import time
 
 _base_=['../lg_base_box.py',
     os.path.expandvars('$MMDETECTION/configs/_base_/models/faster-rcnn_r50_fpn.py'),
 ]
+
+# Make sure custom hooks are imported
+custom_imports = dict(
+    imports=['datasets.custom_loading', 'model.lg', 'evaluator.CocoMetricRGD', 'hooks.custom_hooks'],
+    allow_failed_imports=False
+)
+
+# Set unique output directory based on timestamp
+timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
+output_dir = f'results/endoscapes_lg_faster_rcnn_{timestamp}'
+ckpt_dir = f'{output_dir}/checkpoints'
+
+# Create the checkpoint directory if it doesn't exist
+os.makedirs(ckpt_dir, exist_ok=True)
 
 # extract detector, data preprocessor config from base
 detector = copy.deepcopy(_base_.model)
@@ -32,3 +47,27 @@ optim_wrapper = dict(
     clip_grad=dict(max_norm=10, norm_type=2),
 )
 auto_scale_lr = dict(enable=True)
+
+# Configure custom directory for outputs
+work_dir = output_dir
+
+# Configure checkpoint saving
+default_hooks = dict(
+    checkpoint=dict(
+        type='CheckpointHook',
+        interval=1,
+        max_keep_ckpts=3,
+        save_best='auto',
+        out_dir=ckpt_dir
+    ),
+    logger=dict(
+        type='LoggerHook',
+        interval=50,
+        out_dir=output_dir
+    )
+)
+
+# Configure test evaluation output path
+test_evaluator = dict(
+    outfile_prefix=f'{output_dir}/test_results'
+)
