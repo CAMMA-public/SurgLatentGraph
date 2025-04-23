@@ -10,7 +10,14 @@ _base_ = [
 
 # Make sure custom modules are imported
 custom_imports = dict(
-    imports=['datasets.custom_loading', 'model.lg', 'evaluator.CocoMetricRGD', 'hooks.custom_hooks', 'model.corruption_preprocessor'],
+    imports=[
+        'datasets.custom_loading', 
+        'model.lg', 
+        'evaluator.CocoMetricRGD', 
+        'hooks.custom_hooks', 
+        'model.corruption_preprocessor',
+        'visualizer.LatentGraphVisualizer'  # Add visualizer import
+    ],
     allow_failed_imports=False
 )
 

@@ -5,6 +5,8 @@ import os
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 import random
+import subprocess
+import sys
 
 # Try to import noise module, but provide a fallback if it's not available
 try:
@@ -14,6 +16,17 @@ except ImportError:
     NOISE_MODULE_AVAILABLE = False
     print("Warning: 'noise' module not found, Perlin noise corruptions won't be available.")
     print("To enable full functionality, install with: pip install noise")
+    
+    # Auto-install noise module if it's not available
+    try:
+        print("Attempting to install noise module...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "noise"])
+        import noise
+        NOISE_MODULE_AVAILABLE = True
+        print("Successfully installed noise module.")
+    except Exception as e:
+        print(f"Failed to install noise module: {e}")
+        print("Continuing with limited functionality.")
 
 # Define the device (GPU if available, otherwise CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
