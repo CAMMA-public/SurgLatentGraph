@@ -154,6 +154,33 @@ run_training() {
     local config_path="configs/models/faster_rcnn/lg_${model_type}_rcnn.py"
     local model_dir="${MAIN_RESULTS_DIR}/lg_${model_type}_rcnn"
     
+    # For DS models, check if base model weights exist first
+    if [[ "$model_type" == "ds_faster" ]]; then
+        local base_weights_path="weights/endoscapes/lg_faster_rcnn.pth"
+        if [[ ! -f "$base_weights_path" ]]; then
+            echo "ERROR: Base model weights not found at $base_weights_path"
+            echo "The DS-enhanced model requires weights from the base Faster R-CNN model."
+            echo "Please train the base Faster R-CNN model first or obtain pre-trained weights."
+            
+            # Check if Faster R-CNN was already trained in this session
+            local faster_ckpt_dir="${MAIN_RESULTS_DIR}/lg_faster_rcnn/checkpoints"
+            local best_faster_ckpt=$(find "${faster_ckpt_dir}" -name "best_*.pth" 2>/dev/null | head -1)
+            
+            if [[ -n "$best_faster_ckpt" ]]; then
+                echo "Found Faster R-CNN checkpoint from this session: $best_faster_ckpt"
+                echo "Copying to weights directory for DS model to use..."
+                cp "$best_faster_ckpt" "$base_weights_path"
+                echo "Successfully copied weights. Proceeding with DS model training."
+            else
+                echo "No Faster R-CNN weights found. Cannot train DS model."
+                return 1
+            fi
+        else
+            echo "Found base model weights at $base_weights_path"
+            echo "These weights will be used to initialize the DS model."
+        fi
+    fi
+    
     echo "===================== TRAINING: lg_${model_type}_rcnn ====================="
     echo "Starting training with $EPOCHS epochs and corruption: $TRAIN_CORRUPTION"
     
@@ -164,6 +191,30 @@ run_training() {
         default_hooks.checkpoint.out_dir="${model_dir}/checkpoints" \
         test_evaluator.outfile_prefix="${model_dir}/test_results" \
         corruption="${TRAIN_CORRUPTION}"
+    
+    local training_success=$?
+    
+    # If training was successful, copy the best checkpoint to the weights directory
+    if [[ $training_success -eq 0 ]]; then
+        local ckpt_dir="${model_dir}/checkpoints"
+        local best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" | head -1)
+        
+        if [[ -n "$best_ckpt" ]]; then
+            echo "Training successful. Copying best checkpoint to weights directory..."
+            # Standard weights path without corruption suffix
+            local weights_path="weights/endoscapes/lg_${model_type}_rcnn.pth"
+            # Additional path with corruption info
+            local corruption_weights_path="weights/endoscapes/lg_${model_type}_rcnn_train-${TRAIN_DESC}.pth"
+            
+            cp "$best_ckpt" "$weights_path"
+            cp "$best_ckpt" "$corruption_weights_path"
+            echo "Weights saved to:"
+            echo "  - $weights_path (standard path for other models to use)"
+            echo "  - $corruption_weights_path (with corruption information)"
+        fi
+    fi
+    
+    return $training_success
 }
 
 # Function to run testing
