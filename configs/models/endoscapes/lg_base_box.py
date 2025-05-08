@@ -32,23 +32,25 @@ lg_model=dict(
         edges_per_node=4,
         gnn_cfg=dict(
             type='GNNHead',
-            num_layers=3,
+            num_layers=5,
             arch='tripleconv',
             add_self_loops=False,
             use_reverse_edges=False,
             norm='graph',
             skip_connect=True,
+            hidden_dim=2048,
         ),
         presence_loss_cfg=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
         ),
-        presence_loss_weight=0.5,
+        presence_loss_weight=0.25,
         classifier_loss_cfg=dict(
             type='CrossEntropyLoss',
         ),
-        classifier_loss_weight=0.5,
+        classifier_loss_weight=0.25,
         num_edge_classes=3,
+        edge_feature_init='intersection',
     ),
 )
 
