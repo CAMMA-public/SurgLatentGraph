@@ -98,22 +98,22 @@ class DSHead(BaseModule, metaclass=ABCMeta):
 
         if isinstance(loss, list):
             # losses
-            self.loss_fn = torch.nn.ModuleList([MODELS.build(l) for l in loss])
-
-            # predictors
-            dim_list = [predictor_dim] + [predictor_hidden_dim] * (num_predictor_layers - 1)
-            self.ds_predictor_head = build_mlp(dim_list)
-            self.ds_predictor = torch.nn.ModuleList()
-            for i in range(3): # separate predictor for each criterion
-                self.ds_predictor.append(torch.nn.Linear(predictor_hidden_dim, num_classes))
-
+            self.loss_fn = [MODELS.build(l) for l in loss]
         else:
             # loss
             self.loss_fn = MODELS.build(loss)
 
+        if isinstance(num_classes, list):
+            # predictors
+            dim_list = [predictor_dim] + [predictor_hidden_dim] * (num_predictor_layers - 1)
+            self.ds_predictor_head = build_mlp(dim_list, batch_norm='batch')
+            self.ds_predictor = torch.nn.ModuleList()
+            for n in num_classes:
+                self.ds_predictor.append(torch.nn.Linear(predictor_hidden_dim, n))
+        else:
             # predictor
             dim_list = [predictor_dim] + [predictor_hidden_dim] * (num_predictor_layers - 1) + [num_classes]
-            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False, batch_norm='batch')
+            self.ds_predictor = build_mlp(dim_list, final_nonlinearity=False, batch_norm='none')
 
         self.loss_weight = loss_weight
         self.loss_consensus = loss_consensus
@@ -327,32 +327,64 @@ class DSHead(BaseModule, metaclass=ABCMeta):
         ds_preds, perturbed_ds_preds = self.predict(graph, feats)
         ds_gt = torch.stack([torch.from_numpy(b.ds) for b in batch_data_samples]).to(ds_preds.device)
 
-        if self.loss_consensus == 'mode':
+        losses = {}
+        if isinstance(self.loss_fn, list):
+            for loss_fn, lc, lw in zip(self.loss_fn, self.loss_consensus, self.loss_weight):
+                if 'focal' in str(type(loss_fn)).lower():
+                    suffix = '_focal'
+                elif 'crossentropy' in str(type(loss_fn)).lower():
+                    suffix = '_bce'
+                elif 'l1' in str(type(loss_fn)).lower():
+                    suffix = '_l1'
+
+                losses_i = self._ds_loss(ds_gt, ds_preds, perturbed_ds_preds,
+                        lc, loss_fn, lw, loss_suffix=suffix)
+                losses.update(losses_i)
+
+        else:
+            losses = self._ds_loss(ds_gt, ds_preds, perturbed_ds_preds,
+                    self.loss_consensus, self.loss_fn, self.loss_weight)
+
+        return losses
+
+    def _ds_loss(self, ds_gt, ds_preds, perturbed_ds_preds, loss_consensus, loss_fn, loss_weight, loss_suffix=''):
+        if loss_consensus == 'mode':
             ds_gt = ds_gt.float().round().long()
-        elif self.loss_consensus == 'prob':
+        elif loss_consensus == 'prob':
             # interpret GT as probability of 1 and randomly generate gt
             random_probs = torch.rand_like(ds_gt) # random probability per label per example
             ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
+        elif loss_consensus == 'focal_mode':
+            ds_preds = ds_preds.flatten()
+            perturbed_ds_preds = {k: v.flatten() for k, v in perturbed_ds_preds.items()}
+            ds_gt = ds_gt.flatten().round().long()
+        elif loss_consensus == 'focal_prob':
+            ds_preds = ds_preds.flatten()
+
+            # compute 0 logits
+            zero_logits = torch.log(ds_preds.sigmoid()/(1 - ds_preds.sigmoid()))
+            ds_preds = torch.stack([zero_logits.flatten(), ds_preds.flatten()], dim=-1)
+
+            for k, v in perturbed_ds_preds.items():
+                v_zero_logits = torch.log(v.sigmoid()/(1 - v.sigmoid()))
+                perturbed_ds_preds[k] = torch.stack([v_zero_logits.flatten(), v.flatten()], dim=-1)
+
+            random_probs = torch.rand_like(ds_gt) # random probability per label per example
+            ds_gt = torch.le(random_probs, ds_gt).long().flatten()
+
         else:
-            ds_gt = ds_gt.long()
+            ds_preds = ds_preds.sigmoid() # convert to probability before loss
+            perturbed_ds_preds = {k: v.sigmoid() for k, v in perturbed_ds_preds.items()}
+            ds_gt = ds_gt.float()
 
         perturbed_ds_loss = {}
-        if isinstance(self.loss_fn, torch.nn.ModuleList):
-            # compute loss for each criterion and sum
-            ds_loss = sum([self.loss_fn[i](ds_preds[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
-            for k, v in perturbed_ds_preds.items():
-                wt = self.viz_loss_weight if k == 'graph_viz' else self.semantic_loss_weight if k == 'graph_sem' else self.img_loss_weight
-                loss_val = sum([self.loss_fn[i](v[:, i], ds_gt[:, i]) for i in range(len(self.loss_fn))]) / len(self.loss_fn)
-                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
+        ds_loss = loss_fn(ds_preds, ds_gt)
+        for k, v in perturbed_ds_preds.items():
+            wt = self.viz_loss_weight if k == 'graph_viz' else self.semantic_loss_weight if k == 'graph_sem' else self.img_loss_weight
+            loss_val = loss_fn(v, ds_gt)
+            perturbed_ds_loss.update({'{}_ds_loss{}'.format(k, loss_suffix): loss_val * wt * loss_weight})
 
-        else:
-            ds_loss = self.loss_fn(ds_preds, ds_gt)
-            for k, v in perturbed_ds_preds.items():
-                wt = self.viz_loss_weight if k == 'graph_viz' else self.semantic_loss_weight if k == 'graph_sem' else self.img_loss_weight
-                loss_val = self.loss_fn(v, ds_gt)
-                perturbed_ds_loss.update({'{}_ds_loss'.format(k): loss_val * wt * self.loss_weight})
-
-        loss = {'ds_loss': ds_loss * self.loss_weight}
+        loss = {'ds_loss{}'.format(loss_suffix): ds_loss * loss_weight}
         loss.update(perturbed_ds_loss)
 
         return loss
@@ -539,14 +571,12 @@ class STDSHead(DSHead):
             random_probs = torch.rand_like(ds_gt) # random probability per label per example
             ds_gt = torch.le(random_probs, ds_gt).long().to(ds_gt.device)
         else:
-            ds_gt = ds_gt.long()
+            ds_preds = ds_preds.sigmoid() # convert to probability before loss
+            perturbed_ds_preds = {k: v.sigmoid() for k, v in perturbed_ds_preds.items()}
+            ds_gt = ds_gt.float()
 
         # reshape preds and gt according to prediction settings
-        if not self.pred_per_frame:
-            # keep only last gt per clip
-            ds_gt = ds_gt[:, -1]
-            is_ds_keyframe = None
-        else:
+        if self.pred_per_frame:
             ds_gt = ds_gt.flatten(end_dim=1)
             ds_preds = ds_preds.flatten(end_dim=1)
             for k, v in perturbed_ds_preds.items():
@@ -556,6 +586,10 @@ class STDSHead(DSHead):
             is_ds_keyframe = Tensor([b.is_ds_keyframe for vds in batch_data_samples for b in vds]).float().to(ds_gt.device)
             is_ds_keyframe[is_ds_keyframe == 0] = self.pseudolabel_loss_weight
             is_ds_keyframe = is_ds_keyframe / is_ds_keyframe.sum()
+        else:
+            # keep only last gt per clip
+            ds_gt = ds_gt[:, -1]
+            is_ds_keyframe = None
 
         perturbed_ds_loss = {}
         if isinstance(self.loss_fn, torch.nn.ModuleList):

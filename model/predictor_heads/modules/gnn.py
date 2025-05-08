@@ -100,7 +100,10 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 if isinstance(v, tuple) or isinstance(v, list):
                     v = torch.cat(v)
 
-                g.edata[k] = v.view(-1, v.shape[-1])
+                if v.ndim > 1:
+                    v = v.view(-1, v.shape[-1])
+
+                g.edata[k] = v
 
             # add in batch info
             g.set_batch_num_nodes(Tensor(nodes_per_clip).int().to(device))
@@ -123,7 +126,10 @@ class GNNHead(BaseModule, metaclass=ABCMeta):
                 if isinstance(v, tuple):
                     v = torch.cat(v)
 
-                g.edata[k] = v.view(-1, v.shape[-1])
+                if v.ndim > 1:
+                    v = v.view(-1, v.shape[-1])
+
+                g.edata[k] = v
 
             # add in batch info
             g.set_batch_num_nodes(Tensor(graph.nodes.nodes_per_img))
