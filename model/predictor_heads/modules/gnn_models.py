@@ -65,7 +65,8 @@ class GraphTripleConv(nn.Module):
             net2_layers = [hidden_dim, hidden_dim, output_dim]
         else:
             if self.use_edges:
-                net1_layers = [2 * input_dim_obj + input_dim_pred, 2 * output_dim + output_dim_pred]
+                net1_layers = [2 * input_dim_obj + input_dim_pred, hidden_dim,
+                        2 * output_dim + output_dim_pred]
             else:
                 net1_layers = [2 * input_dim_obj, hidden_dim, 2 * output_dim]
 

@@ -59,7 +59,6 @@ class LGDetector(BaseDetector):
         self.use_gt_dets = use_gt_dets
         self.perturb_factor = perturb_factor if not use_gt_dets else 0
         self.viz_feat_size = viz_feat_size
-        graph_head.viz_feat_size = viz_feat_size
 
         # if trainable detector cfg is defined, that is used for trainable backbone
         if trainable_detector_cfg is not None:
@@ -96,6 +95,7 @@ class LGDetector(BaseDetector):
 
         # add roi extractor to graph head
         if graph_head is not None:
+            graph_head.viz_feat_size = viz_feat_size
             graph_head.roi_extractor = self.roi_extractor
             self.graph_head = MODELS.build(graph_head)
             self.num_edge_classes = graph_head.num_edge_classes
@@ -126,7 +126,7 @@ class LGDetector(BaseDetector):
 
             # compute sem_input_dim
             sem_input_dim = 1 # scores
-            edge_sem_input_dim = 1 # bg prob
+            edge_sem_input_dim = 0 # don't factor in score for edge
             if self.sem_feat_use_bboxes:
                 # boxes and score
                 sem_input_dim += 4
@@ -152,14 +152,14 @@ class LGDetector(BaseDetector):
         else:
             losses = {}
 
-        # extract LG
-        feats, graph, detached_results, _, _, losses = self.extract_lg(batch_inputs,
+        # extract LG (gets non-differentiable predicted detections, and differentiable predicted graph)
+        feats, graph, results, gt_edges, losses = self.extract_lg(batch_inputs,
                 batch_data_samples, losses=losses)
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
             reconstructed_imgs, img_targets, rescaled_results = self.reconstruction_head.predict(
-                    detached_results, feats, graph, batch_inputs)
+                    results, feats, graph, batch_inputs)
 
             recon_boxes = []
             for r in rescaled_results:
@@ -184,9 +184,10 @@ class LGDetector(BaseDetector):
 
         return losses
 
-    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList) -> SampleList:
+    def predict(self, batch_inputs: Tensor, batch_data_samples: SampleList,
+            rescale: bool = True) -> SampleList:
         # extract LG
-        feats, graph, detached_results, results, gt_edges, _ = self.extract_lg(batch_inputs,
+        feats, graph, results, gt_edges, losses = self.extract_lg(batch_inputs,
                 batch_data_samples)
 
         if graph is not None:
@@ -198,7 +199,7 @@ class LGDetector(BaseDetector):
 
         # use feats and detections to reconstruct img
         if self.reconstruction_head is not None:
-            reconstructed_imgs, _, _ = self.reconstruction_head.predict(detached_results,
+            reconstructed_imgs, _, _ = self.reconstruction_head.predict(results,
                     feats, graph, batch_inputs)
 
             for r, r_img in zip(results, reconstructed_imgs):
@@ -215,6 +216,19 @@ class LGDetector(BaseDetector):
 
             for r, dp in zip(results, ds_preds):
                 r.pred_ds = dp
+
+        # rescale results if needed
+        if rescale:
+            scale_factor = 1 / torch.Tensor(results[0].scale_factor)
+            for r in results:
+                r.pred_instances.bboxes = scale_boxes(r.pred_instances.bboxes,
+                        scale_factor.tolist())
+                if 'masks' in r.pred_instances:
+                    if r.pred_instances.masks.shape[0] == 0:
+                        r.pred_instances.masks = torch.zeros((0, *r.ori_shape)).to(r.pred_instances.masks)
+                    else:
+                        r.pred_instances.masks = F.interpolate(r.pred_instances.masks.unsqueeze(0).float(),
+                                size=r.ori_shape).bool().squeeze(0)
 
         return results
 
@@ -290,16 +304,13 @@ class LGDetector(BaseDetector):
     def extract_lg(self, batch_inputs: Tensor, batch_data_samples: SampleList,
             force_perturb: bool = False, losses: dict = None,
             clip_size: int = -1) -> Tuple[BaseDataElement]:
+
         # run detector to get detections
         with torch.no_grad():
-            detector_is_training = self.detector.training
-            self.detector.training = False
-            results = self.detector.predict(batch_inputs, batch_data_samples)
-            detached_results = self.detach_results(results)
-            self.detector.training = detector_is_training
+            results = self.detector.predict(batch_inputs, batch_data_samples, rescale=False)
 
         # get bb and fpn features
-        feats = self.extract_feat(batch_inputs, detached_results, force_perturb, clip_size)
+        feats = self.extract_feat(batch_inputs, results, force_perturb, clip_size)
 
         # update feat of each pred instance
         for ind, r in enumerate(results):
@@ -310,31 +321,33 @@ class LGDetector(BaseDetector):
             if self.detector.training:
                 # train graph with gt boxes (only when detector is training)
                 graph_losses, graph = self.graph_head.loss_and_predict(
-                        detached_results, feats)
+                        results, feats)
                 losses.update(graph_losses)
                 gt_edges = None
 
             else:
                 if self.force_train_graph_head and self.training:
                     graph_losses, graph = self.graph_head.loss_and_predict(
-                            detached_results, feats)
+                            results, feats)
                     losses.update(graph_losses)
                     gt_edges = None
 
                 else:
-                    graph, gt_edges = self.graph_head.predict(detached_results, feats)
+                    graph, gt_edges = self.graph_head.predict(results, feats)
+
+            if self.encode_semantics:
+                # compute semantic feats
+                self.compute_semantic_feat(results, feats, graph)
+
+            # update feat of each pred instance
+            for ind, r in enumerate(results):
+                r.pred_instances.graph_feats = graph.nodes.gnn_viz_feats[ind, :r.pred_instances.bboxes.shape[0]]
+
         else:
             graph = None
+            gt_edges = None
 
-        if self.encode_semantics:
-            # compute semantic feats
-            self.compute_semantic_feat(detached_results, feats, graph)
-
-        # update feat of each pred instance
-        for ind, r in enumerate(results):
-            r.pred_instances.graph_feats = graph.nodes.gnn_viz_feats[ind, :r.pred_instances.bboxes.shape[0]]
-
-        return feats, graph, detached_results, results, gt_edges, losses
+        return feats, graph, results, gt_edges, losses
 
     def detach_results(self, results: SampleList) -> SampleList:
         for i in range(len(results)):
@@ -396,13 +409,8 @@ class LGDetector(BaseDetector):
             feats.bb_feats = bb_feats
             feats.neck_feats = neck_feats
 
-            # rescale bboxes, convert to rois
-            boxes_per_img = [len(b) for b in boxes]
-            scale_factor = results[0].scale_factor
-            rescaled_boxes = scale_boxes(torch.cat(boxes).float(), scale_factor).split(boxes_per_img)
-            rois = bbox2roi(rescaled_boxes)
-
-            # extract roi feats
+            # convert bboxes to roi and extract roi feats
+            rois = bbox2roi(boxes)
             roi_input_feats = feats.neck_feats if feats.neck_feats is not None else feats.bb_feats
             if isinstance(self.roi_extractor, SgSingleRoIExtractor) and 'masks' in results[0].pred_instances:
                 roi_feats = self.roi_extractor(
@@ -415,6 +423,7 @@ class LGDetector(BaseDetector):
                 )
 
             # pool feats and split into list
+            boxes_per_img = [len(b) for b in boxes]
             feats.instance_feats = pad_sequence(roi_feats.squeeze(-1).squeeze(-1).split(boxes_per_img),
                     batch_first=True)
 

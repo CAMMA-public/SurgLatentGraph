@@ -35,17 +35,17 @@ train_pipeline = [
         ),
         dict(
             type='Resize',
-            scale=(399, 224),
+            scale=(854, 480),
             keep_ratio=True,
         ),
         dict(
             type='RandomFlip',
             prob=0.5,
         ),
-        dict(
-            type='RandAugment',
-            aug_space=rand_aug_surg,
-        ),
+        #dict(
+        #    type='RandAugment',
+        #    aug_space=rand_aug_surg,
+        #),
         dict(
             type='Color',
             min_mag = 0.6,
@@ -67,7 +67,7 @@ eval_pipeline = [
         dict(type='LoadImageFromFile'),
         dict(
             type='Resize',
-            scale=(399, 224),
+            scale=(854, 480),
             keep_ratio=True,
         ),
         dict(type='LoadAnnotationsWithDS',

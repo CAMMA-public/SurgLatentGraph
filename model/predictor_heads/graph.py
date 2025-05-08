@@ -6,7 +6,7 @@ from mmengine.structures import BaseDataElement
 from mmdet.models.roi_heads.roi_extractors import BaseRoIExtractor
 from mmdet.structures import SampleList
 from mmdet.structures.bbox import bbox2roi, bbox_overlaps
-from mmdet.structures.bbox.transforms import bbox2roi, scale_boxes
+from mmdet.structures.bbox.transforms import bbox2roi
 from typing import List, Tuple, Union
 import torch
 import random
@@ -34,21 +34,21 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
             roi_extractor: BaseRoIExtractor, num_edge_classes: int,
             presence_loss_cfg: ConfigType, presence_loss_weight: float,
             classifier_loss_cfg: ConfigType, classifier_loss_weight: float,
-            gt_use_pred_detections: bool = False, sem_feat_hidden_dim: int = 2048,
-            semantic_feat_projector_layers: int = 3, num_roi_feat_maps: int = 4,
-            allow_same_label_edge: List = [5], gnn_cfg: ConfigType = None,
-            init_cfg: OptMultiConfig = None) -> None:
+            edge_feature_init: str = 'union', gt_use_pred_detections: bool = False,
+            num_roi_feat_maps: int = 4, allow_same_label_edge: List = [5],
+            gnn_cfg: ConfigType = None, init_cfg: OptMultiConfig = None) -> None:
         super().__init__(init_cfg=init_cfg)
 
         # attributes for building graph from detections
         self.edges_per_node = edges_per_node
         self.viz_feat_size = viz_feat_size
         self.roi_extractor = roi_extractor
+        self.edge_feature_init = edge_feature_init
         self.num_roi_feat_maps = num_roi_feat_maps
-        dim_list = [viz_feat_size, 64, 64]
-        self.edge_mlp_sbj = build_mlp(dim_list, batch_norm='batch',
+        dim_list = [viz_feat_size] * 3
+        self.edge_mlp_sbj = build_mlp(dim_list, batch_norm='none',
                 final_nonlinearity=False)
-        self.edge_mlp_obj = build_mlp(dim_list, batch_norm='batch',
+        self.edge_mlp_obj = build_mlp(dim_list, batch_norm='none',
                 final_nonlinearity=False)
         self.gt_use_pred_detections = gt_use_pred_detections
         self.allow_same_label_edge = torch.tensor(allow_same_label_edge)
@@ -71,7 +71,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         # attributes for predicting relation class
         self.num_edge_classes = num_edge_classes
-        dim_list = [viz_feat_size, viz_feat_size, self.num_edge_classes + 1] # predict no edge or which class
+        dim_list = [viz_feat_size * 2, 1024, self.num_edge_classes] # predict edge class
         self.edge_predictor = build_mlp(dim_list, batch_norm='batch', final_nonlinearity=False)
 
         # make query projector if roi_extractor is None
@@ -81,7 +81,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _predict_edge_presence(self, node_features, nodes_per_img):
         # EDGE PREDICTION
-        mlp_input = node_features.flatten(end_dim=1)
+        mlp_input = node_features.flatten(end_dim=1).detach()
         if mlp_input.shape[0] == 1:
             sbj_feats = self.edge_mlp_sbj(torch.cat([mlp_input, mlp_input]))[0].unsqueeze(0)
         else:
@@ -113,14 +113,13 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         return edge_presence_logits, edge_presence_masked
 
     def _build_edges(self, results: SampleList, nodes_per_img: List, feats: BaseDataElement = None) -> SampleList:
-        # get boxes, rescale
-        scale_factor = results[0].scale_factor
+        # get boxes
         boxes = pad_sequence([r.pred_instances.bboxes for r in results], batch_first=True)
+        labels = pad_sequence([r.pred_instances.labels for r in results], batch_first=True)
         boxes_per_img = [len(r.pred_instances.bboxes) for r in results]
-        rescaled_boxes = scale_boxes(boxes.float(), scale_factor)
 
         # compute all box_unions
-        edge_boxes = self.box_union(rescaled_boxes, rescaled_boxes)
+        edge_boxes = self.box_union(boxes, boxes)
 
         # select valid edge boxes
         valid_edge_boxes = [e[:b, :b].flatten(end_dim=1) for e, b in zip(edge_boxes, boxes_per_img)]
@@ -149,10 +148,19 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         # collate all edge information
         edges = BaseDataElement()
         edges.boxes = torch.cat(valid_edge_boxes)
+
+        # get boxes of subject and object node
         edges.boxesA = torch.cat([b[:num_b].repeat_interleave(num_b, dim=0) for num_b, b in zip(
-                boxes_per_img, rescaled_boxes)])
+                boxes_per_img, boxes)])
         edges.boxesB = torch.cat([b[:num_b].repeat(num_b, 1) for num_b, b in zip(
-                boxes_per_img, rescaled_boxes)])
+                boxes_per_img, boxes)])
+
+        # get labels of subject and object node
+        edges.labelsA = torch.cat([l[:num_inst].repeat_interleave(num_inst, dim=0) for num_inst, l in zip(
+                boxes_per_img, labels)])
+        edges.labelsB = torch.cat([l[:num_inst].repeat(num_inst) for num_inst, l in zip(
+                boxes_per_img, labels)])
+
         edges.edges_per_img = [num_b * num_b for num_b in boxes_per_img]
         edges.viz_feats = edge_viz_feats
 
@@ -163,7 +171,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
     def _predict_edge_classes(self, graph: BaseDataElement, batch_input_shape: tuple) -> BaseDataElement:
         # predict edge class
-        edge_predictor_input = graph.edges.viz_feats + graph.edges.gnn_viz_feats
+        edge_predictor_input = torch.cat([graph.edges.viz_feats, graph.edges.gnn_viz_feats], -1)
         if edge_predictor_input.shape[0] == 1:
             graph.edges.class_logits = self.edge_predictor(edge_predictor_input.repeat(2, 1))[0].unsqueeze(0)
         else:
@@ -186,6 +194,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges.boxes = edges.boxes[edge_indices]
         edges.boxesA = edges.boxesA[edge_indices]
         edges.boxesB = edges.boxesB[edge_indices]
+        edges.labelsA = edges.labelsA[edge_indices]
+        edges.labelsB = edges.labelsB[edge_indices]
         edges.viz_feats = edges.viz_feats[edge_indices]
 
         return edges
@@ -275,6 +285,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         graph.edges.boxes = dgl_g.edata['boxes'].split(graph.edges.edges_per_img.tolist())
         graph.edges.boxesA = dgl_g.edata['boxesA'].split(graph.edges.edges_per_img.tolist())
         graph.edges.boxesB = dgl_g.edata['boxesB'].split(graph.edges.edges_per_img.tolist())
+        graph.edges.labelsA = dgl_g.edata['labelsA'].split(graph.edges.edges_per_img.tolist())
+        graph.edges.labelsB = dgl_g.edata['labelsB'].split(graph.edges.edges_per_img.tolist())
         graph.edges.gnn_viz_feats = dgl_g.edata['gnn_feats']
 
         return graph
@@ -284,7 +296,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         bounding_boxes = []
         all_labels = []
         for r in results:
-            if r.is_det_keyframe and not self.gt_use_pred_detections:
+            if 'is_det_keyframe' in r and r.is_det_keyframe and not self.gt_use_pred_detections:
                 boxes = r.gt_instances.bboxes
                 labels = r.gt_instances.labels
                 bounding_boxes.append(boxes)
@@ -292,7 +304,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                 boxes_per_img.append(len(boxes))
 
             else:
-                # get boxes, rescale
+                # get boxes
                 boxes = r.pred_instances.bboxes
                 scores = r.pred_instances.scores
                 labels = r.pred_instances.labels
@@ -301,8 +313,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
                 boxes = boxes[scores > 0.3]
                 labels = labels[scores > 0.3]
 
-                # convert to tensor and scale boxes
-                bounding_boxes.append(scale_boxes(boxes.float(), r.scale_factor))
+                # convert to tensor
+                bounding_boxes.append(boxes.float())
                 boxes_per_img.append(len(bounding_boxes))
                 all_labels.append(labels)
 
@@ -326,7 +338,7 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         areas_y = areas.unsqueeze(-2).expand(B, N, N)
 
         # compute intersection
-        intersection = self.box_intersection(bounding_boxes, bounding_boxes) # B x N x N
+        _, intersection = self.box_intersection(bounding_boxes, bounding_boxes) # B x N x N
 
         # inside-outside is when intersection is close to the area of the smaller box
         inside_outside_matrix = intersection / torch.minimum(areas_x, areas_y)
@@ -381,10 +393,16 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
             edge_flats.append(ef)
 
         # COMPUTE EDGE BOXES AND SELECT USING EDGE FLATS
-        edge_boxes = self.box_union(bounding_boxes, bounding_boxes)
+        if self.edge_feature_init == 'intersection':
+            edge_boxes, _ = self.box_intersection(bounding_boxes, bounding_boxes)
+        if self.edge_feature_init == 'union':
+            edge_boxes = self.box_union(bounding_boxes, bounding_boxes)
+
         selected_edge_boxes = [eb[ef[:, 0], ef[:, 1]] for eb, ef in zip(edge_boxes, edge_flats)]
         selected_boxesA = [b[ef[:, 0]] for b, ef in zip(bounding_boxes, edge_flats)]
         selected_boxesB = [b[ef[:, 1]] for b, ef in zip(bounding_boxes, edge_flats)]
+        selected_labelsA = [l[ef[:, 0]] for l, ef in zip(all_labels, edge_flats)]
+        selected_labelsB = [l[ef[:, 1]] for l, ef in zip(all_labels, edge_flats)]
 
         # SELECT RELATIONSHIPS USING EDGE FLATS
         selected_relations = [er[ef[:, 0], ef[:, 1]] for er, ef in zip(relationships, edge_flats)]
@@ -395,6 +413,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         gt_edges.edge_boxes = selected_edge_boxes
         gt_edges.boxesA = selected_boxesA
         gt_edges.boxesB = selected_boxesB
+        gt_edges.labelsA = selected_labelsA
+        gt_edges.labelsB = selected_labelsB
         gt_edges.edge_relations = selected_relations
 
         return gt_edges
@@ -457,7 +477,16 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         intersection_height = torch.clamp(intersection_y2 - intersection_y1, min=0)  # (B, N1, N2)
         intersection_area = intersection_width * intersection_height  # (B, N1, N2)
 
-        return intersection_area
+        # get the intersection bboxes
+
+        # when boxes don't overlap, either x2 < x1 or y2 < y1, in these cases we want to use the box connecting the corners
+        int_boxes_x1 = torch.min(intersection_x1, intersection_x2)
+        int_boxes_x2 = torch.max(intersection_x1, intersection_x2)
+        int_boxes_y1 = torch.min(intersection_y1, intersection_y2)
+        int_boxes_y2 = torch.max(intersection_y1, intersection_y2)
+        intersection_boxes = torch.stack([int_boxes_x1, int_boxes_y1, int_boxes_x2, int_boxes_y2], -1)
+
+        return intersection_boxes, intersection_area
 
     def loss_and_predict(self, results: SampleList, feats: BaseDataElement) -> Tuple[SampleList, dict]:
         # init loss dict
@@ -471,7 +500,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edges, presence_logits = self._build_edges(results, nodes_per_img, feats)
 
         # compute edge presence loss
-        edge_presence_loss = self.edge_presence_loss(presence_logits, edges, gt_edges)
+        edge_presence_loss = self.edge_presence_loss(presence_logits, edges,
+                gt_edges, num_training_samples=32)
 
         # select edges, construct graph, apply gnn, and predict edge classes
         edges = self._select_edges(edges, nodes_per_img)
@@ -490,7 +520,8 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         graph = self._predict_edge_classes(graph, results[0].batch_input_shape)
 
         # compute edge classifier loss
-        edge_classifier_loss = self.edge_classifier_loss(graph.edges, gt_edges)
+        edge_classifier_loss = self.edge_classifier_loss(graph.edges, gt_edges,
+                num_training_samples=32)
 
         # update losses
         losses.update(edge_presence_loss)
@@ -498,12 +529,16 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
 
         return losses, graph
 
-    def edge_presence_loss(self, presence_logits, edges, gt_edges):
+    def edge_presence_loss(self, presence_logits, edges, gt_edges, num_training_samples):
         # first match edge boxes to gt edge boxes
         bA = edges.boxesA.split(edges.edges_per_img)
         bB = edges.boxesB.split(edges.edges_per_img)
-        pred_matched_inds, pred_unmatched_inds, _ = self.match_boxes(bA, bB,
-                gt_edges.boxesA, gt_edges.boxesB, num=32, iou_threshold=0.5, iou_lower_bound=0.2)
+        lA = edges.labelsA.split(edges.edges_per_img)
+        lB = edges.labelsB.split(edges.edges_per_img)
+        pred_matched_inds, pred_unmatched_inds, _ = self.match_edges(bA, bB,
+                gt_edges.boxesA, gt_edges.boxesB, lA, lB, gt_edges.labelsA, gt_edges.labelsB,
+                num=num_training_samples, iou_threshold=0.5, iou_lower_bound=0.2,
+                pos_fraction=0.5)
 
         # assign labels (1 if matched, 0 if unmatched)
         training_inds = [torch.cat([m.view(-1), u.view(-1)]) for m, u in zip(pred_matched_inds, pred_unmatched_inds)]
@@ -515,32 +550,45 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         edge_presence_gt = torch.cat([torch.cat([torch.ones_like(m).view(-1), torch.zeros_like(u).view(-1)]) \
                 for m, u in zip(pred_matched_inds, pred_unmatched_inds)])
 
-        presence_loss = self.presence_loss(flat_edge_relations, edge_presence_gt).nan_to_num(0) * self.presence_loss_weight
+        presence_loss = self.presence_loss(flat_edge_relations,
+                edge_presence_gt).nan_to_num(0) * self.presence_loss_weight
 
         return {'loss_edge_presence': presence_loss}
 
-    def edge_classifier_loss(self, edges, gt_edges):
+    def edge_classifier_loss(self, edges, gt_edges, num_training_samples):
+        bA = edges.boxesA
+        bB = edges.boxesB
+        lA = edges.labelsA
+        lB = edges.labelsB
+
         # first match edge boxes to gt edge boxes
-        pred_matched_inds, _, gt_matched_inds = self.match_boxes(edges.boxesA,
-                edges.boxesB, gt_edges.boxesA, gt_edges.boxesB, num=16,
-                pos_fraction=0.875, iou_lower_bound=0.2)
+        pred_matched_inds, _, gt_matched_inds = self.match_edges(bA, bB,
+                gt_edges.boxesA, gt_edges.boxesB, lA, lB, gt_edges.labelsA, gt_edges.labelsB,
+                num=num_training_samples, pos_fraction=0.875, iou_threshold=0.5)
 
         # assign labels (1 if matched, 0 if unmatched)
         flat_edge_classes = torch.cat([cl[t.view(-1)] for cl, t in zip(edges.class_logits.split(
             edges.edges_per_img.tolist()), pred_matched_inds)])
-        edge_classifier_gt = torch.cat([r[t.view(-1)] for r, t in zip(gt_edges.edge_relations, gt_matched_inds)])
+        edge_classifier_gt = torch.cat([r[t.view(-1)] - 1 for r, t in zip(
+            gt_edges.edge_relations, gt_matched_inds)]) # subtract 1 because we need 0-indexing
 
         classifier_loss = self.classifier_loss(flat_edge_classes, edge_classifier_gt).nan_to_num(0) * self.classifier_loss_weight
 
         return {'loss_edge_classifier': classifier_loss}
 
-    def match_boxes(self, pred_boxes_A, pred_boxes_B, gt_boxes_A, gt_boxes_B, iou_threshold=0.5, iou_lower_bound=0.5, num=50, pos_fraction=0.5):
-        # pred_boxes_A: List of tensors of length B, where each tensor has shape (N, 4) representing predicted bounding boxes A in (x1, y1, x2, y2) format
-        # pred_boxes_B: List of tensors of length B, where each tensor has shape (N, 4) representing predicted bounding boxes B in (x1, y1, x2, y2) format
-        # gt_boxes_A: List of tensors of length B, where each tensor has shape (M, 4) representing ground truth bounding boxes A in (x1, y1, x2, y2) format
-        # gt_boxes_B: List of tensors of length B, where each tensor has shape (M, 4) representing ground truth bounding boxes B in (x1, y1, x2, y2) format
-        # iou_threshold: IoU threshold for matching
-        # iou_lower_bound: Lower bound on IoU for returning unmatched boxes
+    def match_edges(self, pred_boxes_A, pred_boxes_B, gt_boxes_A, gt_boxes_B,
+            pred_labels_A=None, pred_labels_B=None, gt_labels_A=None, gt_labels_B=None,
+            iou_threshold=0.5, iou_lower_bound=0.5, num=50, pos_fraction=0.5):
+        """
+            Args:
+                pred_boxes_A: List of tensors of length B, where each tensor has shape (N, 4) representing predicted bounding boxes A in (x1, y1, x2, y2) format
+                pred_boxes_B: List of tensors of length B, where each tensor has shape (N, 4) representing predicted bounding boxes B in (x1, y1, x2, y2) format
+                gt_boxes_A: List of tensors of length B, where each tensor has shape (M, 4) representing ground truth bounding boxes A in (x1, y1, x2, y2) format
+                gt_boxes_B: List of tensors of length B, where each tensor has shape (M, 4) representing ground truth bounding boxes B in (x1, y1, x2, y2) format
+                iou_threshold: IoU threshold for matching
+                iou_lower_bound: Lower bound on IoU for returning unmatched boxes
+        """
+
         B = len(pred_boxes_A)
 
         pred_matched_indices = []
@@ -548,33 +596,61 @@ class GraphHead(BaseModule, metaclass=ABCMeta):
         gt_matched_indices = []
 
         for b in range(B):
-            p_A = pred_boxes_A[b]
-            p_B = pred_boxes_B[b]
-            g_A = gt_boxes_A[b]
-            g_B = gt_boxes_B[b]
+            pb_A = pred_boxes_A[b]
+            pb_B = pred_boxes_B[b]
+            gb_A = gt_boxes_A[b]
+            gb_B = gt_boxes_B[b]
 
-            N, _ = p_A.shape
-            M, _ = g_A.shape
+            N, _ = pb_A.shape
+            M, _ = gb_A.shape
 
             # compute overlaps, handle no GT boxes
             if M == 0:
-                overlaps = torch.zeros(N, 1).to(p_A.device)
+                overlaps = torch.zeros(N, 1).to(pb_A.device)
+                matches = torch.zeros(N, 1).to(pb_A.device)
             elif N == 0:
-                pred_matched_indices.append(torch.tensor([], dtype=torch.int64, device=p_A.device))
-                pred_unmatched_indices.append(torch.tensor([], dtype=torch.int64, device=p_A.device))
-                gt_matched_indices.append(torch.tensor([], dtype=torch.int64, device=p_A.device))
+                pred_matched_indices.append(torch.tensor([], dtype=torch.int64, device=pb_A.device))
+                pred_unmatched_indices.append(torch.tensor([], dtype=torch.int64, device=pb_A.device))
+                gt_matched_indices.append(torch.tensor([], dtype=torch.int64, device=pb_A.device))
                 continue
             else:
-                overlaps_AA = bbox_overlaps(p_A, g_A)
-                overlaps_BB = bbox_overlaps(p_B, g_B)
-                overlaps_AB = bbox_overlaps(p_A, g_B)
-                overlaps_BA = bbox_overlaps(p_B, g_A)
+                overlaps_AA = bbox_overlaps(pb_A, gb_A)
+                overlaps_BB = bbox_overlaps(pb_B, gb_B)
+                overlaps_AB = bbox_overlaps(pb_A, gb_B)
+                overlaps_BA = bbox_overlaps(pb_B, gb_A)
                 overlaps = torch.max(torch.min(overlaps_AA, overlaps_BB), torch.min(overlaps_AB, overlaps_BA))
 
-            max_overlaps, argmax_overlaps = overlaps.max(dim=1)
+                if pred_labels_A is not None:
+                    # get labels for current image
+                    pl_A = pred_labels_A[b]
+                    pl_B = pred_labels_B[b]
+                    gl_A = gt_labels_A[b]
+                    gl_B = gt_labels_B[b]
 
-            matched_indices = torch.nonzero(max_overlaps >= iou_threshold, as_tuple=False).squeeze()
-            unmatched_indices = torch.nonzero(max_overlaps < iou_lower_bound, as_tuple=False).squeeze()
+                    # use labels to filter matches
+                    matches_AA = pl_A.unsqueeze(-1) == gl_A
+                    matches_AB = pl_A.unsqueeze(-1) == gl_B
+                    matches_BA = pl_B.unsqueeze(-1) == gl_A
+                    matches_BB = pl_B.unsqueeze(-1) == gl_B
+                    matches = torch.max(torch.min(matches_AA, matches_BB),
+                            torch.min(matches_AB, matches_BA))
+
+            max_overlaps, argmax_overlaps = overlaps.max(1)
+
+            if pred_labels_A is not None:
+                # combine label-based and bbox-based match matrices
+                strict_consensus, argmax_overlaps = (matches * overlaps).max(1)
+                mean_consensus = ((matches + overlaps) / 2).max(1).values
+
+                # match based on strict consensus
+                matched_indices = torch.nonzero(strict_consensus >= iou_threshold, as_tuple=False).squeeze()
+
+                # negative matches based on mean consensus
+                unmatched_indices = torch.nonzero(mean_consensus < iou_lower_bound, as_tuple=False).squeeze()
+
+            else:
+                matched_indices = torch.nonzero(max_overlaps >= iou_threshold, as_tuple=False).squeeze()
+                unmatched_indices = torch.nonzero(max_overlaps < iou_lower_bound, as_tuple=False).squeeze()
 
             # sample
             sampled_matched_inds, sampled_unmatched_inds = self.sample_indices(
