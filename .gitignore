@@ -20,3 +20,6 @@ extracted_feats/
 sam_queries/
 slurms
 mmdetection/
+configs/datasets/transforms/
+corruption_debug/
+smoke_debug/
