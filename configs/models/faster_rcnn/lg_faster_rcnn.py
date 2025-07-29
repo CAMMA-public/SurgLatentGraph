@@ -14,14 +14,15 @@ custom_imports = dict(
 )
 
 # Try to get corruption type from command line arguments
-def get_corruption_arg():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--corruption', type=str, default='none', help='Corruption type to apply')
+# def get_corruption_arg():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--corruption', type=str, default='none', help='Corruption type to apply')
     
-    args, _ = parser.parse_known_args()
-    return args.corruption
+#     args, _ = parser.parse_known_args()
+#     return args.corruption
 
-corruption_type = get_corruption_arg()
+# corruption_type = get_corruption_arg()
+corruption_type = 'none'  # Default to 'none' if not specified
 
 # Set unique output directory based on timestamp
 timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())

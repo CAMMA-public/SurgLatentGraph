@@ -115,7 +115,7 @@ else
     MODEL_DESC="${MODEL}"
 fi
 
-MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}"
+MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}_${TIMESTAMP}"
 mkdir -p "${MAIN_RESULTS_DIR}"
 
 # Create a symbolic link to the latest training results directory
