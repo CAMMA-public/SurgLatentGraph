@@ -2,7 +2,6 @@ import os
 import copy
 
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/coco_instance.py')
-corruption_type = 'none'
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
 
 # Modify dataset related settings
@@ -39,7 +38,6 @@ train_pipeline = [
             scale=(399, 224),
             keep_ratio=True,
         ),
-        dict(type='ApplyCorruption', corruption_type=corruption_type),  # ADD THIS
         dict(
             type='RandomFlip',
             prob=0.5,
@@ -72,7 +70,6 @@ eval_pipeline = [
             scale=(399, 224),
             keep_ratio=True,
         ),
-        dict(type='ApplyCorruption', corruption_type=corruption_type),  # ADD THIS
         dict(type='LoadAnnotationsWithDS',
             with_bbox=True,
             with_mask=True),

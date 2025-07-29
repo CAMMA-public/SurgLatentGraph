@@ -260,12 +260,12 @@ def corrupt(image, corruption_type):
         return uneven_illumination(image)
     elif corruption_type == 'smoke_effect':
         return add_smoke_effect(image, intensity=0.7)
-    elif corruption_type == 'random':
+    elif corruption_type == 'random' or corruption_type == 'random_corruptions':
         return random_corrupt(image)
     elif corruption_type == 'none' or corruption_type is None:
         return image
     else:
-        raise ValueError(f"Invalid corruption type '{corruption_type}'. Choose from: 'gaussian_noise', 'motion_blur', 'defocus_blur', 'uneven_illumination', 'smoke_effect', 'random', 'none'.")
+        raise ValueError(f"Invalid corruption type '{corruption_type}'. Choose from: 'gaussian_noise', 'motion_blur', 'defocus_blur', 'uneven_illumination', 'smoke_effect', 'random_corruptions', 'none'.")
 
 # Keep the original 'corruption' function for backwards compatibility
 def corruption(image, corruption_type):
