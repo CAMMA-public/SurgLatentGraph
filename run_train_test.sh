@@ -58,6 +58,7 @@ MODEL="all"
 EPOCHS=20
 TRAIN_CORRUPTION="none"
 TEST_CORRUPTION="none"
+LOG_SUBFOLDER="" # Default: no subfolder
 CPU_COUNT=$(nproc --all 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
@@ -105,6 +106,15 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
+        --log-subfolder)
+            LOG_SUBFOLDER="$2"
+            # Validate subfolder name (no special characters, spaces, etc.)
+            if [[ ! "$LOG_SUBFOLDER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+                echo "Error: Log subfolder name must contain only letters, numbers, underscores, and hyphens"
+                exit 1
+            fi
+            shift 2
+            ;;
         --help)
             echo "Usage: ./run_train_test.sh [options]"
             echo ""
@@ -114,6 +124,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --epochs, --epoch N            : Number of epochs for training (default: 20)"
             echo "  --train-corruption TYPE        : Apply corruption during training (default: none)"
             echo "  --test-corruption TYPE         : Apply corruption during testing (default: none)"
+            echo "  --log-subfolder NAME           : Specify subfolder name for organizing log files (optional)"
             echo ""
             echo "Corruption types:"
             echo "  none               : No corruption (clean data)"
@@ -128,6 +139,8 @@ while [[ $# -gt 0 ]]; do
             echo "  ./run_train_test.sh --mode train --model faster --train-corruption none"
             echo "  ./run_train_test.sh --mode test --model all --test-corruption gaussian_noise"
             echo "  ./run_train_test.sh --mode both --epoch 10 --train-corruption none --test-corruption motion_blur"
+            echo "  ./run_train_test.sh --mode train --model all --log-subfolder experiment_1"
+            echo "  ./run_train_test.sh --mode both --model ds_faster --log-subfolder corruption_study_v2"
             exit 0
             ;;
         *)
@@ -187,6 +200,47 @@ mkdir -p "${TEST_RESULTS_DIR}/gt"
 # Create weights directory if it doesn't exist
 mkdir -p "weights/endoscapes/"
 
+# # Create log directory
+# LOG_OUTPUT_DIR="log_output"
+# if [[ -n "$LOG_SUBFOLDER" ]]; then
+#     LOG_OUTPUT_DIR="log_output/${LOG_SUBFOLDER}"
+# fi
+# mkdir -p "${LOG_OUTPUT_DIR}"
+# Create log directory
+LOG_OUTPUT_DIR="log_output"
+if [[ -n "$LOG_SUBFOLDER" ]]; then
+    LOG_OUTPUT_DIR="log_output/${LOG_SUBFOLDER}"
+fi
+mkdir -p "${LOG_OUTPUT_DIR}"
+
+# Fix permissions immediately after creating the directory
+if [ "$(whoami)" = "root" ]; then
+    chmod -R 755 "${LOG_OUTPUT_DIR}"
+    chown -R 1000:1000 "${LOG_OUTPUT_DIR}" 2>/dev/null || true
+fi
+
+# Create a unique log filename with timestamp
+LOG_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+MAIN_LOG_FILE="${LOG_OUTPUT_DIR}/run_train_test_${LOG_TIMESTAMP}.log"
+
+# Function to log with timestamp
+log_message() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${MAIN_LOG_FILE}"
+    # Fix permissions immediately after writing
+    if [ "$(whoami)" = "root" ]; then
+        chmod 644 "${MAIN_LOG_FILE}" 2>/dev/null || true
+        chown 1000:1000 "${MAIN_LOG_FILE}" 2>/dev/null || true
+    fi
+}
+# Start logging
+log_message "=== Starting run_train_test.sh execution ==="
+log_message "Command: $0 $*"
+log_message "Working directory: $(pwd)"
+log_message "Parameters: MODE=$MODE, MODEL=$MODEL, EPOCHS=$EPOCHS, TRAIN_CORRUPTION=$TRAIN_CORRUPTION, TEST_CORRUPTION=$TEST_CORRUPTION"
+if [[ -n "$LOG_SUBFOLDER" ]]; then
+    log_message "Log subfolder: $LOG_SUBFOLDER"
+fi
+
 # Function to run training
 run_training() {
     local model_type=$1
@@ -225,13 +279,18 @@ run_training() {
     echo "Using MMDetection from: $MMDETECTION"
     echo "Python path includes: $PYTHONPATH"
     
+    # Create specific log file for this training run
+    local training_log_file="${LOG_OUTPUT_DIR}/training_lg_${model_type}_rcnn_${LOG_TIMESTAMP}.log"
+    log_message "Training output will be logged to: $training_log_file"
+    
     # Use local train.py with debug statements instead of mim train
     PYTHONPATH="${PYTHONPATH}" python mmdetection/tools/train.py ${config_path} \
         --cfg-options train_cfg.max_epochs=$EPOCHS \
         work_dir="${model_dir}" \
         default_hooks.checkpoint.out_dir="${model_dir}/checkpoints" \
         test_evaluator.outfile_prefix="${model_dir}/test_results" \
-        corruption="${TRAIN_CORRUPTION}"
+        corruption="${TRAIN_CORRUPTION}" \
+        2>&1 | tee "${training_log_file}"
     
     local training_success=$?
     
@@ -293,15 +352,18 @@ run_testing() {
         # Create test output directories
         mkdir -p "${metrics_dir}"
         
-        # Create a file to directly capture the test output
+        # Create specific log files for this test run
+        local testing_log_file="${LOG_OUTPUT_DIR}/testing_lg_${model_type}_rcnn_${TEST_CORRUPTION}_${LOG_TIMESTAMP}.log"
         TEST_OUTPUT_FILE="${metrics_dir}/test_terminal_output.txt"
+        
+        log_message "Testing output will be logged to: $testing_log_file"
         
         # Add corruption argument for testing and save the raw output
         mim test mmdet ${config_path} \
             --checkpoint "$best_ckpt" \
             --cfg-options test_evaluator.outfile_prefix="${test_model_dir}" \
             corruption="${TEST_CORRUPTION}" \
-            &> "${TEST_OUTPUT_FILE}" 
+            2>&1 | tee "${testing_log_file}" "${TEST_OUTPUT_FILE}" 
             
         # Also display the output in the terminal
         cat "${TEST_OUTPUT_FILE}"
@@ -573,4 +635,18 @@ echo "Results Summary:"
 echo "  - Checkpoints saved to: ${MAIN_RESULTS_DIR}/*/checkpoints/"
 echo "  - Metrics available in: ${TEST_RESULTS_DIR}/*/eval_results.txt"
 echo "  - Consolidated metrics: results/corruption_comparison.csv"
+echo ""
+echo "Log Files:"
+if [[ -n "$LOG_SUBFOLDER" ]]; then
+    echo "  - Log subfolder: log_output/${LOG_SUBFOLDER}/"
+fi
+echo "  - Main log: ${MAIN_LOG_FILE}"
+echo "  - Training logs: ${LOG_OUTPUT_DIR}/training_*.log"
+echo "  - Testing logs: ${LOG_OUTPUT_DIR}/testing_*.log"
+
+# Final permission fix for all log files
+if [ "$(whoami)" = "root" ]; then
+    chmod -R 644 "${LOG_OUTPUT_DIR}"/*.log 2>/dev/null || true
+    chown -R 1000:1000 "${LOG_OUTPUT_DIR}"/*.log 2>/dev/null || true
+fi
 echo "====================================================================="
