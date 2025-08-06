@@ -1,8 +1,20 @@
 import os
 import copy
+import argparse
 
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/coco_instance.py')
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
+
+# Get corruption type from command line or environment
+def get_corruption_type():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--train-corruption', type=str, default='none', 
+                       choices=['none', 'gaussian_noise', 'motion_blur', 'defocus_blur', 
+                               'uneven_illumination', 'smoke_effect', 'random_corruptions'])
+    args, _ = parser.parse_known_args()
+    return args.train_corruption
+
+corruption_type = get_corruption_type()
 
 # Modify dataset related settings
 
@@ -27,12 +39,27 @@ rand_aug_surg = [
         [dict(type='Sharpness', level=8)],
 ]
 
+#add corruption introduction class function
+
 train_pipeline = [
         dict(type='LoadImageFromFile'),
         dict(type='LoadAnnotationsWithDS',
             with_bbox=True,
             with_mask=True,
         ),
+]
+
+# Add corruption transform if specified
+if corruption_type != 'none':
+    train_pipeline.append(
+        dict(
+            type='CorruptionTransform',
+            corruption_type=corruption_type,
+        )
+    )
+
+# Continue with rest of pipeline
+train_pipeline.extend([
         dict(
             type='Resize',
             scale=(399, 224),
@@ -43,7 +70,7 @@ train_pipeline = [
             prob=0.5,
         ),
         dict(
-            type='RandAugment',
+            type='RandAugment', #it randomly calles one of the augmentations in rand_aug_surg
             aug_space=rand_aug_surg,
         ),
         dict(
@@ -61,7 +88,7 @@ train_pipeline = [
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
                 'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe', 'video_id')
         ),
-]
+])
 
 eval_pipeline = [
         dict(type='LoadImageFromFile'),

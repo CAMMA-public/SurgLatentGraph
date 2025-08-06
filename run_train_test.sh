@@ -13,6 +13,45 @@
 #
 # Corruption options: none, gaussian_noise, motion_blur, defocus_blur, uneven_illumination, smoke_effect, random_corruptions
 
+# Set up environment variables for local MMDetection
+export PYTHONPATH="${PYTHONPATH}:$(pwd):$(pwd)/mmdetection"
+export MMDETECTION="$(pwd)/mmdetection"
+
+# Print environment setup for debugging
+echo "Environment Setup:"
+echo "PYTHONPATH: $PYTHONPATH"
+echo "MMDETECTION: $MMDETECTION"
+echo "Current Directory: $(pwd)"
+echo ""
+
+# Verify MMDetection installation
+echo "Verifying MMDetection setup..."
+if [ -f "mmdetection/tools/train.py" ]; then
+    echo "✓ Found local MMDetection train.py script"
+else
+    echo "✗ ERROR: MMDetection train.py not found at mmdetection/tools/train.py"
+    echo "Please ensure MMDetection is properly installed in your project"
+    exit 1
+fi
+
+# Test Python import
+python -c "
+import sys
+sys.path.insert(0, '$(pwd)')
+sys.path.insert(0, '$(pwd)/mmdetection')
+try:
+    import mmdet
+    print('✓ MMDetection import successful')
+    print(f'  MMDetection version: {mmdet.__version__}')
+    print(f'  MMDetection path: {mmdet.__file__}')
+except ImportError as e:
+    print('✗ ERROR: Failed to import MMDetection')
+    print(f'  Error: {e}')
+    exit(1)
+" || exit 1
+
+echo ""
+
 # Default values
 MODE="both"
 MODEL="all"
@@ -183,9 +222,11 @@ run_training() {
     
     echo "===================== TRAINING: lg_${model_type}_rcnn ====================="
     echo "Starting training with $EPOCHS epochs and corruption: $TRAIN_CORRUPTION"
+    echo "Using MMDetection from: $MMDETECTION"
+    echo "Python path includes: $PYTHONPATH"
     
-    # Add corruption argument for training
-    mim train mmdet ${config_path} \
+    # Use local train.py with debug statements instead of mim train
+    PYTHONPATH="${PYTHONPATH}" python mmdetection/tools/train.py ${config_path} \
         --cfg-options train_cfg.max_epochs=$EPOCHS \
         work_dir="${model_dir}" \
         default_hooks.checkpoint.out_dir="${model_dir}/checkpoints" \

@@ -7,11 +7,13 @@ from scipy.ndimage import gaussian_filter
 import random
 import subprocess
 import sys
+from ipdb import set_trace
 
 # Try to import noise module, but provide a fallback if it's not available
 try:
     import noise
     NOISE_MODULE_AVAILABLE = True
+    print("Noise module available for Perlin noise corruptions.")
 except ImportError:
     NOISE_MODULE_AVAILABLE = False
     print("Warning: 'noise' module not found, Perlin noise corruptions won't be available.")
@@ -35,6 +37,7 @@ def add_gaussian_noise(image, mean=0, std=0.5):
     """
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
+    print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
     noise = torch.randn_like(image, dtype=torch.float32) * std + mean
     noisy_image = image.float() + noise
 
