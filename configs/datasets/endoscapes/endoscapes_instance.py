@@ -39,7 +39,14 @@ rand_aug_surg = [
         [dict(type='Sharpness', level=8)],
 ]
 
-#add corruption introduction class function
+corrupt_aug_surg = [
+        [dict(type='Gaussian_noise', level=8, min_mag=0.1, max_mag=1.0)],
+        [dict(type='motion_blur', level=8, min_mag=3.0, max_mag=15.0)],
+        [dict(type='defocus_blur', level=8, min_mag=3.0, max_mag=15.0)],
+]
+
+# Add our custom corruption transforms to the RandAugment space
+all_aug_surg = rand_aug_surg + corrupt_aug_surg
 
 train_pipeline = [
         dict(type='LoadImageFromFile'),
@@ -49,14 +56,14 @@ train_pipeline = [
         ),
 ]
 
-# Add corruption transform if specified
-if corruption_type != 'none':
-    train_pipeline.append(
-        dict(
-            type='CorruptionTransform',
-            corruption_type=corruption_type,
-        )
-    )
+# # Add corruption transform if specified
+# if corruption_type is not None:
+#     train_pipeline.append(
+#         dict(
+#             type='CorruptionTransform',
+#             corruption_type=corrupt_aug_surg,
+#         )
+#     )
 
 # Continue with rest of pipeline
 train_pipeline.extend([
@@ -71,7 +78,7 @@ train_pipeline.extend([
         ),
         dict(
             type='RandAugment', #it randomly calles one of the augmentations in rand_aug_surg
-            aug_space=rand_aug_surg,
+            aug_space=all_aug_surg, #rand_aug_surg
         ),
         dict(
             type='Color',
