@@ -37,6 +37,7 @@ rand_aug_surg = [
         [dict(type='Color', level=8)],
         [dict(type='Brightness', level=8)],
         [dict(type='Sharpness', level=8)],
+        []
 ]
 
 #add corruption introduction class function
