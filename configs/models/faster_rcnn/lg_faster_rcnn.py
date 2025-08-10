@@ -25,12 +25,12 @@ custom_imports = dict(
 corruption_type = 'none'  # Default to 'none' if not specified
 
 # Set unique output directory based on timestamp
-timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
-output_dir = f'results/endoscapes_lg_faster_rcnn_{timestamp}'
-ckpt_dir = f'{output_dir}/checkpoints'
+# timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
+# output_dir = f'results/endoscapes_lg_faster_rcnn_{timestamp}'
+# ckpt_dir = f'{output_dir}/checkpoints'
 
-# Create the checkpoint directory if it doesn't exist
-os.makedirs(ckpt_dir, exist_ok=True)
+# # Create the checkpoint directory if it doesn't exist
+# os.makedirs(ckpt_dir, exist_ok=True)
 
 # extract detector, data preprocessor config from base
 detector = copy.deepcopy(_base_.model)
