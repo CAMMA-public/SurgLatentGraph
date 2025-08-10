@@ -1,3 +1,4 @@
+_gaussian_noise_save_counter = 0
 import cv2
 import numpy as np
 import torch
@@ -9,6 +10,10 @@ import subprocess
 import sys
 from ipdb import set_trace
 import torch
+import matplotlib
+import uuid
+
+
 
 # Try to import noise module, but provide a fallback if it's not available
 try:
@@ -34,16 +39,66 @@ except ImportError:
 # Define the device (GPU if available, otherwise CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def add_gaussian_noise(image, mean=0, std=0.5):
+def add_gaussian_noise(image, mean=5, std=0.5):
     """
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
     print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    import uuid
+    global _gaussian_noise_save_counter
+    if _gaussian_noise_save_counter < 1:
+        img_np = image.detach().cpu().numpy()
+        if img_np.ndim == 3 and img_np.shape[0] in [1,3]:
+            img_np = img_np.transpose(1,2,0)
+
+    # Increase std to make noise visible
+    visible_std = 25.0 if image.dtype == torch.uint8 else 0.2
+    noise = torch.randn_like(image, dtype=torch.float32) * visible_std + 0
+    noisy_image = image.float() + noise
+
+    if image.dtype == torch.uint8:
+        noisy_image = torch.clamp(noisy_image, 0, 255).to(torch.uint8)
+
+    if _gaussian_noise_save_counter < 1:
+        noisy_np = noisy_image.detach().cpu().numpy()
+        if noisy_np.ndim == 3 and noisy_np.shape[0] in [1,3]:
+            noisy_np = noisy_np.transpose(1,2,0)
+        import uuid
+        os.makedirs('debug_images', exist_ok=True)
+        unique_id = str(uuid.uuid4())
+        plt.figure(figsize=(10,5))
+        plt.subplot(1,2,1)
+        plt.title('Input Image')
+        plt.imshow(img_np.astype('uint8') if img_np.dtype != 'uint8' else img_np)
+        plt.axis('off')
+        plt.subplot(1,2,2)
+        plt.title('Noisy Image')
+        plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'debug_images/input_and_noisy_m{mean}_std{visible_std}_{unique_id}.png')
+        plt.close()
+        _gaussian_noise_save_counter += 1
+
     noise = torch.randn_like(image, dtype=torch.float32) * std + mean
     noisy_image = image.float() + noise
 
     if image.dtype == torch.uint8:
         noisy_image = torch.clamp(noisy_image, 0, 255).to(torch.uint8)
+
+    if _gaussian_noise_save_counter < 1:
+        # Display and save output image
+        noisy_np = noisy_image.detach().cpu().numpy()
+        if noisy_np.ndim == 3 and noisy_np.shape[0] in [1,3]:
+            noisy_np = noisy_np.transpose(1,2,0)
+        plt.figure()
+        plt.title('Noisy Image')
+        plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
+        plt.axis('off')
+        plt.savefig(f'debug_images/noisy_m{mean}_std{visible_std}_{unique_id}.png')
+        plt.close()
+        _gaussian_noise_save_counter += 1
 
     return noisy_image
 
