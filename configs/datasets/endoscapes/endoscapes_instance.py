@@ -8,9 +8,7 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Get corruption type from environment variable (set by shell or main script)
 # corruption_type = os.environ.get('train_corruption', 'none')
-# corruption_type = os.environ.get('TRAIN_CORRUPTION', 'none')
-
-corruption_type = "gaussian_noise"
+corruption_type = os.environ.get('TRAIN_CORRUPTION', 'none')
 print(f"Using corruption type: {corruption_type}")
 
 # Modify dataset related settings

@@ -241,6 +241,7 @@ if [[ -n "$LOG_SUBFOLDER" ]]; then
     log_message "Log subfolder: $LOG_SUBFOLDER"
 fi
 
+export TRAIN_CORRUPTION="$TRAIN_CORRUPTION"
 # Function to run training
 run_training() {
     local model_type=$1
