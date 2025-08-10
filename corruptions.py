@@ -54,6 +54,7 @@ def add_gaussian_noise(image, mean=5, std=0.5):
 
     # Increase std to make noise visible
     visible_std = 25.0 if image.dtype == torch.uint8 else 0.2
+    # to change the intensity of noise change the std
     noise = torch.randn_like(image, dtype=torch.float32) * visible_std + 0
     noisy_image = image.float() + noise
 
@@ -103,17 +104,24 @@ def add_gaussian_noise(image, mean=5, std=0.5):
     return noisy_image
 
 def apply_motion_blur(image, kernel_size=15):
-    # Check if the input is batched (5D: B, T, C, H, W)
-    is_batched = len(image.shape) == 5
-    if is_batched:
-        batch_size, timesteps, channels, height, width = image.shape
-        image = image.view(-1, channels, height, width)  # Reshape to (B*T, C, H, W)
+    # Handle 5D (B, T, C, H, W), 4D (B, C, H, W), and 3D (C, H, W) tensors
+    orig_shape = image.shape
+    is_5d = len(orig_shape) == 5
+    is_4d = len(orig_shape) == 4
+    is_3d = len(orig_shape) == 3
+
+    if is_5d:
+        batch_size, timesteps, channels, height, width = orig_shape
+        image = image.view(-1, channels, height, width)  # (B*T, C, H, W)
+    elif is_3d:
+        # Add batch dimension
+        image = image.unsqueeze(0)  # (1, C, H, W)
 
     # Save original for visualization
     original_tensor = image.clone()
 
-    # Convert to (H, W, C) format for OpenCV processing
-    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (B*T, H, W, C)
+    # Now image is (N, C, H, W)
+    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (N, H, W, C)
 
     # Create a motion blur kernel
     kernel = np.zeros((kernel_size, kernel_size), dtype=np.float32)
@@ -123,11 +131,17 @@ def apply_motion_blur(image, kernel_size=15):
     blurred_np = np.array([cv2.filter2D(img, -1, kernel) for img in image_np])
 
     # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # (B*T, C, H, W)
+    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # (N, C, H, W)
 
     # Reshape back if input was 5D
-    if is_batched:
+    if is_5d:
         blurred_tensor = blurred_tensor.view(batch_size, timesteps, channels, height, width)
+    elif is_3d:
+        blurred_tensor = blurred_tensor.squeeze(0)  # Remove batch dimension
+
+    # If input was uint8, convert output to uint8
+    if image.dtype == torch.uint8:
+        blurred_tensor = torch.clamp(blurred_tensor, 0, 255).to(torch.uint8)
 
     return blurred_tensor
 

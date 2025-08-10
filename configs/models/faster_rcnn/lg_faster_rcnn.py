@@ -24,13 +24,19 @@ custom_imports = dict(
 # corruption_type = get_corruption_arg()
 corruption_type = 'none'  # Default to 'none' if not specified
 
-# Set unique output directory based on timestamp
-# timestamp = time.strftime('%Y%m%d-%H%M%S', time.localtime())
-# output_dir = f'results/endoscapes_lg_faster_rcnn_{timestamp}'
-# ckpt_dir = f'{output_dir}/checkpoints'
 
-# # Create the checkpoint directory if it doesn't exist
-# os.makedirs(ckpt_dir, exist_ok=True)
+# Set output directory to match shell script naming: results/{epochs}_epoch_cpu{cpu_count}_{model}_{train_desc}_{timestamp}
+# These variables should be passed in via environment or config options from the shell script
+epochs = int(os.environ.get('EPOCHS', 1))
+cpu_count = os.environ.get('CPU_COUNT', '1')
+model_desc = os.environ.get('MODEL_DESC', 'lg_faster_rcnn')
+train_desc = os.environ.get('TRAIN_DESC', 'clean')
+timestamp = os.environ.get('TIMESTAMP', time.strftime('%Y%m%d-%H%M%S', time.localtime()))
+output_dir = f'results/{epochs}_epoch_cpu{cpu_count}_{model_desc}_{train_desc}_{timestamp}'
+ckpt_dir = f'{output_dir}/checkpoints'
+
+# Create the checkpoint directory if it doesn't exist
+os.makedirs(ckpt_dir, exist_ok=True)
 
 # extract detector, data preprocessor config from base
 detector = copy.deepcopy(_base_.model)
