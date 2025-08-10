@@ -8,6 +8,7 @@ import random
 import subprocess
 import sys
 from ipdb import set_trace
+import torch
 
 # Try to import noise module, but provide a fallback if it's not available
 try:
@@ -253,22 +254,32 @@ def corrupt(image, corruption_type):
     Returns:
         Corrupted image with the same shape as input
     """
+    # Ensure input is a torch.Tensor; convert if needed
+    img_was_numpy = False
+    if isinstance(image, np.ndarray):
+        img_was_numpy = True
+        image = torch.from_numpy(image)
+    # Dispatch to the correct corruption function
     if corruption_type == 'gaussian_noise':
-        return add_gaussian_noise(image)
+        out = add_gaussian_noise(image)
     elif corruption_type == 'motion_blur':
-        return apply_motion_blur(image)
+        out = apply_motion_blur(image)
     elif corruption_type == 'defocus_blur':
-        return apply_defocus_blur(image)
+        out = apply_defocus_blur(image)
     elif corruption_type == 'uneven_illumination':
-        return uneven_illumination(image)
+        out = uneven_illumination(image)
     elif corruption_type == 'smoke_effect':
-        return add_smoke_effect(image, intensity=0.7)
+        out = add_smoke_effect(image, intensity=0.7)
     elif corruption_type == 'random' or corruption_type == 'random_corruptions':
-        return random_corrupt(image)
+        out = random_corrupt(image)
     elif corruption_type == 'none' or corruption_type is None:
-        return image
+        out = image
     else:
         raise ValueError(f"Invalid corruption type '{corruption_type}'. Choose from: 'gaussian_noise', 'motion_blur', 'defocus_blur', 'uneven_illumination', 'smoke_effect', 'random_corruptions', 'none'.")
+    # Convert back to numpy if original input was numpy
+    if img_was_numpy:
+        out = out.detach().cpu().numpy()
+    return out
 
 # Keep the original 'corruption' function for backwards compatibility
 def corruption(image, corruption_type):

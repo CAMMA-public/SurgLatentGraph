@@ -5,16 +5,13 @@ import argparse
 _base_ = os.path.expandvars('$MMDETECTION/configs/_base_/datasets/coco_instance.py')
 custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=False)
 
-# Get corruption type from command line or environment
-def get_corruption_type():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--train-corruption', type=str, default='none', 
-                       choices=['none', 'gaussian_noise', 'motion_blur', 'defocus_blur', 
-                               'uneven_illumination', 'smoke_effect', 'random_corruptions'])
-    args, _ = parser.parse_known_args()
-    return args.train_corruption
 
-corruption_type = get_corruption_type()
+# Get corruption type from environment variable (set by shell or main script)
+# corruption_type = os.environ.get('train_corruption', 'none')
+# corruption_type = os.environ.get('TRAIN_CORRUPTION', 'none')
+
+corruption_type = "gaussian_noise"
+print(f"Using corruption type: {corruption_type}")
 
 # Modify dataset related settings
 
@@ -39,14 +36,14 @@ rand_aug_surg = [
         [dict(type='Sharpness', level=8)],
 ]
 
-corrupt_aug_surg = [
-        [dict(type='Gaussian_noise', level=8, min_mag=0.1, max_mag=1.0)],
-        [dict(type='motion_blur', level=8, min_mag=3.0, max_mag=15.0)],
-        [dict(type='defocus_blur', level=8, min_mag=3.0, max_mag=15.0)],
-]
+# corrupt_aug_surg = [
+#         [dict(type='Gaussian_noise', level=8, min_mag=0.1, max_mag=1.0)],
+#         [dict(type='motion_blur', level=8, min_mag=3.0, max_mag=15.0)],
+#         [dict(type='defocus_blur', level=8, min_mag=3.0, max_mag=15.0)],
+# ]
 
 # Add our custom corruption transforms to the RandAugment space
-all_aug_surg = rand_aug_surg + corrupt_aug_surg
+all_aug_surg = rand_aug_surg #+ corrupt_aug_surg
 
 train_pipeline = [
         dict(type='LoadImageFromFile'),
@@ -54,19 +51,10 @@ train_pipeline = [
             with_bbox=True,
             with_mask=True,
         ),
-]
-
-# # Add corruption transform if specified
-# if corruption_type is not None:
-#     train_pipeline.append(
-#         dict(
-#             type='CorruptionTransform',
-#             corruption_type=corrupt_aug_surg,
-#         )
-#     )
-
-# Continue with rest of pipeline
-train_pipeline.extend([
+        dict(
+            type='ImgCorruption',
+            corruption_type=corruption_type,
+        ),
         dict(
             type='Resize',
             scale=(399, 224),
@@ -95,7 +83,7 @@ train_pipeline.extend([
             meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
                 'flip', 'flip_direction', 'homography_matrix', 'ds', 'is_det_keyframe', 'video_id')
         ),
-])
+]
 
 eval_pipeline = [
         dict(type='LoadImageFromFile'),

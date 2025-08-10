@@ -158,20 +158,21 @@ else
     TRAIN_DESC="${TRAIN_CORRUPTION}"
 fi
 
+
 # Create main results directory based on training settings
 # Format: results/{epochs}_epoch_cpu{cpu_count}_{model}_{train_desc}
 # This resembles the Cholec80 folder format like "11_epoch_w28"
-if [[ "$MODEL" == "all" ]]; then
-    MODEL_DESC="all_models"
-else
-    MODEL_DESC="${MODEL}"
-fi
-
-MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}_${TIMESTAMP}"
-mkdir -p "${MAIN_RESULTS_DIR}"
-
+# if [[ "$MODEL" == "all" ]]; then
+#     MODEL_DESC="all_models"
+# else
+#     MODEL_DESC="${MODEL}"
+# fi
+#
+# MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}_${TIMESTAMP}"
+# mkdir -p "${MAIN_RESULTS_DIR}"
+#
 # Create a symbolic link to the latest training results directory
-ln -sf "${MAIN_RESULTS_DIR}" "results/latest_training"
+# ln -sf "${MAIN_RESULTS_DIR}" "results/latest_training"
 
 # Test results will be in subdirectories named after the test corruption
 if [[ "$TEST_CORRUPTION" == "none" ]]; then

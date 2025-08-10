@@ -16,7 +16,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train SurgLatentGraph with corruption robustness')
     parser.add_argument('config', help='Path to the training config file')
     parser.add_argument('--work-dir', help='Directory to save logs and models')
-    parser.add_argument('--corruption', type=str, default=None, 
+    parser.add_argument('--train_corruption', type=str, default=None, 
                       choices=['gaussian_noise', 'motion_blur', 'defocus_blur', 
                                'uneven_illumination', 'smoke_effect', 'random_corruptions', 'none'],
                       help='Type of corruption to apply during training')
@@ -75,7 +75,8 @@ def main():
     
     # Load the configuration
     cfg = Config.fromfile(args.config)
-    
+    cfg.train_corruption = args.train_corruption
+
     # Set work directory
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
