@@ -247,68 +247,92 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
 
     return blurred_tensor
 
-def uneven_illumination(image, strength=0.5):
-    # Check if input is 5D (batch + time)
-    print("Uneven_illumination is added. ")
+def uneven_illumination(image, strength=0.8):
+    import matplotlib
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    import matplotlib.pyplot as plt
+    import uuid
+    global _uneven_illumination_save_counter
+    if '_uneven_illumination_save_counter' not in globals():
+        _uneven_illumination_save_counter = 0
+    print("Uneven_illumination is added.")
     is_batched = (image.dim() == 5)
     added_batch = False
+    orig_dtype = image.dtype
+    # Always work in float32 [0,1] for processing
+    if orig_dtype == torch.uint8:
+        image = image.float() / 255.0
     if is_batched:
         b, t, c, h, w = image.shape
-        # Flatten (B, T) into one dimension => (B*T, C, H, W)
         image = image.view(-1, c, h, w)
     elif image.dim() == 3:
-        # Single image: (C, H, W) -> (1, C, H, W)
         image = image.unsqueeze(0)
         added_batch = True
         c, h, w = image.shape[1:]
         b, t = 1, 1
     else:
-        # Already (N, C, H, W)
         c, h, w = image.shape[1:]
         b, t = image.shape[0], 1
 
     original_tensor = image.clone()
-
-    # Convert to (N, H, W, C) for OpenCV-like operations
     image_np = image.permute(0, 2, 3, 1).cpu().numpy().astype(np.float32)
-    N = image_np.shape[0]  # number of images/frames
-
-    # Apply uneven illumination to each frame
+    N = image_np.shape[0]
     result_list = []
+    min_grad = max(1 - strength, 0.7)
     for i in range(N):
-        # Get one frame: shape (H, W, C)
         frame = image_np[i]
         h_i, w_i, c_i = frame.shape
-
-        # Create horizontal gradient from (1 - strength) to 1
-        gradient = np.linspace(1 - strength, 1, w_i, dtype=np.float32)
-        # Tile vertically to match frame height, shape => (H, W, 1)
+        gradient = np.linspace(min_grad, 1, w_i, dtype=np.float32)
         gradient = np.tile(gradient, (h_i, 1)).reshape(h_i, w_i, 1)
-
-        # Multiply frame by gradient, then clip to [0, 1]
         illuminated = frame * gradient
         illuminated = np.clip(illuminated, 0, 1)
         result_list.append(illuminated)
-
-    # Stack all processed frames back into shape (N, H, W, C)
     result_np = np.stack(result_list, axis=0)
-
-    # Convert to torch => shape (N, C, H, W)
     result_tensor = torch.from_numpy(result_np).permute(0, 3, 1, 2).to(image.device)
-
-    # If input was uint8, convert output to uint8
-    if original_tensor.dtype == torch.uint8:
-        result_tensor = torch.clamp(result_tensor, 0, 255).to(torch.uint8)
+    # Convert back to original dtype if needed
+    if orig_dtype == torch.uint8:
+        result_tensor = torch.clamp(result_tensor * 255.0, 0, 255).to(torch.uint8)
     else:
-        result_tensor = result_tensor.float()
         result_tensor = torch.clamp(result_tensor, 0, 1)
-
-    # Unflatten if originally batched
     if is_batched:
         result_tensor = result_tensor.view(b, t, c, h, w)
     elif added_batch:
         result_tensor = result_tensor.squeeze(0)
-
+    # --- Plot and save debug image (only once per session) ---
+    if _uneven_illumination_save_counter < 1:
+        def to_disp_np(t):
+            arr = t.detach().cpu().numpy()
+            if arr.ndim == 3 and arr.shape[0] in (1, 3):
+                arr = arr.transpose(1, 2, 0)
+            if arr.ndim == 2:
+                arr = np.expand_dims(arr, axis=-1)
+            if arr.ndim == 3 and arr.shape[2] == 1:
+                arr = arr.squeeze(-1)
+            # Always scale to [0,255] for display
+            if arr.dtype != np.uint8:
+                arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+            return arr
+        inp_np = to_disp_np(original_tensor[0])
+        if result_tensor.ndim == 4:
+            out_np = to_disp_np(result_tensor[0])
+        else:
+            out_np = to_disp_np(result_tensor)
+        os.makedirs('debug_images', exist_ok=True)
+        unique_id = str(uuid.uuid4())
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.title('Input Image')
+        plt.imshow(inp_np)
+        plt.axis('off')
+        plt.subplot(1, 2, 2)
+        plt.title('Uneven Illuminated Image')
+        plt.imshow(out_np)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'debug_images/input_and_uneven_illumination_6_{unique_id}.png')
+        plt.close()
+        _uneven_illumination_save_counter += 1
+    # --------------------------------------------------------
     return result_tensor
 
 # Function to generate Perlin noise for corruption
