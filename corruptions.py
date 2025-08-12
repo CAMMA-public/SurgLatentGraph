@@ -322,11 +322,11 @@ def uneven_illumination(image, strength=0.8):
         plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
         plt.title('Input Image')
-        plt.imshow(inp_np)
+        plt.imshow(inp_np)  # No channel swap, display as imported
         plt.axis('off')
         plt.subplot(1, 2, 2)
         plt.title('Uneven Illuminated Image')
-        plt.imshow(out_np)
+        plt.imshow(out_np)  # No channel swap, display as imported
         plt.axis('off')
         plt.tight_layout()
         plt.savefig(f'debug_images/input_and_uneven_illumination_6_{unique_id}.png')
