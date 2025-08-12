@@ -145,7 +145,7 @@ def apply_motion_blur(image, kernel_size=45):
 
     return blurred_tensor
 
-def apply_defocus_blur(image, kernel_size=15):
+def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd numbers to change the intensity of the effect.
     print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
     is_batched = len(image.shape) == 5
     is_3d = len(image.shape) == 3
@@ -157,27 +157,46 @@ def apply_defocus_blur(image, kernel_size=15):
 
     original_tensor = image.clone()
 
-    # Convert to (N, H, W, C) format for OpenCV
-    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # Shape: (N, H, W, C)
 
-    # Apply Gaussian blur to each frame
-    blurred_np = np.array([cv2.GaussianBlur(img, (kernel_size, kernel_size), 0) for img in image_np])
 
-    # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # Shape: (N, C, H, W)
+    # Convert to (N, H, W, C) format for OpenCV, ensure uint8
+    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (N, H, W, C)
+    if image_np.dtype != np.uint8:
+        mx = np.max(image_np) if image_np.size else 1.0
+        if mx <= 1.0:
+            image_np = image_np * 255.0
+        image_np = np.clip(image_np, 0, 255).astype(np.uint8)
+
+    # If input is single channel, convert to 3 channel, else keep as is
+    if image_np.shape[-1] == 1:
+        image_np_color = np.repeat(image_np, 3, axis=-1)
+    else:
+        image_np_color = image_np
+
+    # Convert RGB to BGR for OpenCV (ensure positive strides)
+    image_np_bgr = image_np_color[..., ::-1].copy()
+
+    # Apply Gaussian blur to each frame (preserve color)
+    blurred_np_bgr = []
+    for img in image_np_bgr:
+        blurred = cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
+        # If result is 2D (grayscale), convert to 3 channel
+        if blurred.ndim == 2:
+            blurred = np.stack([blurred]*3, axis=-1)
+        blurred_np_bgr.append(blurred)
+    blurred_np_bgr = np.stack(blurred_np_bgr, axis=0)
+
+    # Convert BGR back to RGB (ensure positive strides)
+    blurred_np = blurred_np_bgr[..., ::-1].copy()
+
+    # Convert back to PyTorch tensor, keep as uint8
+    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device)
 
     # Reshape back if input was 5D or 3D
     if is_batched:
         blurred_tensor = blurred_tensor.view(batch_size, timesteps, channels, height, width)
     elif is_3d:
         blurred_tensor = blurred_tensor.squeeze(0)  # Remove batch dimension
-
-    # Ensure output is uint8 if input was uint8, or scale float to uint8
-    if image.dtype == torch.uint8:
-        blurred_tensor = torch.clamp(blurred_tensor, 0, 255).to(torch.uint8)
-    elif blurred_tensor.max() <= 1.0:
-        blurred_tensor = (blurred_tensor * 255.0).clamp(0, 255).to(torch.uint8)
-
 
     # --- Plot and save debug image (only once per session) ---
     import matplotlib
@@ -190,13 +209,10 @@ def apply_defocus_blur(image, kernel_size=15):
     if _defocus_blur_save_counter < 1:
         def to_disp_np(t):
             arr = t.detach().cpu().numpy()
-            # If shape is (C, H, W), transpose to (H, W, C)
             if arr.ndim == 3 and arr.shape[0] in (1, 3):
                 arr = arr.transpose(1, 2, 0)
-            # If shape is (H, W), expand to (H, W, 1)
             if arr.ndim == 2:
                 arr = np.expand_dims(arr, axis=-1)
-            # If shape is (H, W, 1), squeeze to (H, W)
             if arr.ndim == 3 and arr.shape[2] == 1:
                 arr = arr.squeeze(-1)
             if arr.dtype != np.uint8:
@@ -207,7 +223,6 @@ def apply_defocus_blur(image, kernel_size=15):
             return arr
 
         inp_np = to_disp_np(original_tensor[0])
-        # Fix: handle case where blurred_tensor is already 3D or 2D
         if blurred_tensor.ndim == 4:
             blur_np = to_disp_np(blurred_tensor[0])
         else:
@@ -225,7 +240,7 @@ def apply_defocus_blur(image, kernel_size=15):
         plt.imshow(blur_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_defocus_blur6_ks{kernel_size}_{unique_id}.png')
+        plt.savefig(f'debug_images/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
         plt.close()
         _defocus_blur_save_counter += 1
     # --------------------------------------------------------
