@@ -78,7 +78,7 @@ def add_gaussian_noise(image, mean=5, std=0.5):
         plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_noisy_m{mean}_std{visible_std}_{unique_id}.png')
+        plt.savefig(f'debug_images/input_and_noisy_test_m{mean}_std{visible_std}_{unique_id}.png')
         plt.close()
         _gaussian_noise_save_counter += 1
 
@@ -177,6 +177,58 @@ def apply_defocus_blur(image, kernel_size=15):
         blurred_tensor = torch.clamp(blurred_tensor, 0, 255).to(torch.uint8)
     elif blurred_tensor.max() <= 1.0:
         blurred_tensor = (blurred_tensor * 255.0).clamp(0, 255).to(torch.uint8)
+
+
+    # --- Plot and save debug image (only once per session) ---
+    import matplotlib
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    import matplotlib.pyplot as plt
+    import uuid
+    global _defocus_blur_save_counter
+    if '_defocus_blur_save_counter' not in globals():
+        _defocus_blur_save_counter = 0
+    if _defocus_blur_save_counter < 1:
+        def to_disp_np(t):
+            arr = t.detach().cpu().numpy()
+            # If shape is (C, H, W), transpose to (H, W, C)
+            if arr.ndim == 3 and arr.shape[0] in (1, 3):
+                arr = arr.transpose(1, 2, 0)
+            # If shape is (H, W), expand to (H, W, 1)
+            if arr.ndim == 2:
+                arr = np.expand_dims(arr, axis=-1)
+            # If shape is (H, W, 1), squeeze to (H, W)
+            if arr.ndim == 3 and arr.shape[2] == 1:
+                arr = arr.squeeze(-1)
+            if arr.dtype != np.uint8:
+                mx = np.max(arr) if arr.size else 1.0
+                if mx <= 1.0:
+                    arr = arr * 255.0
+                arr = np.clip(arr, 0, 255).astype(np.uint8)
+            return arr
+
+        inp_np = to_disp_np(original_tensor[0])
+        # Fix: handle case where blurred_tensor is already 3D or 2D
+        if blurred_tensor.ndim == 4:
+            blur_np = to_disp_np(blurred_tensor[0])
+        else:
+            blur_np = to_disp_np(blurred_tensor)
+
+        os.makedirs('debug_images', exist_ok=True)
+        unique_id = str(uuid.uuid4())
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.title('Input Image')
+        plt.imshow(inp_np)
+        plt.axis('off')
+        plt.subplot(1, 2, 2)
+        plt.title('Defocus Blurred Image')
+        plt.imshow(blur_np)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'debug_images/input_and_defocus_blur6_ks{kernel_size}_{unique_id}.png')
+        plt.close()
+        _defocus_blur_save_counter += 1
+    # --------------------------------------------------------
 
     return blurred_tensor
 
