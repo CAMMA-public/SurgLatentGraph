@@ -249,20 +249,27 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
 
 def uneven_illumination(image, strength=0.5):
     # Check if input is 5D (batch + time)
+    print("Uneven_illumination is added. ")
     is_batched = (image.dim() == 5)
+    added_batch = False
     if is_batched:
         b, t, c, h, w = image.shape
         # Flatten (B, T) into one dimension => (B*T, C, H, W)
         image = image.view(-1, c, h, w)
+    elif image.dim() == 3:
+        # Single image: (C, H, W) -> (1, C, H, W)
+        image = image.unsqueeze(0)
+        added_batch = True
+        c, h, w = image.shape[1:]
+        b, t = 1, 1
     else:
-        # Single image: (C, H, W)
-        c, h, w = image.shape
-        b, t = 1, 1  # For convenient unflattening logic at the end
+        # Already (N, C, H, W)
+        c, h, w = image.shape[1:]
+        b, t = image.shape[0], 1
 
     original_tensor = image.clone()
 
     # Convert to (N, H, W, C) for OpenCV-like operations
-    # N = B*T for batched input, or 1 for single input
     image_np = image.permute(0, 2, 3, 1).cpu().numpy().astype(np.float32)
     N = image_np.shape[0]  # number of images/frames
 
@@ -281,18 +288,26 @@ def uneven_illumination(image, strength=0.5):
         # Multiply frame by gradient, then clip to [0, 1]
         illuminated = frame * gradient
         illuminated = np.clip(illuminated, 0, 1)
-        
         result_list.append(illuminated)
 
     # Stack all processed frames back into shape (N, H, W, C)
     result_np = np.stack(result_list, axis=0)
 
     # Convert to torch => shape (N, C, H, W)
-    result_tensor = torch.from_numpy(result_np).permute(0, 3, 1, 2).to(image.device).float()
+    result_tensor = torch.from_numpy(result_np).permute(0, 3, 1, 2).to(image.device)
+
+    # If input was uint8, convert output to uint8
+    if original_tensor.dtype == torch.uint8:
+        result_tensor = torch.clamp(result_tensor, 0, 255).to(torch.uint8)
+    else:
+        result_tensor = result_tensor.float()
+        result_tensor = torch.clamp(result_tensor, 0, 1)
 
     # Unflatten if originally batched
     if is_batched:
         result_tensor = result_tensor.view(b, t, c, h, w)
+    elif added_batch:
+        result_tensor = result_tensor.squeeze(0)
 
     return result_tensor
 
