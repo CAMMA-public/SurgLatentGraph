@@ -8,8 +8,11 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 
 # Get corruption type from environment variable (set by shell or main script)
 # corruption_type = os.environ.get('train_corruption', 'none')
-corruption_type = os.environ.get('TRAIN_CORRUPTION', 'none')
-print(f"Using corruption type: {corruption_type}")
+train_corruption = os.environ.get('TRAIN_CORRUPTION', 'none')
+print(f"Using corruption type: {train_corruption}")
+
+test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
+print(f"Using test corruption type: {test_corruption}")
 
 # Modify dataset related settings
 
@@ -51,7 +54,7 @@ train_pipeline = [
         ),
         dict(
             type='ImgCorruption',
-            corruption_type=corruption_type,
+            corruption_type=train_corruption,
         ),
         dict(
             type='Resize',
@@ -85,6 +88,10 @@ train_pipeline = [
 
 eval_pipeline = [
         dict(type='LoadImageFromFile'),
+        dict(
+            type='ImgCorruption',
+            corruption_type=test_corruption,
+        ),
         dict(
             type='Resize',
             scale=(399, 224),

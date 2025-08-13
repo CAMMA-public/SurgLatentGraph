@@ -242,6 +242,7 @@ if [[ -n "$LOG_SUBFOLDER" ]]; then
 fi
 
 export TRAIN_CORRUPTION="$TRAIN_CORRUPTION"
+export TEST_CORRUPTION="$TEST_CORRUPTION"
 # Function to run training
 run_training() {
     local model_type=$1

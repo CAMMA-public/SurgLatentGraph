@@ -36,6 +36,9 @@ except ImportError:
         print(f"Failed to install noise module: {e}")
         print("Continuing with limited functionality.")
 
+test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
+print(f"Using test corruption type: {test_corruption}")
+
 # Define the device (GPU if available, otherwise CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -44,6 +47,8 @@ def add_gaussian_noise(image, mean=5, std=0.5):
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
     print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
+    print(f'Using g_n {test_corruption}')
+
     matplotlib.rcParams['font.family'] = 'DejaVu Sans'
     import uuid
     global _gaussian_noise_save_counter
