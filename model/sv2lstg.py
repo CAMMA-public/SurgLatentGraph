@@ -655,7 +655,7 @@ class SV2LSTG(BaseDetector):
             results = [DetDataSample(pred_instances=p, metainfo=m) for p, m in zip(pred_instances, metainfo)]
 
         else:
-            feats, graphs, detached_results, results, _, _ = self.lg_detector.extract_lg(
+            feats, graphs, results, _, _ = self.lg_detector.extract_lg(
                     batch_inputs.flatten(end_dim=1),
                     [x for y in batch_data_samples for x in y],
                     losses=losses)
