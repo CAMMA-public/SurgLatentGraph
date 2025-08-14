@@ -21,7 +21,7 @@ from .predictor_heads.modules.utils import apply_sparse_mask, get_sparse_mask_in
 class SV2LSTG(BaseDetector):
     def __init__(self, lg_detector: BaseDetector, ds_head: ConfigType, clip_size: int,
             viz_feat_size: int, semantic_feat_size: int, reencode_semantics: bool = False,
-            use_gnn_feats: bool = True, num_spatial_edge_classes: int = 4,
+            use_gnn_feats: bool = True, num_spatial_edge_classes: int = 3,
             use_spat_graph: bool = True, use_viz_graph: bool = True, learn_sim_graph: bool = False,
             sem_feat_hidden_dim: int = 2048, semantic_feat_projector_layers: int = 3,
             sem_feat_use_bboxes: bool = True, sem_feat_use_class_logits: bool = True,
@@ -222,6 +222,8 @@ class SV2LSTG(BaseDetector):
         graphs.edges.boxes = list(graphs.edges.boxes.split(graphs.edges.edges_per_clip))
         graphs.edges.boxesA = list(graphs.edges.boxesA.split(graphs.edges.edges_per_clip))
         graphs.edges.boxesB = list(graphs.edges.boxesB.split(graphs.edges.edges_per_clip))
+        graphs.edges.labelsA = list(graphs.edges.labelsA.split(graphs.edges.edges_per_clip))
+        graphs.edges.labelsB = list(graphs.edges.labelsB.split(graphs.edges.edges_per_clip))
 
         if 'presence_logits' in graphs.edges.keys():
             del graphs.edges.presence_logits
@@ -237,6 +239,8 @@ class SV2LSTG(BaseDetector):
     def build_st_graph(self, graphs: BaseDataElement, clip_results: SampleList):
         node_boxes = pad_sequence([pad_sequence([x.pred_instances.bboxes for x in cr]) \
                 for cr in clip_results], batch_first=True).transpose(1, 2)
+        node_labels = pad_sequence([pad_sequence([x.pred_instances.labels for x in cr]) \
+                for cr in clip_results], batch_first=True).transpose(1, 2)
 
         viz_graph, spat_graph = None, None
         if self.use_viz_graph:
@@ -248,14 +252,14 @@ class SV2LSTG(BaseDetector):
         if viz_graph is not None or spat_graph is not None:
             # add viz and spat edges to st_graph, being mindful of indexing, and extract edge features
             st_graph = self._featurize_st_graph(spat_graph, viz_graph, node_boxes,
-                    graphs, clip_results[0][0].ori_shape)
+                    node_labels, graphs, clip_results[0][0].ori_shape)
         else:
             st_graph = graphs
 
         return st_graph
 
     def _featurize_st_graph(self, spat_graph: Tensor, viz_graph: Tensor, node_boxes: Tensor,
-            graphs: BaseDataElement, box_shape: Tensor):
+            node_labels: Tensor, graphs: BaseDataElement, box_shape: Tensor):
         # extract shape quantities, device
         B, T, N, _ = node_boxes.shape
         M = T * N
@@ -283,6 +287,7 @@ class SV2LSTG(BaseDetector):
             # pad node_boxes
             pad_dim = (padded_spat_graph.shape[-1] - M) // T
             node_boxes = F.pad(node_boxes, (0, 0, 0, pad_dim))
+            node_labels = F.pad(node_labels, (0, 0, 0, pad_dim))
 
             # recompute dims
             B, T, N, _ = node_boxes.shape
@@ -368,14 +373,20 @@ class SV2LSTG(BaseDetector):
             extra_boxesA = node_boxes[ind].flatten(end_dim=1)[nonzero_uids[0]]
             extra_boxesB = node_boxes[ind].flatten(end_dim=1)[nonzero_uids[1]]
             extra_edge_boxes = self._box_union(extra_boxesA, extra_boxesB)
+            extra_labelsA = node_labels[ind].flatten(end_dim=1)[nonzero_uids[0]]
+            extra_labelsB = node_labels[ind].flatten(end_dim=1)[nonzero_uids[1]]
             if self.use_temporal_edges_only:
                 graphs.edges.boxes[ind] = extra_edge_boxes
                 graphs.edges.boxesA[ind] = extra_boxesA
                 graphs.edges.boxesB[ind] = extra_boxesB
+                graphs.edges.labelsA[ind] = extra_labelsA
+                graphs.edges.labelsB[ind] = extra_labelsB
             else:
                 graphs.edges.boxes[ind] = torch.cat([graphs.edges.boxes[ind], extra_edge_boxes])
                 graphs.edges.boxesA[ind] = torch.cat([graphs.edges.boxesA[ind], extra_boxesA])
                 graphs.edges.boxesB[ind] = torch.cat([graphs.edges.boxesB[ind], extra_boxesB])
+                graphs.edges.labelsA[ind] = torch.cat([graphs.edges.labelsA[ind], extra_labelsA])
+                graphs.edges.labelsB[ind] = torch.cat([graphs.edges.labelsB[ind], extra_labelsB])
 
             # update viz feats
             extra_edge_viz_feats = graphs.nodes.feats[ind].view(M, -1)[nonzero_uids.T].mean(1)
@@ -634,6 +645,8 @@ class SV2LSTG(BaseDetector):
             graphs.edges.boxes = torch.cat([l.edges.boxes for l in lg_list])
             graphs.edges.boxesA = torch.cat([l.edges.boxesA for l in lg_list])
             graphs.edges.boxesB = torch.cat([l.edges.boxesB for l in lg_list])
+            graphs.edges.labelsA = torch.cat([l.edges.labelsA for l in lg_list])
+            graphs.edges.labelsB = torch.cat([l.edges.labelsB for l in lg_list])
             graphs.edges.class_logits = torch.cat([l.edges.class_logits for l in lg_list])
             graphs.edges.edge_flats = torch.cat([torch.cat([torch.ones(
                 l.edges.edge_flats.shape[0], 1).to(l.edges.edge_flats) * ind,
@@ -675,6 +688,8 @@ class SV2LSTG(BaseDetector):
             graphs.edges.boxes = torch.cat(graphs.edges.boxes)
             graphs.edges.boxesA = torch.cat(graphs.edges.boxesA)
             graphs.edges.boxesB = torch.cat(graphs.edges.boxesB)
+            graphs.edges.labelsA = torch.cat(graphs.edges.labelsA)
+            graphs.edges.labelsB = torch.cat(graphs.edges.labelsB)
 
             # fuse viz feats, gnn viz feats
             if self.use_gnn_feats:
