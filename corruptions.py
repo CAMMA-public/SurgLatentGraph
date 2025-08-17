@@ -43,6 +43,9 @@ print(f"Using test corruption type: {test_corruption}")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def add_gaussian_noise(image, mean=5, std=0.5):
+    # Stop immediately if image is empty
+    if any(dim == 0 for dim in image.shape):
+        raise ValueError(f"add_gaussian_noise: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
     """
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
@@ -58,7 +61,7 @@ def add_gaussian_noise(image, mean=5, std=0.5):
             img_np = img_np.transpose(1,2,0)
 
     # Increase std to make noise visible
-    visible_std = 25.0 if image.dtype == torch.uint8 else 0.2
+    visible_std = 50.0 if image.dtype == torch.uint8 else 0.2
     # to change the intensity of noise change the std
     noise = torch.randn_like(image, dtype=torch.float32) * visible_std + 0
     noisy_image = image.float() + noise
@@ -109,6 +112,12 @@ def add_gaussian_noise(image, mean=5, std=0.5):
     return noisy_image
 
 def apply_motion_blur(image, kernel_size=45):
+    # Stop immediately if image is empty
+    if any(dim == 0 for dim in image.shape):
+        raise ValueError(f"apply_motion_blur: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
+    # Stop immediately if image is empty
+    if any(dim == 0 for dim in image.shape):
+        raise ValueError(f"apply_defocus_blur: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
     # Handle 5D (B, T, C, H, W), 4D (B, C, H, W), and 3D (C, H, W) tensors
     orig_shape = image.shape
     is_5d = len(orig_shape) == 5
@@ -123,20 +132,44 @@ def apply_motion_blur(image, kernel_size=45):
         image = image.unsqueeze(0)  # (1, C, H, W)
 
     # Save original for visualization
+    # Save original for visualization
     original_tensor = image.clone()
 
     # Now image is (N, C, H, W)
     image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (N, H, W, C)
+    orig_dtype = image.dtype
+    mx = np.max(image_np) if image_np.size else 1.0
+    # Convert to uint8 for visible effect
+    if image_np.dtype != np.uint8:
+        if mx <= 1.0:
+            image_np = image_np * 255.0
+        image_np = np.clip(image_np, 0, 255).astype(np.uint8)
 
     # Create a motion blur kernel
     kernel = np.zeros((kernel_size, kernel_size), dtype=np.float32)
     kernel[int((kernel_size - 1) / 2), :] = np.ones(kernel_size) / kernel_size
 
-    # Apply motion blur to each image in the batch
-    blurred_np = np.array([cv2.filter2D(img, -1, kernel) for img in image_np])
+    # Apply motion blur to each image in the batch, per channel
+    blurred_np = []
+    for img in image_np:
+        if img.shape[-1] == 1:
+            # Grayscale
+            blurred = cv2.filter2D(img.squeeze(-1), -1, kernel)
+            blurred = np.expand_dims(blurred, axis=-1)
+        else:
+            # Color: apply kernel per channel
+            channels = [cv2.filter2D(img[..., c], -1, kernel) for c in range(img.shape[-1])]
+            blurred = np.stack(channels, axis=-1)
+        blurred_np.append(blurred)
+    blurred_np = np.stack(blurred_np, axis=0)
 
     # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device).float()  # (N, C, H, W)
+    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device)
+    # Convert back to original dtype/range
+    if orig_dtype == torch.uint8:
+        blurred_tensor = blurred_tensor.to(torch.uint8)
+    else:
+        blurred_tensor = blurred_tensor.float() / 255.0
 
     # Reshape back if input was 5D
     if is_5d:
@@ -144,9 +177,62 @@ def apply_motion_blur(image, kernel_size=45):
     elif is_3d:
         blurred_tensor = blurred_tensor.squeeze(0)  # Remove batch dimension
 
-    # If input was uint8, convert output to uint8
-    if image.dtype == torch.uint8:
-        blurred_tensor = torch.clamp(blurred_tensor, 0, 255).to(torch.uint8)
+    # --- Plot and save debug image (only once per session) ---
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    global _motion_blur_save_counter
+    if '_motion_blur_save_counter' not in globals():
+        _motion_blur_save_counter = 0
+    if _motion_blur_save_counter < 1:
+        def to_disp_np(t):
+            arr = t.detach().cpu().numpy()
+            if arr.ndim == 3 and arr.shape[0] in (1, 3):
+                arr = arr.transpose(1, 2, 0)
+            if arr.ndim == 2:
+                arr = np.expand_dims(arr, axis=-1)
+            if arr.ndim == 3 and arr.shape[2] == 1:
+                arr = arr.squeeze(-1)
+            if arr.dtype != np.uint8:
+                arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
+            return arr
+
+        inp_np = to_disp_np(original_tensor[0])
+        if blurred_tensor.ndim == 4:
+            blur_np = to_disp_np(blurred_tensor[0])
+        else:
+            blur_np = to_disp_np(blurred_tensor)
+
+        os.makedirs('debug_images', exist_ok=True)
+        unique_id = str(uuid.uuid4())
+        plt.figure(figsize=(10, 5))
+        plt.subplot(1, 2, 1)
+        plt.title('Input Image')
+        plt.imshow(inp_np)
+        plt.axis('off')
+        plt.subplot(1, 2, 2)
+        plt.title('Motion Blurred Image')
+        plt.imshow(blur_np)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'debug_images/input_and_motion_blur_ks_{kernel_size}_{unique_id}.png')
+        plt.close()
+        _motion_blur_save_counter += 1
+    # --------------------------------------------------------
+
+    # return blurred_tensor
+    #     plt.figure(figsize=(10, 5))
+    #     plt.subplot(1, 2, 1)
+    #     plt.title('Input Image')
+    #     plt.imshow(inp_np)
+    #     plt.axis('off')
+    #     plt.subplot(1, 2, 2)
+    #     plt.title('Motion Blurred Image')
+    #     plt.imshow(blur_np)
+    #     plt.axis('off')
+    #     plt.tight_layout()
+    #     plt.savefig(f'debug_images/input_and_motion_blur_ks_3_{kernel_size}_{unique_id}.png')
+    #     plt.close()
+    #     _motion_blur_save_counter += 1
+    # --------------------------------------------------------
 
     return blurred_tensor
 
@@ -253,6 +339,9 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
     return blurred_tensor
 
 def uneven_illumination(image, strength=0.8):
+    # Stop immediately if image is empty
+    if any(dim == 0 for dim in image.shape):
+        raise ValueError(f"uneven_illumination: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
     import matplotlib
     matplotlib.rcParams['font.family'] = 'DejaVu Sans'
     import matplotlib.pyplot as plt
@@ -365,48 +454,71 @@ def generate_perlin_noise(height, width, scale=10, intensity=0.5):
 
 # Function to add realistic corruption (smoke effect)
 def add_smoke_effect(image, intensity=0.7):
-    """
-    Apply a realistic smoke effect to an image tensor while handling different tensor shapes.
-    """
+    # Stop immediately if image is empty
+    if any(dim == 0 for dim in image.shape):
+        print(f"add_smoke_effect: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping and returning None.")
+        return None
     if not isinstance(image, torch.Tensor):
         raise TypeError("Input image must be a PyTorch tensor")
     if intensity is None:
         raise ValueError("Error: 'intensity' must be a valid float value.")
-
-    image = image.to(device).clone()
+    print(f"Adding smoke effect with intensity {intensity} to image of shape {image.shape}")
+    image = image.to('cpu').contiguous()
+    orig_shape = image.shape
+    orig_dtype = image.dtype
+    squeeze_batch = False
     is_sequence = False
-    if image.dim() == 5:  
-        batch_size, seq_len, channels, height, width = image.shape
-        image = image.view(batch_size * seq_len, channels, height, width)
+    if image.dim() == 5:
+        b, t, c, h, w = image.shape
+        image = image.view(-1, c, h, w)
         is_sequence = True
-
-    if image.dim() == 4:
-        batch_size, channels, height, width = image.shape
-        image_np = image.permute(0, 2, 3, 1).cpu().numpy()
+    elif image.dim() == 4:
+        b, c, h, w = image.shape
+    elif image.dim() == 3:
+        c, h, w = image.shape
+        image = image.unsqueeze(0)
+        b = 1
+        squeeze_batch = True
     else:
-        image_np = image.permute(1, 2, 0).cpu().numpy()
-
-    h, w = image_np.shape[-3:-1]
+        raise ValueError(f"Unsupported image shape: {image.shape}")
+    if orig_dtype == torch.uint8:
+        image_f32 = image.float() / 255.0
+    else:
+        image_f32 = image.float().clamp(0, 1)
+    image_np = image_f32.permute(0, 2, 3, 1).cpu().numpy()
+    b, h, w, c = image_np.shape
+    if min(h, w, c) <= 0:
+        print(f"Smoke effect received invalid image shape: {image_np.shape}. Stopping and returning None.")
+        return None
     noise_pattern = generate_perlin_noise(h, w, scale=50, intensity=intensity)
-    noise_3ch = np.stack([noise_pattern] * 3, axis=-1)
+    noise_3ch = np.stack([noise_pattern] * c, axis=2)
     noise_3ch = gaussian_filter(noise_3ch, sigma=5)
-
-    if image_np.ndim == 4:
-        noise_3ch = np.expand_dims(noise_3ch, axis=0)
-        noise_3ch = np.repeat(noise_3ch, batch_size, axis=0)
-
-    assert noise_3ch.shape == image_np.shape, f"Shape mismatch: noise {noise_3ch.shape} vs image {image_np.shape}"
-    corrupted = cv2.addWeighted(image_np, 1.0 - intensity, noise_3ch, intensity, 0)
+    noise_3ch = np.expand_dims(noise_3ch, axis=0)
+    noise_3ch = np.repeat(noise_3ch, b, axis=0)
+    corrupted = cv2.addWeighted(image_np.astype(np.float32), 1.0 - intensity, noise_3ch.astype(np.float32), intensity, 0)
     corrupted = np.clip(corrupted, 0, 1)
-
-    corrupted_tensor = torch.from_numpy(corrupted).permute(0, 3, 1, 2).to(device).float()
-
-    if corrupted_tensor.shape[1] != 3:
-        corrupted_tensor = corrupted_tensor[:, :3, :, :]
-
+    corrupted_tensor = torch.from_numpy(corrupted).permute(0, 3, 1, 2).contiguous()
+    if orig_dtype == torch.uint8:
+        corrupted_tensor = (corrupted_tensor * 255.0).clamp(0, 255).to(torch.uint8)
+    else:
+        corrupted_tensor = corrupted_tensor.float().clamp(0, 1)
     if is_sequence:
-        corrupted_tensor = corrupted_tensor.view(batch_size // seq_len, seq_len, 3, height, width)
-
+        corrupted_tensor = corrupted_tensor.view(orig_shape)
+    elif squeeze_batch:
+        corrupted_tensor = corrupted_tensor.squeeze(0)
+    out_shape = tuple(corrupted_tensor.shape)
+    if any(dim == 0 for dim in out_shape):
+        print(f"Smoke effect produced empty image with shape {out_shape} and dtype {corrupted_tensor.dtype}. Stopping and returning None.")
+        return None
+    if torch.isnan(corrupted_tensor).any():
+        print(f"Smoke effect produced image with NaNs. Shape: {out_shape}, dtype: {corrupted_tensor.dtype}. Stopping and returning None.")
+        return None
+    min_val = corrupted_tensor.min().item() if corrupted_tensor.numel() > 0 else None
+    max_val = corrupted_tensor.max().item() if corrupted_tensor.numel() > 0 else None
+    print(f"Smoke effect output shape: {out_shape}, dtype: {corrupted_tensor.dtype}, min: {min_val}, max: {max_val}")
+    if min_val == 0 and max_val == 0:
+        print(f"Smoke effect produced all-zero image. Shape: {out_shape}, dtype: {corrupted_tensor.dtype}. Stopping and returning None.")
+        return None
     return corrupted_tensor
 
 # Global counter for verification
