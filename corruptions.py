@@ -454,7 +454,6 @@ def generate_perlin_noise(height, width, scale=10, intensity=0.5):
 
 # Function to add realistic corruption (smoke effect)
 def add_smoke_effect(image, intensity=0.7):
-    # Stop immediately if image is empty
     if any(dim == 0 for dim in image.shape):
         print(f"add_smoke_effect: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping and returning None.")
         return None
@@ -490,11 +489,22 @@ def add_smoke_effect(image, intensity=0.7):
     if min(h, w, c) <= 0:
         print(f"Smoke effect received invalid image shape: {image_np.shape}. Stopping and returning None.")
         return None
-    noise_pattern = generate_perlin_noise(h, w, scale=50, intensity=intensity)
-    noise_3ch = np.stack([noise_pattern] * c, axis=2)
-    noise_3ch = gaussian_filter(noise_3ch, sigma=5)
-    noise_3ch = np.expand_dims(noise_3ch, axis=0)
-    noise_3ch = np.repeat(noise_3ch, b, axis=0)
+    # Create a more diffuse, uniform smoke effect
+    # Use higher scale for Perlin noise and higher sigma for Gaussian filter
+    diffuse_scale = 100  # Higher scale for larger, smoother noise features
+    diffuse_sigma = 15   # Higher sigma for more diffusion
+    # Optionally, add a random offset for each image in the batch
+    noise_3ch = np.zeros((b, h, w, c), dtype=np.float32)
+    for i in range(b):
+        offset_x = np.random.randint(0, diffuse_scale)
+        offset_y = np.random.randint(0, diffuse_scale)
+        noise_pattern = generate_perlin_noise(h, w, scale=diffuse_scale, intensity=intensity)
+        # Shift the noise pattern for each image for more variety
+        noise_pattern = np.roll(noise_pattern, shift=offset_x, axis=0)
+        noise_pattern = np.roll(noise_pattern, shift=offset_y, axis=1)
+        noise_img = np.stack([noise_pattern] * c, axis=2)
+        noise_img = gaussian_filter(noise_img, sigma=diffuse_sigma)
+        noise_3ch[i] = noise_img
     corrupted = cv2.addWeighted(image_np.astype(np.float32), 1.0 - intensity, noise_3ch.astype(np.float32), intensity, 0)
     corrupted = np.clip(corrupted, 0, 1)
     corrupted_tensor = torch.from_numpy(corrupted).permute(0, 3, 1, 2).contiguous()
@@ -519,6 +529,40 @@ def add_smoke_effect(image, intensity=0.7):
     if min_val == 0 and max_val == 0:
         print(f"Smoke effect produced all-zero image. Shape: {out_shape}, dtype: {corrupted_tensor.dtype}. Stopping and returning None.")
         return None
+    # Now do plotting after all error checks
+    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+    global _smoke_effect_save_counter
+    if '_smoke_effect_save_counter' not in globals():
+        _smoke_effect_save_counter = 0
+    if _smoke_effect_save_counter < 1:
+        inp_np = image.detach().cpu().numpy()
+        out_np = corrupted_tensor.detach().cpu().numpy()
+        # If batch dimension exists, select the first image
+        if inp_np.ndim == 4:
+            inp_np = inp_np[0]
+        if out_np.ndim == 4:
+            out_np = out_np[0]
+        # If channel-first, transpose to HWC
+        if inp_np.ndim == 3 and inp_np.shape[0] in [1,3]:
+            inp_np = inp_np.transpose(1,2,0)
+        if out_np.ndim == 3 and out_np.shape[0] in [1,3]:
+            out_np = out_np.transpose(1,2,0)
+        os.makedirs('debug_images/s_e', exist_ok=True)
+        unique_id = str(uuid.uuid4())
+        plt.figure(figsize=(10,5))
+        plt.subplot(1,2,1)
+        plt.title('Input Image')
+        plt.imshow(inp_np.astype('uint8') if inp_np.dtype != 'uint8' else inp_np)
+        plt.axis('off')
+        plt.subplot(1,2,2)
+        plt.title('Smoke Effect Output')
+        plt.imshow(out_np.astype('uint8') if out_np.dtype != 'uint8' else out_np)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(f'debug_images/s_e/input_and_smoke_effect_{unique_id}.png')
+        plt.close()
+        _smoke_effect_save_counter += 1
+    # --------------------------------------------------------
     return corrupted_tensor
 
 # Global counter for verification
