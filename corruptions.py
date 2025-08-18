@@ -491,8 +491,8 @@ def add_smoke_effect(image, intensity=0.7):
         return None
     # Create a more diffuse, uniform smoke effect
     # Use higher scale for Perlin noise and higher sigma for Gaussian filter
-    diffuse_scale = 100  # Higher scale for larger, smoother noise features
-    diffuse_sigma = 15   # Higher sigma for more diffusion
+    diffuse_scale = 500 #100 #max 500-1000 # Higher scale for larger, smoother noise features
+    diffuse_sigma = 15  #15 #max 50-100 # Higher sigma for more diffusion
     # Optionally, add a random offset for each image in the batch
     noise_3ch = np.zeros((b, h, w, c), dtype=np.float32)
     for i in range(b):
@@ -559,7 +559,7 @@ def add_smoke_effect(image, intensity=0.7):
         plt.imshow(out_np.astype('uint8') if out_np.dtype != 'uint8' else out_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/s_e/input_and_smoke_effect_{unique_id}.png')
+        plt.savefig(f'debug_images/s_e/input_and_se_{diffuse_scale}_{diffuse_sigma}_{unique_id}.png')
         plt.close()
         _smoke_effect_save_counter += 1
     # --------------------------------------------------------
