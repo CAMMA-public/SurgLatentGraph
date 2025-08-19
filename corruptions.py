@@ -3,16 +3,12 @@ import cv2
 import numpy as np
 import torch
 import os
+import matplotlib
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 import random
 import subprocess
-import sys
-from ipdb import set_trace
-import torch
-import matplotlib
 import uuid
-
 
 
 # Try to import noise module, but provide a fallback if it's not available
@@ -111,130 +107,190 @@ def add_gaussian_noise(image, mean=5, std=0.5):
 
     return noisy_image
 
-def apply_motion_blur(image, kernel_size=45):
-    # Stop immediately if image is empty
+# def apply_motion_blur(ima
+
+
+
+# Avoid Calibri warnings in many envs
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+
+# ---- global guard to save exactly once ----
+_motion_blur_debug_saved = False
+
+def reset_motion_blur_debug():
+    """Call this if you want to allow saving one more debug image later."""
+    global _motion_blur_debug_saved
+    _motion_blur_debug_saved = False
+
+@torch.no_grad()
+def apply_motion_blur(
+    image: torch.Tensor,
+    kernel_size: int = 41,
+    angle_deg: float = 0.0,
+    debug: bool = True,
+    debug_dir: str = "debug_images/m_b_3",
+):
+    """
+    Motion blur for PyTorch tensors.
+    Accepts:
+      - 3D:  (C,H,W) or (H,W,C)
+      - 4D:  (N,C,H,W) or (N,H,W,C)
+      - 5D:  (B,T,C,H,W) or (B,T,H,W,C)
+    Returns a tensor with the SAME rank and channel/layout as the input.
+
+    Args:
+        image: torch.Tensor on any device, dtype float in [0,1] or uint8.
+        kernel_size: desired blur length (will be clamped to min(H,W) and made odd).
+        angle_deg: motion direction (0° = horizontal, CCW positive).
+        debug: save one side-by-side visualization (saved only once per session).
+        debug_dir: output folder for the debug image.
+    """
+
     if any(dim == 0 for dim in image.shape):
-        raise ValueError(f"apply_motion_blur: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
-    # Stop immediately if image is empty
-    if any(dim == 0 for dim in image.shape):
-        raise ValueError(f"apply_defocus_blur: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
-    # Handle 5D (B, T, C, H, W), 4D (B, C, H, W), and 3D (C, H, W) tensors
-    orig_shape = image.shape
-    is_5d = len(orig_shape) == 5
-    is_4d = len(orig_shape) == 4
-    is_3d = len(orig_shape) == 3
+        raise ValueError(f"apply_motion_blur: empty image {tuple(image.shape)} dtype={image.dtype}")
 
-    if is_5d:
-        batch_size, timesteps, channels, height, width = orig_shape
-        image = image.view(-1, channels, height, width)  # (B*T, C, H, W)
-    elif is_3d:
-        # Add batch dimension
-        image = image.unsqueeze(0)  # (1, C, H, W)
+    device, orig_dtype = image.device, image.dtype
+    orig_shape = tuple(image.shape)
+    dim = image.dim()
 
-    # Save original for visualization
-    # Save original for visualization
-    original_tensor = image.clone()
+    # --------- Layout normalization to NCHW (and bookkeeping to restore) ---------
+    def _to_nchw(img: torch.Tensor):
+        d = img.dim()
+        # returns nchw_tensor, restore_callable
+        if d == 3:
+            # (C,H,W) or (H,W,C)
+            if img.shape[0] in (1, 3):  # CHW
+                nchw = img.unsqueeze(0)  # N=1
+                def restore(x): return x.squeeze(0)
+                return nchw, restore, ('CHW',)
+            elif img.shape[-1] in (1, 3):  # HWC
+                nchw = img.permute(2, 0, 1).unsqueeze(0)
+                def restore(x): return x.squeeze(0).permute(1, 2, 0)
+                return nchw, restore, ('HWC',)
+            else:
+                raise ValueError(f"3D tensor must be CHW or HWC, got {tuple(img.shape)}")
+        elif d == 4:
+            # (N,C,H,W) or (N,H,W,C)
+            if img.shape[1] in (1, 3):  # NCHW
+                def restore(x): return x
+                return img, restore, ('NCHW',)
+            elif img.shape[-1] in (1, 3):  # NHWC
+                nchw = img.permute(0, 3, 1, 2)
+                def restore(x): return x.permute(0, 2, 3, 1)
+                return nchw, restore, ('NHWC',)
+            else:
+                raise ValueError(f"4D tensor must be NCHW or NHWC, got {tuple(img.shape)}")
+        elif d == 5:
+            # (B,T,C,H,W) or (B,T,H,W,C)
+            if img.shape[2] in (1, 3):  # BTCHW
+                B, T, C, H, W = img.shape
+                nchw = img.view(B*T, C, H, W)
+                def restore(x): return x.view(B, T, C, H, W)
+                return nchw, restore, ('BTCHW', (B, T, C, H, W))
+            elif img.shape[-1] in (1, 3):  # BTHWC
+                B, T, H, W, C = img.shape
+                nchw = img.permute(0, 1, 4, 2, 3).contiguous().view(B*T, C, H, W)
+                def restore(x): return x.view(B, T, C, H, W).permute(0, 1, 3, 4, 2)
+                return nchw, restore, ('BTHWC', (B, T, H, W, C))
+            else:
+                raise ValueError(f"5D tensor must be BTCHW or BTHWC, got {tuple(img.shape)}")
+        else:
+            raise ValueError(f"Unsupported rank {d}; expected 3/4/5.")
 
-    # Now image is (N, C, H, W)
-    image_np = image.permute(0, 2, 3, 1).cpu().numpy()  # (N, H, W, C)
-    orig_dtype = image.dtype
-    mx = np.max(image_np) if image_np.size else 1.0
-    # Convert to uint8 for visible effect
-    if image_np.dtype != np.uint8:
+    nchw, restore_layout, layout_info = _to_nchw(image)
+    N, C, H, W = nchw.shape
+    # ------------------------------------------------------------------------------
+
+    # --------- to uint8 NHWC for OpenCV ---------
+    img_np = nchw.permute(0, 2, 3, 1).contiguous().detach().cpu().numpy()  # (N,H,W,C)
+    if img_np.dtype != np.uint8:
+        mx = float(np.max(img_np)) if img_np.size else 1.0
         if mx <= 1.0:
-            image_np = image_np * 255.0
-        image_np = np.clip(image_np, 0, 255).astype(np.uint8)
+            img_np = img_np * 255.0
+        img_np = np.clip(img_np, 0, 255).astype(np.uint8)
 
-    # Create a motion blur kernel
-    kernel = np.zeros((kernel_size, kernel_size), dtype=np.float32)
-    kernel[int((kernel_size - 1) / 2), :] = np.ones(kernel_size) / kernel_size
+    # --------- kernel build (clamp & make odd) ---------
+    kmax = int(min(H, W))
+    ks_req = int(max(1, kernel_size))
+    eff_ks = min(ks_req, kmax)
+    if eff_ks % 2 == 0:
+        eff_ks += 1
+    print(f"[MotionBlur] orig={orig_shape}, layout={layout_info}, NHWC={(N,H,W,C)}, "
+          f"requested_ks={ks_req}, kmax={kmax}, eff_ks={eff_ks}, angle={angle_deg}°")
 
-    # Apply motion blur to each image in the batch, per channel
-    blurred_np = []
-    for img in image_np:
-        if img.shape[-1] == 1:
-            # Grayscale
-            blurred = cv2.filter2D(img.squeeze(-1), -1, kernel)
-            blurred = np.expand_dims(blurred, axis=-1)
-        else:
-            # Color: apply kernel per channel
-            channels = [cv2.filter2D(img[..., c], -1, kernel) for c in range(img.shape[-1])]
-            blurred = np.stack(channels, axis=-1)
-        blurred_np.append(blurred)
-    blurred_np = np.stack(blurred_np, axis=0)
+    # Horizontal line then rotate
+    k = np.zeros((eff_ks, eff_ks), dtype=np.float32)
+    k[eff_ks // 2, :] = 1.0
+    center = (eff_ks / 2 - 0.5, eff_ks / 2 - 0.5)
+    M = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+    k = cv2.warpAffine(k, M, (eff_ks, eff_ks), flags=cv2.INTER_LINEAR)
+    s = k.sum()
+    if s != 0:
+        k /= s
 
-    # Convert back to PyTorch tensor
-    blurred_tensor = torch.from_numpy(blurred_np).permute(0, 3, 1, 2).to(image.device)
-    # Convert back to original dtype/range
+    # --------- filter per-channel ---------
+    out_np = np.empty_like(img_np)
+    for n in range(N):
+        for c in range(C):
+            out_np[n, ..., c] = cv2.filter2D(img_np[n, ..., c], -1, k)
+
+    # --------- back to torch & restore dtype/device ---------
+    out_nchw = torch.from_numpy(out_np).permute(0, 3, 1, 2).to(device)
     if orig_dtype == torch.uint8:
-        blurred_tensor = blurred_tensor.to(torch.uint8)
+        out_nchw = out_nchw.to(torch.uint8)
     else:
-        blurred_tensor = blurred_tensor.float() / 255.0
+        out_nchw = out_nchw.float() / 255.0
 
-    # Reshape back if input was 5D
-    if is_5d:
-        blurred_tensor = blurred_tensor.view(batch_size, timesteps, channels, height, width)
-    elif is_3d:
-        blurred_tensor = blurred_tensor.squeeze(0)  # Remove batch dimension
+    # --------- restore original layout/rank ---------
+    out_restored = restore_layout(out_nchw)
 
-    # --- Plot and save debug image (only once per session) ---
-    matplotlib.rcParams['font.family'] = 'DejaVu Sans'
-    global _motion_blur_save_counter
-    if '_motion_blur_save_counter' not in globals():
-        _motion_blur_save_counter = 0
-    if _motion_blur_save_counter < 1:
-        def to_disp_np(t):
-            arr = t.detach().cpu().numpy()
-            if arr.ndim == 3 and arr.shape[0] in (1, 3):
-                arr = arr.transpose(1, 2, 0)
-            if arr.ndim == 2:
-                arr = np.expand_dims(arr, axis=-1)
-            if arr.ndim == 3 and arr.shape[2] == 1:
-                arr = arr.squeeze(-1)
-            if arr.dtype != np.uint8:
-                arr = np.clip(arr * 255.0, 0, 255).astype(np.uint8)
-            return arr
+    # --------- save ONE debug image per session ---------
+    if debug:
+        global _motion_blur_debug_saved
+        if not _motion_blur_debug_saved:
+            os.makedirs(debug_dir, exist_ok=True)
 
-        inp_np = to_disp_np(original_tensor[0])
-        if blurred_tensor.ndim == 4:
-            blur_np = to_disp_np(blurred_tensor[0])
+            def to_disp_np(t):
+                a = t.detach().cpu().numpy()
+                # choose a single frame/sample
+                if a.ndim == 5:  # (B,T,C,H,W) or (B,T,H,W,C)
+                    if a.shape[2] in (1,3):     # BTCHW
+                        a = a[0, 0]            # (C,H,W)
+                    else:                       # BTHWC
+                        a = a[0, 0]            # (H,W,C)
+                if a.ndim == 4:  # (N,C,H,W) or (N,H,W,C)
+                    a = a[0]
+                if a.ndim == 3 and a.shape[0] in (1,3):  # (C,H,W) -> (H,W,C)
+                    a = a.transpose(1, 2, 0)
+                if a.ndim == 2:
+                    a = a[..., None]
+                if a.ndim == 3 and a.shape[2] == 1:
+                    a = a.squeeze(-1)
+                if a.dtype != np.uint8:
+                    a = np.clip(a * 255.0, 0, 255).astype(np.uint8)
+                return a
+
+            inp_np = to_disp_np(image)
+            out_np1 = to_disp_np(out_restored)
+            diff = np.abs(out_np1.astype(np.int16) - inp_np.astype(np.int16)).astype(np.uint8)
+            diff_show = diff.max(axis=2) if (diff.ndim == 3 and diff.shape[2] == 3) else diff
+
+            plt.figure(figsize=(15, 5))
+            plt.subplot(1, 3, 1); plt.title("Input"); plt.imshow(inp_np); plt.axis("off")
+            plt.subplot(1, 3, 2); plt.title(f"Blurred (ks={eff_ks}, θ={angle_deg}°)")
+            plt.imshow(out_np1); plt.axis("off")
+            plt.subplot(1, 3, 3); plt.title("Absolute Difference")
+            plt.imshow(diff_show, cmap="gray"); plt.axis("off")
+            plt.tight_layout()
+
+            fname = os.path.join(debug_dir, f"mblur_ks{eff_ks}_ang{int(angle_deg)}_{uuid.uuid4()}.png")
+            plt.savefig(fname); plt.close()
+            _motion_blur_debug_saved = True
+            print(f"[MotionBlur] Debug saved ONCE -> {fname}")
         else:
-            blur_np = to_disp_np(blurred_tensor)
+            print("[MotionBlur] Debug already saved once; skipping.")
 
-        os.makedirs('debug_images', exist_ok=True)
-        unique_id = str(uuid.uuid4())
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
-        plt.title('Input Image')
-        plt.imshow(inp_np)
-        plt.axis('off')
-        plt.subplot(1, 2, 2)
-        plt.title('Motion Blurred Image')
-        plt.imshow(blur_np)
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_motion_blur_ks_{kernel_size}_{unique_id}.png')
-        plt.close()
-        _motion_blur_save_counter += 1
-    # --------------------------------------------------------
-
-    # return blurred_tensor
-    #     plt.figure(figsize=(10, 5))
-    #     plt.subplot(1, 2, 1)
-    #     plt.title('Input Image')
-    #     plt.imshow(inp_np)
-    #     plt.axis('off')
-    #     plt.subplot(1, 2, 2)
-    #     plt.title('Motion Blurred Image')
-    #     plt.imshow(blur_np)
-    #     plt.axis('off')
-    #     plt.tight_layout()
-    #     plt.savefig(f'debug_images/input_and_motion_blur_ks_3_{kernel_size}_{unique_id}.png')
-    #     plt.close()
-    #     _motion_blur_save_counter += 1
-    # --------------------------------------------------------
-
-    return blurred_tensor
+    return out_restored
 
 def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd numbers to change the intensity of the effect.
     print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
