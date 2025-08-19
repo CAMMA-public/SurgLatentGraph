@@ -394,7 +394,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
 
     return blurred_tensor
 
-def uneven_illumination(image, strength=0.8):
+def uneven_illumination(image, strength=15):
     # Stop immediately if image is empty
     if any(dim == 0 for dim in image.shape):
         raise ValueError(f"uneven_illumination: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
@@ -467,7 +467,7 @@ def uneven_illumination(image, strength=0.8):
             out_np = to_disp_np(result_tensor[0])
         else:
             out_np = to_disp_np(result_tensor)
-        os.makedirs('debug_images', exist_ok=True)
+        os.makedirs('debug_images/u_i_3', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
@@ -479,7 +479,7 @@ def uneven_illumination(image, strength=0.8):
         plt.imshow(out_np)  # No channel swap, display as imported
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_uneven_illumination_6_{unique_id}.png')
+        plt.savefig(f'debug_images/u_i_3/input_and_u_i_s{strength}_{unique_id}.png')
         plt.close()
         _uneven_illumination_save_counter += 1
     # --------------------------------------------------------
@@ -603,7 +603,7 @@ def add_smoke_effect(image, intensity=0.7):
             inp_np = inp_np.transpose(1,2,0)
         if out_np.ndim == 3 and out_np.shape[0] in [1,3]:
             out_np = out_np.transpose(1,2,0)
-        os.makedirs('debug_images/s_e', exist_ok=True)
+        os.makedirs('debug_images/s_e_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10,5))
         plt.subplot(1,2,1)
@@ -615,7 +615,7 @@ def add_smoke_effect(image, intensity=0.7):
         plt.imshow(out_np.astype('uint8') if out_np.dtype != 'uint8' else out_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/s_e/input_and_se_{diffuse_scale}_{diffuse_sigma}_{unique_id}.png')
+        plt.savefig(f'debug_images/s_e_1/input_and_se_{diffuse_scale}_{diffuse_sigma}_{unique_id}.png')
         plt.close()
         _smoke_effect_save_counter += 1
     # --------------------------------------------------------
