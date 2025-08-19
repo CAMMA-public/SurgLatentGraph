@@ -45,8 +45,8 @@ def add_gaussian_noise(image, mean=5, std=0.5):
     """
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
-    print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
-    print(f'Using g_n {test_corruption}')
+    # print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
+    # print(f'Using g_n {test_corruption}')
 
     matplotlib.rcParams['font.family'] = 'DejaVu Sans'
     import uuid
@@ -215,8 +215,8 @@ def apply_motion_blur(
     eff_ks = min(ks_req, kmax)
     if eff_ks % 2 == 0:
         eff_ks += 1
-    print(f"[MotionBlur] orig={orig_shape}, layout={layout_info}, NHWC={(N,H,W,C)}, "
-          f"requested_ks={ks_req}, kmax={kmax}, eff_ks={eff_ks}, angle={angle_deg}°")
+    # print(f"[MotionBlur] orig={orig_shape}, layout={layout_info}, NHWC={(N,H,W,C)}, "
+        #   f"requested_ks={ks_req}, kmax={kmax}, eff_ks={eff_ks}, angle={angle_deg}°")
 
     # Horizontal line then rotate
     k = np.zeros((eff_ks, eff_ks), dtype=np.float32)
@@ -286,14 +286,14 @@ def apply_motion_blur(
             fname = os.path.join(debug_dir, f"mblur_ks{eff_ks}_ang{int(angle_deg)}_{uuid.uuid4()}.png")
             plt.savefig(fname); plt.close()
             _motion_blur_debug_saved = True
-            print(f"[MotionBlur] Debug saved ONCE -> {fname}")
+            # print(f"[Mot/ionBlur] Debug saved ONCE -> {fname}")
         else:
             print("[MotionBlur] Debug already saved once; skipping.")
 
     return out_restored
 
 def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd numbers to change the intensity of the effect.
-    print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
+    # print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
     is_batched = len(image.shape) == 5
     is_3d = len(image.shape) == 3
     if is_batched:
@@ -405,7 +405,7 @@ def uneven_illumination(image, strength=15):
     global _uneven_illumination_save_counter
     if '_uneven_illumination_save_counter' not in globals():
         _uneven_illumination_save_counter = 0
-    print("Uneven_illumination is added.")
+    # print("Uneven_illumination is added.")
     is_batched = (image.dim() == 5)
     added_batch = False
     orig_dtype = image.dtype
@@ -517,7 +517,7 @@ def add_smoke_effect(image, intensity=0.7):
         raise TypeError("Input image must be a PyTorch tensor")
     if intensity is None:
         raise ValueError("Error: 'intensity' must be a valid float value.")
-    print(f"Adding smoke effect with intensity {intensity} to image of shape {image.shape}")
+    # print(f"Adding smoke effect with intensity {intensity} to image of shape {image.shape}")
     image = image.to('cpu').contiguous()
     orig_shape = image.shape
     orig_dtype = image.dtype
@@ -574,14 +574,14 @@ def add_smoke_effect(image, intensity=0.7):
         corrupted_tensor = corrupted_tensor.squeeze(0)
     out_shape = tuple(corrupted_tensor.shape)
     if any(dim == 0 for dim in out_shape):
-        print(f"Smoke effect produced empty image with shape {out_shape} and dtype {corrupted_tensor.dtype}. Stopping and returning None.")
+        # print(f"Smoke effect produced empty image with shape {out_shape} and dtype {corrupted_tensor.dtype}. Stopping and returning None.")
         return None
     if torch.isnan(corrupted_tensor).any():
         print(f"Smoke effect produced image with NaNs. Shape: {out_shape}, dtype: {corrupted_tensor.dtype}. Stopping and returning None.")
         return None
     min_val = corrupted_tensor.min().item() if corrupted_tensor.numel() > 0 else None
     max_val = corrupted_tensor.max().item() if corrupted_tensor.numel() > 0 else None
-    print(f"Smoke effect output shape: {out_shape}, dtype: {corrupted_tensor.dtype}, min: {min_val}, max: {max_val}")
+    # print(f"Smoke effect output shape: {out_shape}, dtype: {corrupted_tensor.dtype}, min: {min_val}, max: {max_val}")
     if min_val == 0 and max_val == 0:
         print(f"Smoke effect produced all-zero image. Shape: {out_shape}, dtype: {corrupted_tensor.dtype}. Stopping and returning None.")
         return None
