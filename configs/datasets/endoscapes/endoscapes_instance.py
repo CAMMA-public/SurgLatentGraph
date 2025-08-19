@@ -86,7 +86,27 @@ train_pipeline = [
         ),
 ]
 
-eval_pipeline = [
+val_pipeline = [
+        dict(type='LoadImageFromFile'),
+        dict(
+            type='ImgCorruption',
+            corruption_type=train_corruption,
+        ),
+        dict(
+            type='Resize',
+            scale=(399, 224),
+            keep_ratio=True,
+        ),
+        dict(type='LoadAnnotationsWithDS',
+            with_bbox=True,
+            with_mask=True),
+        dict(
+            type='PackDetInputs',
+            meta_keys=('img_id', 'img_path', 'ori_shape', 'img_shape', 'scale_factor',
+                'ds', 'is_det_keyframe', 'video_id'),
+        ),
+]
+test_pipeline = [
         dict(type='LoadImageFromFile'),
         dict(
             type='ImgCorruption',
@@ -127,7 +147,7 @@ train_eval_dataloader['dataset'].update(dict(
         metainfo=metainfo,
         ann_file='train/annotation_coco.json',
         data_prefix=dict(img='train/'),
-        pipeline=eval_pipeline,
+        pipeline=val_pipeline,
     )
 )
 
@@ -139,7 +159,7 @@ val_dataloader = dict(
         metainfo=metainfo,
         ann_file='val/annotation_coco.json',
         data_prefix=dict(img='val/'),
-        pipeline=eval_pipeline))
+        pipeline=val_pipeline))
 
 test_dataloader = dict(
     batch_size=8,
@@ -149,7 +169,7 @@ test_dataloader = dict(
         metainfo=metainfo,
         ann_file='test/annotation_coco.json',
         data_prefix=dict(img='test/'),
-        pipeline=eval_pipeline))
+        pipeline=test_pipeline))
 
 # metric
 val_evaluator = dict(ann_file=os.path.join(data_root, 'val/annotation_coco.json'), format_only=False,)
