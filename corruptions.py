@@ -70,7 +70,7 @@ def add_gaussian_noise(image, mean=5, std=0.5):
         if noisy_np.ndim == 3 and noisy_np.shape[0] in [1,3]:
             noisy_np = noisy_np.transpose(1,2,0)
         import uuid
-        os.makedirs('debug_images', exist_ok=True)
+        os.makedirs('debug_images/gn_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10,5))
         plt.subplot(1,2,1)
@@ -82,7 +82,7 @@ def add_gaussian_noise(image, mean=5, std=0.5):
         plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_noisy_test_m{mean}_std{visible_std}_{unique_id}.png')
+        plt.savefig(f'debug_images/gn_1/input_and_noisy_test_m{mean}_std{visible_std}_{unique_id}.png')
         plt.close()
         _gaussian_noise_save_counter += 1
 
@@ -375,7 +375,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         else:
             blur_np = to_disp_np(blurred_tensor)
 
-        os.makedirs('debug_images', exist_ok=True)
+        os.makedirs('debug_images/d_b_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
@@ -387,7 +387,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         plt.imshow(blur_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
+        plt.savefig(f'debug_images/d_b_1/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
         plt.close()
         _defocus_blur_save_counter += 1
     # --------------------------------------------------------
