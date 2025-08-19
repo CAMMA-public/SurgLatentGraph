@@ -63,9 +63,24 @@ CPU_COUNT=$(nproc --all 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
 # Parse command line arguments
+CHECKPOINT_ROOT=""
+CHECKPOINT_FASTER=""
+CHECKPOINT_DS_FASTER=""
 while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
+        --checkpoint-root)
+            CHECKPOINT_ROOT="$2"
+            shift 2
+            ;;
+        --checkpoint-faster)
+            CHECKPOINT_FASTER="$2"
+            shift 2
+            ;;
+        --checkpoint-ds-faster)
+            CHECKPOINT_DS_FASTER="$2"
+            shift 2
+            ;;
         --mode)
             MODE="$2"
             if [[ ! "$MODE" =~ ^(train|test|both)$ ]]; then
@@ -151,6 +166,36 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# If checkpoint root is provided, set checkpoint paths automatically
+if [ -n "$CHECKPOINT_ROOT" ]; then
+    # For faster_rcnn
+    FAST_PATH="$CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn/best_*"
+    if [ -f "$FAST_PATH" ]; then
+        CHECKPOINT_FASTER="$FAST_PATH"
+        echo "Auto-selected Faster R-CNN checkpoint: $CHECKPOINT_FASTER"
+    else
+        # Try to find any best_*.pth file
+        ALT_FAST_PATH=$(find "$CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn" -name "best_*.pth" | head -1)
+        if [ -n "$ALT_FAST_PATH" ]; then
+            CHECKPOINT_FASTER="$ALT_FAST_PATH"
+            echo "Auto-selected Faster R-CNN checkpoint: $CHECKPOINT_FASTER"
+        fi
+    fi
+    # For ds_faster_rcnn
+    DS_PATH="$CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn/best_*"
+    if [ -f "$DS_PATH" ]; then
+        CHECKPOINT_DS_FASTER="$DS_PATH"
+        echo "Auto-selected DS Faster R-CNN checkpoint: $CHECKPOINT_DS_FASTER"
+    else
+        # Try to find any best_*.pth file
+        ALT_DS_PATH=$(find "$CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn" -name "best_*.pth" | head -1)
+        if [ -n "$ALT_DS_PATH" ]; then
+            CHECKPOINT_DS_FASTER="$ALT_DS_PATH"
+            echo "Auto-selected DS Faster R-CNN checkpoint: $CHECKPOINT_DS_FASTER"
+        fi
+    fi
+fi
+
 # Create descriptive folder names based on training settings
 if [[ "$TRAIN_CORRUPTION" == "none" ]]; then
     TRAIN_DESC="clean"
@@ -167,20 +212,22 @@ else
     MODEL_DESC="${MODEL}"
 fi
 
-MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}_${TIMESTAMP}"
-mkdir -p "${MAIN_RESULTS_DIR}"
+# If checkpoint root is provided, use it as MAIN_RESULTS_DIR, otherwise create a new results directory and symlink
+if [[ -n "$CHECKPOINT_ROOT" ]]; then
+    MAIN_RESULTS_DIR="$CHECKPOINT_ROOT"
+else
+    MAIN_RESULTS_DIR="results/${EPOCHS}_epoch_cpu${CPU_COUNT}_${MODEL_DESC}_${TRAIN_DESC}_${TIMESTAMP}"
+    mkdir -p "${MAIN_RESULTS_DIR}"
+    ln -sf "${MAIN_RESULTS_DIR}" "results/latest_training"
+fi
 
-# Create a symbolic link to the latest training results directory
-ln -sf "${MAIN_RESULTS_DIR}" "results/latest_training"
 
-# Test results will be in subdirectories named after the test corruption
+# If checkpoint-root is provided, always store test results in a subfolder named after the test-corruption argument
 if [[ "$TEST_CORRUPTION" == "none" ]]; then
     TEST_DIR_NAME="clean"
 else
     TEST_DIR_NAME="${TEST_CORRUPTION}"
 fi
-
-# Create test results directory
 TEST_RESULTS_DIR="${MAIN_RESULTS_DIR}/${TEST_DIR_NAME}_predicts"
 mkdir -p "${TEST_RESULTS_DIR}"
 
@@ -326,74 +373,94 @@ run_testing() {
     local model_dir="${MAIN_RESULTS_DIR}/lg_${model_type}_rcnn"
     local test_model_dir="${TEST_RESULTS_DIR}/lg_${model_type}_rcnn"
     local ckpt_dir="${model_dir}/checkpoints"
+    # Ensure the test results subfolder exists before creating metrics_summary
+    mkdir -p "${test_model_dir}"
     local metrics_dir="${test_model_dir}/metrics_summary"
     
     echo "===================== TESTING: lg_${model_type}_rcnn ====================="
     echo "Testing with corruption: $TEST_CORRUPTION"
     
-    # Find the best checkpoint
-    local best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" | head -1)
-    
-    if [ -z "$best_ckpt" ]; then
-        # If no best checkpoint, use the latest epoch
-        best_ckpt=$(find "${ckpt_dir}" -name "epoch_*.pth" | sort -r | head -1)
-    fi
-    
-    # If still no checkpoint and we're only testing, try the weights directory
-    if [ -z "$best_ckpt" ] && [ "$MODE" == "test" ]; then
-        if [ -f "weights/endoscapes/lg_${model_type}_rcnn.pth" ]; then
-            best_ckpt="weights/endoscapes/lg_${model_type}_rcnn.pth"
+    # Check for user-provided checkpoint argument
+    local best_ckpt=""
+    if [ "$model_type" == "faster" ] && [ -n "$CHECKPOINT_FASTER" ]; then
+        if [ -f "$CHECKPOINT_FASTER" ]; then
+            best_ckpt="$CHECKPOINT_FASTER"
+            echo "Using user-provided checkpoint for faster_rcnn: $best_ckpt"
+        else
+            echo "ERROR: Provided checkpoint for faster_rcnn does not exist: $CHECKPOINT_FASTER"
+            return 1
+        fi
+    elif [ "$model_type" == "ds_faster" ] && [ -n "$CHECKPOINT_DS_FASTER" ]; then
+        if [ -f "$CHECKPOINT_DS_FASTER" ]; then
+            best_ckpt="$CHECKPOINT_DS_FASTER"
+            echo "Using user-provided checkpoint for ds_faster_rcnn: $best_ckpt"
+        else
+            echo "ERROR: Provided checkpoint for ds_faster_rcnn does not exist: $CHECKPOINT_DS_FASTER"
+            return 1
         fi
     fi
-    
+    # If not provided, use default logic
+    if [ -z "$best_ckpt" ]; then
+        best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" | head -1)
+        if [ -z "$best_ckpt" ]; then
+            best_ckpt=$(find "${ckpt_dir}" -name "epoch_*.pth" | sort -r | head -1)
+        fi
+        if [ -z "$best_ckpt" ] && [ "$MODE" == "test" ]; then
+            if [ -f "weights/endoscapes/lg_${model_type}_rcnn.pth" ]; then
+                best_ckpt="weights/endoscapes/lg_${model_type}_rcnn.pth"
+            fi
+        fi
+    fi
     # Run testing with the best checkpoint
     if [ -n "$best_ckpt" ]; then
         echo "Found checkpoint: $best_ckpt"
         echo "Running test with checkpoint..."
-        
+
         # Create test output directories
         mkdir -p "${metrics_dir}"
-        
+
         # Create specific log files for this test run
         local testing_log_file="${LOG_OUTPUT_DIR}/testing_lg_${model_type}_rcnn_${TEST_CORRUPTION}_${LOG_TIMESTAMP}.log"
         TEST_OUTPUT_FILE="${metrics_dir}/test_terminal_output.txt"
-        
+
         log_message "Testing output will be logged to: $testing_log_file"
-        
-        # Add corruption argument for testing and save the raw output
+
+        # Set output prefix to test_model_dir so all MMDetection outputs go inside the correct subfolder
         mim test mmdet ${config_path} \
             --checkpoint "$best_ckpt" \
             --cfg-options test_evaluator.outfile_prefix="${test_model_dir}" \
             corruption="${TEST_CORRUPTION}" \
-            2>&1 | tee "${testing_log_file}" "${TEST_OUTPUT_FILE}" 
-            
+            2>&1 | tee "${testing_log_file}" "${TEST_OUTPUT_FILE}"
+
         # Also display the output in the terminal
         cat "${TEST_OUTPUT_FILE}"
-        
+
         # Save a copy of raw output for debugging
         cp "${TEST_OUTPUT_FILE}" "${metrics_dir}/raw_test_output.txt"
-        
+
         # Copy the best checkpoint to the weights directory with corruption info
         echo "Copying checkpoint to weights/endoscapes/"
-        
+
         # Create a unique name for this model based on corruption settings
         if [[ "$TRAIN_CORRUPTION" == "none" ]]; then
             WEIGHT_SUFFIX="clean"
         else
             WEIGHT_SUFFIX="${TRAIN_CORRUPTION}"
         fi
-        
+
         cp "$best_ckpt" "weights/endoscapes/lg_${model_type}_rcnn_train-${WEIGHT_SUFFIX}.pth"
-        
-        # Create metrics summary after testing
-        extract_metrics "${test_model_dir}" "${TEST_OUTPUT_FILE}" "${TEST_CORRUPTION}"
     else
         echo "No checkpoint found for testing lg_${model_type}_rcnn"
         if [ "$MODE" == "both" ]; then
             echo "This is unexpected as we just trained the model. Please check the logs."
         fi
-        return 1
+        # Even if no checkpoint, call extract_metrics to create empty/error files for debugging
+        TEST_OUTPUT_FILE="${metrics_dir}/test_terminal_output.txt"
+        echo "No test output: checkpoint missing" > "${TEST_OUTPUT_FILE}"
     fi
+
+    # Always call extract_metrics to ensure metrics files are created
+    extract_metrics "${test_model_dir}" "${TEST_OUTPUT_FILE}" "${TEST_CORRUPTION}"
 }
 
 # Function to extract and organize test metrics
