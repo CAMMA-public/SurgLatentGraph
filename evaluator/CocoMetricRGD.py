@@ -27,7 +27,8 @@ class CocoMetricRGD(CocoMetric):
             pred_per_frame: bool = False, save_lg: bool = False, num_thresholds: int = 10,
             task_type: str = 'multilabel', agg: str = 'frame', ds_per_class: bool = True,
             save_reconstructions: bool = False, **kwargs):
-
+        #agg options: frame, per_video, per_class
+        # task_type options: multilabel, multiclass, multitask_multilabel, multitask_multiclass
         super().__init__(**kwargs)
         self.ssim_roi = SSIM_RoI(data_range=1, size_average=True, channel=3)
         self.data_root = data_root

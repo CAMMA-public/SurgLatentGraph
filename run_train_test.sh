@@ -168,31 +168,22 @@ done
 
 # If checkpoint root is provided, set checkpoint paths automatically
 if [ -n "$CHECKPOINT_ROOT" ]; then
-    # For faster_rcnn
-    FAST_PATH="$CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn/best_*"
-    if [ -f "$FAST_PATH" ]; then
-        CHECKPOINT_FASTER="$FAST_PATH"
-        echo "Auto-selected Faster R-CNN checkpoint: $CHECKPOINT_FASTER"
+    echo "Searching for checkpoints in line 171: $CHECKPOINT_ROOT"
+    
+    # For faster_rcnn - use find directly instead of wildcard test
+    CHECKPOINT_FASTER=$(find "$CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn" -name "best_*.pth" 2>/dev/null | head -1)
+    if [ -n "$CHECKPOINT_FASTER" ]; then
+        echo "Auto-selected Faster R-CNN checkpoint line 176: $CHECKPOINT_FASTER"
     else
-        # Try to find any best_*.pth file
-        ALT_FAST_PATH=$(find "$CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn" -name "best_*.pth" | head -1)
-        if [ -n "$ALT_FAST_PATH" ]; then
-            CHECKPOINT_FASTER="$ALT_FAST_PATH"
-            echo "Auto-selected Faster R-CNN checkpoint: $CHECKPOINT_FASTER"
-        fi
+        echo "Warning: line 178 No Faster R-CNN checkpoint found in $CHECKPOINT_ROOT/lg_faster_rcnn/checkpoints/lg_faster_rcnn/"
     fi
-    # For ds_faster_rcnn
-    DS_PATH="$CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn/best_*"
-    if [ -f "$DS_PATH" ]; then
-        CHECKPOINT_DS_FASTER="$DS_PATH"
-        echo "Auto-selected DS Faster R-CNN checkpoint: $CHECKPOINT_DS_FASTER"
+    
+    # For ds_faster_rcnn - use find directly instead of wildcard test
+    CHECKPOINT_DS_FASTER=$(find "$CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn" -name "best_*.pth" 2>/dev/null | head -1)
+    if [ -n "$CHECKPOINT_DS_FASTER" ]; then
+        echo "Auto-selected DS Faster R-CNN checkpoint line 184: $CHECKPOINT_DS_FASTER"
     else
-        # Try to find any best_*.pth file
-        ALT_DS_PATH=$(find "$CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn" -name "best_*.pth" | head -1)
-        if [ -n "$ALT_DS_PATH" ]; then
-            CHECKPOINT_DS_FASTER="$ALT_DS_PATH"
-            echo "Auto-selected DS Faster R-CNN checkpoint: $CHECKPOINT_DS_FASTER"
-        fi
+        echo "Warning: line 186 No DS Faster R-CNN checkpoint found in $CHECKPOINT_ROOT/lg_ds_faster_rcnn/checkpoints/lg_ds_faster_rcnn/"
     fi
 fi
 
@@ -385,29 +376,38 @@ run_testing() {
     if [ "$model_type" == "faster" ] && [ -n "$CHECKPOINT_FASTER" ]; then
         if [ -f "$CHECKPOINT_FASTER" ]; then
             best_ckpt="$CHECKPOINT_FASTER"
-            echo "Using user-provided checkpoint for faster_rcnn: $best_ckpt"
+            echo "Using user-provided checkpoint for faster_rcnn best_ckpt line 379: $best_ckpt"
         else
-            echo "ERROR: Provided checkpoint for faster_rcnn does not exist: $CHECKPOINT_FASTER"
+            echo "ERROR: Provided checkpoint for faster_rcnn does not exist line 381: $CHECKPOINT_FASTER"
             return 1
         fi
     elif [ "$model_type" == "ds_faster" ] && [ -n "$CHECKPOINT_DS_FASTER" ]; then
         if [ -f "$CHECKPOINT_DS_FASTER" ]; then
             best_ckpt="$CHECKPOINT_DS_FASTER"
-            echo "Using user-provided checkpoint for ds_faster_rcnn: $best_ckpt"
+            echo "Using user-provided checkpoint for ds_faster_rcnn best_ckpt line 387: $best_ckpt"
         else
-            echo "ERROR: Provided checkpoint for ds_faster_rcnn does not exist: $CHECKPOINT_DS_FASTER"
+            echo "ERROR: Provided checkpoint for ds_faster_rcnn does not exist line 389: $CHECKPOINT_DS_FASTER"
             return 1
         fi
     fi
     # If not provided, use default logic
     if [ -z "$best_ckpt" ]; then
-        best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" | head -1)
-        if [ -z "$best_ckpt" ]; then
-            best_ckpt=$(find "${ckpt_dir}" -name "epoch_*.pth" | sort -r | head -1)
-        fi
+        # First try to find in the expected checkpoint directory structure
+        best_ckpt=$(find "${ckpt_dir}" -name "best_*.pth" 2>/dev/null | head -1)
+        
+        # If still not found and we're in test-only mode, try weights directory
         if [ -z "$best_ckpt" ] && [ "$MODE" == "test" ]; then
             if [ -f "weights/endoscapes/lg_${model_type}_rcnn.pth" ]; then
                 best_ckpt="weights/endoscapes/lg_${model_type}_rcnn.pth"
+                echo "Using weights directory checkpoint line 402: $best_ckpt"
+            fi
+        fi
+        
+        # If still not found, try epoch checkpoints as last resort
+        if [ -z "$best_ckpt" ]; then
+            best_ckpt=$(find "${ckpt_dir}" -name "epoch_*.pth" 2>/dev/null | sort -r | head -1)
+            if [ -n "$best_ckpt" ]; then
+                echo "Using latest epoch checkpoint line 410: $best_ckpt"
             fi
         fi
     fi

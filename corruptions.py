@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import torch
 import os
+import sys
 import matplotlib
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
@@ -14,6 +15,9 @@ import uuid
 # Try to import noise module, but provide a fallback if it's not available
 try:
     import noise
+    NOISE_MODULE_AVAILABLE = True
+    print("Noise module available for Perlin noise corruptions.")
+except ImportError:
     NOISE_MODULE_AVAILABLE = True
     print("Noise module available for Perlin noise corruptions.")
 except ImportError:
@@ -32,79 +36,90 @@ except ImportError:
         print(f"Failed to install noise module: {e}")
         print("Continuing with limited functionality.")
 
+train_corruption = os.environ.get('TRAIN_CORRUPTION', 'none')
+print(f"Using corruption type: {train_corruption}")
 test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
 print(f"Using test corruption type: {test_corruption}")
 
 # Define the device (GPU if available, otherwise CPU)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def add_gaussian_noise(image, mean=5, std=0.5):
+def add_gaussian_noise(image, mean=0, std=0.5):
     # Stop immediately if image is empty
     if any(dim == 0 for dim in image.shape):
         raise ValueError(f"add_gaussian_noise: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
+    else: 
+        print("Image shape and dtype OK for Gaussian noise addition.")
     """
     Adds Gaussian noise to a PyTorch image tensor without changing its shape or type.
     """
-    # print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
+    print(f"ADDING GAUSSIAN NOISE WITH MEAN={mean}, STD={std} TO IMAGE OF SHAPE {image.shape}")
     # print(f'Using g_n {test_corruption}')
 
     matplotlib.rcParams['font.family'] = 'DejaVu Sans'
-    import uuid
     global _gaussian_noise_save_counter
-    if _gaussian_noise_save_counter < 1:
-        img_np = image.detach().cpu().numpy()
-        if img_np.ndim == 3 and img_np.shape[0] in [1,3]:
-            img_np = img_np.transpose(1,2,0)
-
-    # Increase std to make noise visible
-    visible_std = 50.0 if image.dtype == torch.uint8 else 0.2
-    # to change the intensity of noise change the std
-    noise = torch.randn_like(image, dtype=torch.float32) * visible_std + 0
+    
+    # Store original image for debug visualization
+    original_image = image.clone()
+    
+    # Apply gaussian noise - use the provided std parameter
+    # Scale std based on image dtype for consistent effect
+    if image.dtype == torch.uint8:
+        # For uint8 images, scale std to [0-255] range
+        effective_std = std * 255.0
+    else:
+        # For float images, use std directly (assuming [0-1] range)
+        effective_std = std
+    
+    noise = torch.randn_like(image, dtype=torch.float32) * effective_std + mean
     noisy_image = image.float() + noise
 
     if image.dtype == torch.uint8:
         noisy_image = torch.clamp(noisy_image, 0, 255).to(torch.uint8)
+        print(f"Clamped noisy image to [0, 255] and converted to uint8.")
+    else:
+        noisy_image = torch.clamp(noisy_image, 0, 1).to(image.dtype)
+        print(f"Clamped noisy image to [0, 1] and converted to original dtype {image.dtype}.")
 
+    # Debug visualization (save only once)
     if _gaussian_noise_save_counter < 1:
-        noisy_np = noisy_image.detach().cpu().numpy()
-        if noisy_np.ndim == 3 and noisy_np.shape[0] in [1,3]:
-            noisy_np = noisy_np.transpose(1,2,0)
-        import uuid
-        os.makedirs('debug_images/gn_1', exist_ok=True)
+        def to_display_format(img):
+            img_np = img.detach().cpu().numpy()
+            # Handle 4D tensors (N, C, H, W) by taking the first image
+            if img_np.ndim == 4:
+                img_np = img_np[0]  # Take first image from batch
+            # Handle 3D tensors (C, H, W) 
+            if img_np.ndim == 3 and img_np.shape[0] in [1,3]:
+                img_np = img_np.transpose(1,2,0)
+            # Handle single channel images
+            if img_np.ndim == 3 and img_np.shape[2] == 1:
+                img_np = img_np.squeeze(2)  # Remove channel dimension for grayscale
+            if img_np.dtype != np.uint8:
+                if img_np.max() <= 1.0:
+                    img_np = (img_np * 255).astype(np.uint8)
+                else:
+                    img_np = np.clip(img_np, 0, 255).astype(np.uint8)
+            return img_np
+        
+        orig_np = to_display_format(original_image)
+        noisy_np = to_display_format(noisy_image)
+        
+        os.makedirs('debug_images/g_g_2', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10,5))
         plt.subplot(1,2,1)
         plt.title('Input Image')
-        plt.imshow(img_np.astype('uint8') if img_np.dtype != 'uint8' else img_np)
+        plt.imshow(orig_np)
         plt.axis('off')
         plt.subplot(1,2,2)
-        plt.title('Noisy Image')
-        plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
+        plt.title(f'Gaussian Noise (std={std})')
+        plt.imshow(noisy_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/gn_1/input_and_noisy_test_m{mean}_std{visible_std}_{unique_id}.png')
+        plt.savefig(f'debug_images/g_g_2/input_and_gaussian_noise_std{std}_{unique_id}.png')
         plt.close()
         _gaussian_noise_save_counter += 1
-
-    noise = torch.randn_like(image, dtype=torch.float32) * std + mean
-    noisy_image = image.float() + noise
-
-    if image.dtype == torch.uint8:
-        noisy_image = torch.clamp(noisy_image, 0, 255).to(torch.uint8)
-
-    if _gaussian_noise_save_counter < 1:
-        # Display and save output image
-        noisy_np = noisy_image.detach().cpu().numpy()
-        if noisy_np.ndim == 3 and noisy_np.shape[0] in [1,3]:
-            noisy_np = noisy_np.transpose(1,2,0)
-        plt.figure()
-        plt.title('Noisy Image')
-        plt.imshow(noisy_np.astype('uint8') if noisy_np.dtype != 'uint8' else noisy_np)
-        plt.axis('off')
-        plt.savefig(f'debug_images/noisy_m{mean}_std{visible_std}_{unique_id}.png')
-        plt.close()
-        _gaussian_noise_save_counter += 1
-
+    
     return noisy_image
 
 # def apply_motion_blur(ima
@@ -128,7 +143,7 @@ def apply_motion_blur(
     kernel_size: int = 41,
     angle_deg: float = 0.0,
     debug: bool = True,
-    debug_dir: str = "debug_images/m_b_3",
+    debug_dir: str = "debug_images/m_m_5_9",
 ):
     """
     Motion blur for PyTorch tensors.
@@ -293,7 +308,7 @@ def apply_motion_blur(
     return out_restored
 
 def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd numbers to change the intensity of the effect.
-    # print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
+    print(f"Applying defocus blur with kernel size {kernel_size} to image of shape {image.shape}")
     is_batched = len(image.shape) == 5
     is_3d = len(image.shape) == 3
     if is_batched:
@@ -375,7 +390,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         else:
             blur_np = to_disp_np(blurred_tensor)
 
-        os.makedirs('debug_images/d_b_1', exist_ok=True)
+        os.makedirs('debug_images/r_r_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
@@ -387,14 +402,14 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         plt.imshow(blur_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/d_b_1/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
+        plt.savefig(f'debug_images/r_r_1/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
         plt.close()
         _defocus_blur_save_counter += 1
     # --------------------------------------------------------
 
     return blurred_tensor
 
-def uneven_illumination(image, strength=15):
+def uneven_illumination(image, strength=50):
     # Stop immediately if image is empty
     if any(dim == 0 for dim in image.shape):
         raise ValueError(f"uneven_illumination: Received empty image with shape {image.shape} and dtype {image.dtype}. Stopping.")
@@ -428,15 +443,40 @@ def uneven_illumination(image, strength=15):
     image_np = image.permute(0, 2, 3, 1).cpu().numpy().astype(np.float32)
     N = image_np.shape[0]
     result_list = []
-    min_grad = max(1 - strength, 0.7)
+    
+    # Create more aggressive illumination gradients
+    # Use exponential/power functions for stronger effects
+    strength_normalized = min(strength / 100.0, 0.95)  # Allow up to 95% effect
+    
     for i in range(N):
         frame = image_np[i]
         h_i, w_i, c_i = frame.shape
-        gradient = np.linspace(min_grad, 1, w_i, dtype=np.float32)
-        gradient = np.tile(gradient, (h_i, 1)).reshape(h_i, w_i, 1)
-        illuminated = frame * gradient
+        
+        # Create multiple gradient patterns for stronger effect
+        if strength_normalized < 0.3:
+            # Mild: Linear gradient
+            min_intensity = 1.0 - strength_normalized
+            gradient = np.linspace(min_intensity, 1.0, w_i, dtype=np.float32)
+        elif strength_normalized < 0.6:
+            # Medium: Quadratic gradient for more dramatic falloff
+            x = np.linspace(0, 1, w_i)
+            min_intensity = 0.1  # More aggressive minimum
+            gradient = min_intensity + (1.0 - min_intensity) * (x ** 2)
+        else:
+            # Strong: Exponential gradient for very dramatic effect
+            x = np.linspace(0, 1, w_i)
+            min_intensity = 0.05  # Very dark on one side
+            # Exponential curve: dark -> bright
+            gradient = min_intensity + (1.0 - min_intensity) * (x ** 3)
+        
+        # Apply gradient across width and broadcast to all pixels
+        gradient_2d = np.tile(gradient, (h_i, 1)).reshape(h_i, w_i, 1)
+        
+        # Apply illumination with stronger effect
+        illuminated = frame * gradient_2d
         illuminated = np.clip(illuminated, 0, 1)
         result_list.append(illuminated)
+        
     result_np = np.stack(result_list, axis=0)
     result_tensor = torch.from_numpy(result_np).permute(0, 3, 1, 2).to(image.device)
     # Convert back to original dtype if needed
@@ -467,19 +507,26 @@ def uneven_illumination(image, strength=15):
             out_np = to_disp_np(result_tensor[0])
         else:
             out_np = to_disp_np(result_tensor)
-        os.makedirs('debug_images/u_i_3', exist_ok=True)
+
+        diff = np.abs(out_np.astype(np.int16) - inp_np.astype(np.int16)).astype(np.uint8)
+        os.makedirs('debug_images/u_u_test', exist_ok=True)
         unique_id = str(uuid.uuid4())
-        plt.figure(figsize=(10, 5))
-        plt.subplot(1, 2, 1)
+        plt.figure(figsize=(15, 5))
+        plt.subplot(1, 3, 1)
         plt.title('Input Image')
-        plt.imshow(inp_np)  # No channel swap, display as imported
+        plt.imshow(inp_np)
         plt.axis('off')
-        plt.subplot(1, 2, 2)
+        plt.subplot(1, 3, 2)
         plt.title('Uneven Illuminated Image')
-        plt.imshow(out_np)  # No channel swap, display as imported
+        plt.imshow(out_np)
+        plt.axis('off')
+        plt.subplot(1, 3, 3)
+        plt.title('Absolute Difference')
+        # Show diff as color image (no grayscale)
+        plt.imshow(diff)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/u_i_3/input_and_u_i_s{strength}_{unique_id}.png')
+        plt.savefig(f'debug_images/u_u_test/input_output_diff_u_i_s{strength}_{unique_id}.png')
         plt.close()
         _uneven_illumination_save_counter += 1
     # --------------------------------------------------------
@@ -603,7 +650,7 @@ def add_smoke_effect(image, intensity=0.7):
             inp_np = inp_np.transpose(1,2,0)
         if out_np.ndim == 3 and out_np.shape[0] in [1,3]:
             out_np = out_np.transpose(1,2,0)
-        os.makedirs('debug_images/s_e_1', exist_ok=True)
+        os.makedirs('debug_images/s_s_2', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10,5))
         plt.subplot(1,2,1)
@@ -615,7 +662,7 @@ def add_smoke_effect(image, intensity=0.7):
         plt.imshow(out_np.astype('uint8') if out_np.dtype != 'uint8' else out_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/s_e_1/input_and_se_{diffuse_scale}_{diffuse_sigma}_{unique_id}.png')
+        plt.savefig(f'debug_images/s_s_2/input_and_se_{intensity}_{diffuse_scale}_{diffuse_sigma}_{unique_id}.png')
         plt.close()
         _smoke_effect_save_counter += 1
     # --------------------------------------------------------
@@ -647,13 +694,14 @@ def random_corrupt(image):
     return image  # Return the (possibly corrupted) image
 
 # Main function to apply corruptions - renamed to 'corrupt' to match what the preprocessor expects
-def corrupt(image, corruption_type):
+def corrupt(image, corruption_type, strength=None):
     """
     Apply the specified corruption type to the image.
     
     Args:
         image: PyTorch tensor of shape (B, C, H, W) or (B, T, C, H, W)
         corruption_type: String specifying which corruption to apply
+        strength: Optional strength parameter for corruptions that support it
         
     Returns:
         Corrupted image with the same shape as input
@@ -671,7 +719,10 @@ def corrupt(image, corruption_type):
     elif corruption_type == 'defocus_blur':
         out = apply_defocus_blur(image)
     elif corruption_type == 'uneven_illumination':
-        out = uneven_illumination(image)
+        if strength is not None:
+            out = uneven_illumination(image, strength=strength)
+        else:
+            out = uneven_illumination(image, strength=50)  # Use default if not specified
     elif corruption_type == 'smoke_effect':
         out = add_smoke_effect(image, intensity=0.7)
     elif corruption_type == 'random' or corruption_type == 'random_corruptions':
@@ -686,6 +737,6 @@ def corrupt(image, corruption_type):
     return out
 
 # Keep the original 'corruption' function for backwards compatibility
-def corruption(image, corruption_type):
+def corruption(image, corruption_type, strength=None):
     """Alias for the corrupt function to maintain backward compatibility"""
-    return corrupt(image, corruption_type)
+    return corrupt(image, corruption_type, strength=strength)

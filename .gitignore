@@ -25,3 +25,5 @@ corruption_debug/
 smoke_debug/
 debug_images/
 log_output/
+results_1/
+metrics/
