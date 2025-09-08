@@ -20,10 +20,40 @@ import argparse
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
+
+def create_custom_colormap():
+    """Create a custom colormap for significance visualization with gradient"""
+    from matplotlib.colors import LinearSegmentedColormap
+    
+    # Create a gradient from white (non-significant) to dark green (highly significant)
+    colors = [
+        '#FFFFFF',  # White for highest p-values (non-significant)
+        '#E8F5E8',  # Very light green
+        '#C8E6C9',  # Light green
+        '#81C784',  # Medium green
+        '#4CAF50',  # Green
+        '#2E7D32'   # Dark green for lowest p-values (highly significant)
+    ]
+    
+    return LinearSegmentedColormap.from_list('custom_green', colors, N=256)
+
+def create_significance_colormap():
+    """Create settings for significance visualization with new color scheme"""
+    # New color scheme:
+    # - White: N/A regions (assign value -1)
+    # - Red: p >= 0.05 (non-significant, assign value 0)
+    # - Green: p < 0.05 (significant, assign value 1)
+    return {
+        'colormap': create_custom_colormap(),
+        'vmin': -1,
+        'vmax': 1,
+        'center': 0,
+    }
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -33,7 +63,7 @@ def parse_args():
                        default='metrics/statistical_results.csv',
                        help='Path to statistical_results.csv file')
     parser.add_argument('-o', '--output-dir', 
-                       default='metrics/heatmaps_6',
+                       default='metrics/heatmaps_8',
                        help='Output directory for heatmap images')
     parser.add_argument('-a', '--alpha', type=float, default=0.05,
                        help='Significance level (default: 0.05)')
@@ -129,7 +159,7 @@ def create_diagonal_corruption_matrix(df, metric_name, value_col, fill_value=np.
     return matrix
 
 def create_individual_metric_heatmap(df, metric_name, output_path, alpha=0.05, dpi=300):
-    """Create heatmap for individual metric showing diagonal p-values"""
+    """Create heatmap for individual metric matching the reference image format exactly"""
     
     # Create p-value matrix for this metric
     pvalue_matrix = create_diagonal_corruption_matrix(df, metric_name, 'p_value', fill_value=1.0)
@@ -137,114 +167,75 @@ def create_individual_metric_heatmap(df, metric_name, output_path, alpha=0.05, d
     # Create significance matrix
     sig_matrix = create_diagonal_corruption_matrix(df, metric_name, 'significant', fill_value=False)
     
-    # Create effect size matrix for color intensity
-    effect_matrix = create_diagonal_corruption_matrix(df, metric_name, 'effect_size', fill_value=0.0)
-    
-    # Create median difference matrix for direction
+    # Create median difference matrix for direction arrows
     diff_matrix = create_diagonal_corruption_matrix(df, metric_name, 'median_difference', fill_value=0.0)
     
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(12, 8))
     
-    # Create a custom color matrix: Red for non-significant, Green for significant
-    color_matrix = np.zeros_like(pvalue_matrix.values, dtype=float)
+    # Use exact settings from reference image
+    sig_settings = create_significance_colormap()
     
+    # Create annotation matrix exactly like reference image
+    annot_matrix = np.empty_like(pvalue_matrix.values, dtype=object)
     for i, train_corruption in enumerate(pvalue_matrix.index):
         for j, eval_corruption in enumerate(pvalue_matrix.columns):
-            if i == j:  # Diagonal elements (same corruption)
+            if i == j:  # Diagonal elements (same corruption training/testing)
                 p_val = pvalue_matrix.iloc[i, j]
-                is_sig = sig_matrix.iloc[i, j]
-                effect = effect_matrix.iloc[i, j]
+                diff_val = diff_matrix.iloc[i, j]
                 
-                if is_sig and p_val < alpha:
-                    # Significant result: Green (positive values)
-                    color_matrix[i, j] = 1.0  # Green for significant
-                else:
-                    # Not significant: Red (negative values)
-                    color_matrix[i, j] = -1.0  # Red for non-significant
+                # Add direction arrow like in reference image
+                direction = "↑" if diff_val > 0 else "↓" if diff_val < 0 else ""
+                
+                # Format p-value exactly like reference (3 decimal places)
+                annot_matrix[i, j] = f"{direction}\n{p_val:.3f}"
             else:
-                # Off-diagonal: no data available, use neutral color
-                color_matrix[i, j] = 0  # Neutral (yellow) for N/A
-    
-    # Create the heatmap
-    # Don't mask off-diagonal elements so we can show "N/A"
-    mask = np.zeros_like(color_matrix, dtype=bool)  # Show all cells
-    
-    # Create custom annotation matrix with p-values and significance markers
-    annot_matrix = np.empty_like(color_matrix, dtype=object)
-    for i, train_corruption in enumerate(pvalue_matrix.index):
-        for j, eval_corruption in enumerate(pvalue_matrix.columns):
-            if i == j and not np.isnan(color_matrix[i, j]):  # Diagonal elements
-                p_val = pvalue_matrix.iloc[i, j]
-                is_sig = sig_matrix.iloc[i, j]
-                
-                # Create significance marker
-                if p_val < 0.001:
-                    sig_marker = "***"
-                elif p_val < 0.01:
-                    sig_marker = "**"
-                elif p_val < 0.05:
-                    sig_marker = "*"
-                else:
-                    sig_marker = ""
-                
-                # Format annotation
-                annot_matrix[i, j] = f"p={p_val:.3f}{sig_marker}"
-            else:
-                # Off-diagonal elements: show N/A
+                # Off-diagonal elements: show N/A exactly like reference
                 annot_matrix[i, j] = "N/A"
     
+    # Create color matrix based on p-values for gradient effect
+    color_matrix = np.full_like(pvalue_matrix.values, np.nan)  # Default to NaN for white
+    
+    for i, train_corruption in enumerate(pvalue_matrix.index):
+        for j, eval_corruption in enumerate(pvalue_matrix.columns):
+            if i == j:  # Diagonal elements only
+                p_val = pvalue_matrix.iloc[i, j]
+                if not pd.isna(p_val):
+                    # Use p-value directly for gradient: lower p = darker green
+                    color_matrix[i, j] = p_val
+    
+    # Create heatmap with gradient color scheme (no borders, no bold text)
+    custom_cmap = create_custom_colormap()
     ax = sns.heatmap(
         color_matrix,
         annot=annot_matrix,
         fmt='',
-        cmap='RdYlGn',
-        center=0,
-        vmin=-1,
-        vmax=1,
-        mask=mask,
+        cmap=custom_cmap,
+        vmin=0.0,
+        vmax=0.1,  # Focus on significance region like reference
         xticklabels=pvalue_matrix.columns,
         yticklabels=pvalue_matrix.index,
-        cbar_kws={'label': 'Significance\n(Green=Significant, Red=Non-Significant)'},
-        linewidths=1,
+        cbar_kws={'label': 'P-Values\n(Green=Significant, Light=Non-Significant)'},
+        linewidths=0,  # No border lines
         square=True,
-        annot_kws={'size': 10, 'weight': 'bold'}
+        annot_kws={'size': 10, 'weight': 'normal', 'ha': 'center', 'va': 'center'}  # No bold text
     )
     
-    # Add p-values as annotations on diagonal
-    for i, train_corruption in enumerate(pvalue_matrix.index):
-        j = i  # Diagonal position
-        p_val = pvalue_matrix.iloc[i, j]
-        is_sig = sig_matrix.iloc[i, j]
+    # Customize the plot to match reference image exactly
+    metric_display = metric_name.replace('ds_ap_', '').replace('_', ' ').title()
+    if 'Mean' in metric_display:
+        metric_display = 'Overall Average Precision'
+    elif 'C1' in metric_display:
+        metric_display = 'Class 1 Precision'
+    elif 'C2' in metric_display:
+        metric_display = 'Class 2 Precision'  
+    elif 'C3' in metric_display:
+        metric_display = 'Class 3 Precision'
         
-        if not np.isnan(p_val):
-            # Format p-value
-            if p_val < 0.001:
-                p_text = "p<0.001"
-            else:
-                p_text = f"p={p_val:.3f}"
-            
-            # Add significance marker
-            sig_marker = "***" if p_val < 0.001 else "**" if p_val < 0.01 else "*" if p_val < 0.05 else ""
-            
-            # Add p-value text
-            ax.text(j + 0.5, i + 0.7, p_text, ha='center', va='center', 
-                   fontsize=8, fontweight='bold', color='black')
-            
-            if sig_marker:
-                ax.text(j + 0.5, i + 0.3, sig_marker, ha='center', va='center', 
-                       fontsize=12, fontweight='bold', color='blue')
-    
-    # Highlight diagonal
-    for i in range(len(pvalue_matrix.index)):
-        ax.add_patch(plt.Rectangle((i, i), 1, 1, fill=False, edgecolor='black', lw=3))
-    
-    plt.title(f'{metric_name.upper()} - Corruption Training Effectiveness\n'
-              f'(Diagonal shows: Corruption-trained vs Clean-trained on same corruption)\n'
-              f'(*** p<0.001, ** p<0.01, * p<0.05)', 
-              fontsize=12, fontweight='bold', pad=20)
-    
-    plt.xlabel('Evaluation Corruption Type', fontsize=11, fontweight='bold')
-    plt.ylabel('Training Corruption Type', fontsize=11, fontweight='bold')
+    plt.title(f'{metric_display} - Cross-Corruption P-Values\n'
+              f'(↑=Positive Effect, ↓=Negative Effect, N/A=Missing Data)', 
+              fontsize=14, fontweight='normal', pad=20)  # No bold
+    plt.xlabel('Training Corruption Type', fontsize=12, fontweight='normal')  # No bold
+    plt.ylabel('Evaluation Dataset', fontsize=12, fontweight='normal')  # No bold
     
     # Rotate labels for better readability
     plt.xticks(rotation=45, ha='right')
@@ -576,7 +567,7 @@ def create_combined_overview(df, output_dir, alpha=0.05, dpi=300):
     pvalue_matrix = create_significance_matrix(df, 'p_value', fill_value=1.0)
     sig_matrix = create_significance_matrix(df, 'significant', fill_value=False)
     
-    sns.heatmap(pvalue_matrix, annot=True, fmt='.3f', cmap='Greens_r', 
+    sns.heatmap(pvalue_matrix, annot=True, fmt='.3f', cmap='RdGy_r', 
                 vmin=0, vmax=0.1, ax=axes[0,0], cbar_kws={'label': 'P-value'},
                 linewidths=0.5, square=True, annot_kws={'size': 8})
     
@@ -610,7 +601,7 @@ def create_combined_overview(df, output_dir, alpha=0.05, dpi=300):
     max_abs_diff = max(abs(diff_matrix.min().min()), abs(diff_matrix.max().max()))
     vmax_diff = max(max_abs_diff, 0.01)
     
-    sns.heatmap(diff_matrix, annot=True, fmt='.3f', cmap='RdYlGn', center=0,
+    sns.heatmap(diff_matrix, annot=True, fmt='.3f', cmap='RdBu_r', center=0,
                 vmin=-vmax_diff, vmax=vmax_diff, ax=axes[1,0], 
                 cbar_kws={'label': 'Performance Δ'}, linewidths=0.5, square=True,
                 annot_kws={'size': 8})
