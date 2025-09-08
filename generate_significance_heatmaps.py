@@ -162,11 +162,12 @@ def create_individual_metric_heatmap(df, metric_name, output_path, alpha=0.05, d
                     # Not significant: Red (negative values)
                     color_matrix[i, j] = -1.0  # Red for non-significant
             else:
-                # Off-diagonal: no data available
-                color_matrix[i, j] = np.nan
+                # Off-diagonal: no data available, use neutral color
+                color_matrix[i, j] = 0  # Neutral (yellow) for N/A
     
     # Create the heatmap
-    mask = np.isnan(color_matrix)
+    # Don't mask off-diagonal elements so we can show "N/A"
+    mask = np.zeros_like(color_matrix, dtype=bool)  # Show all cells
     
     # Create custom annotation matrix with p-values and significance markers
     annot_matrix = np.empty_like(color_matrix, dtype=object)
@@ -189,7 +190,8 @@ def create_individual_metric_heatmap(df, metric_name, output_path, alpha=0.05, d
                 # Format annotation
                 annot_matrix[i, j] = f"p={p_val:.3f}{sig_marker}"
             else:
-                annot_matrix[i, j] = ""
+                # Off-diagonal elements: show N/A
+                annot_matrix[i, j] = "N/A"
     
     ax = sns.heatmap(
         color_matrix,
