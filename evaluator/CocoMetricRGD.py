@@ -13,6 +13,7 @@ from torchmetrics import AveragePrecision as AP, Precision, Recall, F1Score
 import os
 import io
 import cv2
+import csv
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -20,12 +21,20 @@ from matplotlib import font_manager
 from matplotlib import rc
 from typing import List
 
+train_corruption = os.environ.get('TRAIN_CORRUPTION', 'none')
+print(f"Using train corruption type: {train_corruption}")
+
+test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
+print(f"Using test corruption type: {test_corruption}")
+
+metrics_csv = os.environ.get('METRICS_CSV', 'none')
+print(f"Using metrics CSV file: {metrics_csv}")
 @METRICS.register_module()
 class CocoMetricRGD(CocoMetric):
     def __init__(self, data_root: str, data_prefix: str, use_pred_boxes_recon: bool,
             num_classes: int, additional_metrics: List = [], clip_eval: bool = False,
             pred_per_frame: bool = False, save_lg: bool = False, num_thresholds: int = 10,
-            task_type: str = 'multilabel', agg: str = 'frame', ds_per_class: bool = True,
+            task_type: str = 'multilabel', agg: str = 'per_video', ds_per_class: bool = True,
             save_reconstructions: bool = False, **kwargs):
         #agg options: frame, per_video, per_class
         # task_type options: multilabel, multiclass, multitask_multilabel, multitask_multiclass
@@ -141,6 +150,19 @@ class CocoMetricRGD(CocoMetric):
         img_paths = self._coco_api.load_imgs(self.img_ids)
         gts, preds = list(map(list, zip(*results)))
 
+        # Debug prints to understand CSV generation conditions
+        print(f"DEBUG compute_metrics: Starting evaluation")
+        print(f"DEBUG compute_metrics: self.agg = {self.agg}")
+        print(f"DEBUG compute_metrics: self.task_type = {self.task_type}")
+        print(f"DEBUG compute_metrics: len(preds) = {len(preds)}")
+        if len(preds) > 0:
+            print(f"DEBUG compute_metrics: preds[0].keys() = {preds[0].keys()}")
+            print(f"DEBUG compute_metrics: 'ds' in preds[0] = {'ds' in preds[0]}")
+            if 'video_id' in preds[0]:
+                print(f"DEBUG compute_metrics: video_id in preds[0] = True")
+            else:
+                print(f"DEBUG compute_metrics: video_id in preds[0] = False")
+
         if self.outfile_prefix is not None:
             result_files = self.results2json(preds, self.outfile_prefix, gts=gts)
 
@@ -194,7 +216,12 @@ class CocoMetricRGD(CocoMetric):
 
         # compute DS metrics
         if 'per_video' in self.agg:
-            vid_ids = torch.tensor([p['video_id'] for p in preds])
+            # Check if video_id exists in predictions
+            if 'video_id' in preds[0]:
+                vid_ids = torch.tensor([p['video_id'] for p in preds])
+            else:
+                print("Warning: video_id not found in predictions, skipping per-video aggregation")
+                return eval_results
 
         if 'ds' in preds[0]:
             if 'multitask' in self.task_type:
@@ -240,6 +267,7 @@ class CocoMetricRGD(CocoMetric):
                     torch_ap = AP(task='multilabel', num_labels=self.num_classes, average='none')
                     ds_preds = torch.stack([p['ds'] for p in preds]).sigmoid()
                     ds_gt = torch.stack([Tensor(g['ds']).round() for g in gts]).long()
+                    print(f"Line 242 from CocoMetricRGD is being called")
 
                     if 'per_video' in self.agg:
                         # split ds_preds, gt by video
@@ -252,15 +280,18 @@ class CocoMetricRGD(CocoMetric):
 
                         ds_vid_ap_per_class = torch.stack(aps).nanmean(0)
                         if self.ds_per_class:
+                            print(f"Line 255 from CocoMetricRGD is being called")
                             for ind, i in enumerate(ds_vid_ap_per_class):
                                 logger_info.append(f'ds_vid_ap_C{ind+1}: {i:.4f}')
                                 eval_results[f'ds_vid_ap_C{ind+1}'] = i
 
                         if 'per_class' in self.agg:
+                            print(f"Line 260 from CocoMetricRGD is being called")
                             ds_vid_ap = ds_vid_ap_per_class.nanmean()
                             ds_vid_ap_std = ds_vid_ap_per_class[~ds_vid_ap_per_class.isnan()].std()
 
                         else:
+                            print(f"Line 265 from CocoMetricRGD is being called")
                             ds_per_vid_ap = torch.stack(aps).nanmean(1)
                             ds_vid_ap = ds_per_vid_ap.nanmean()
                             ds_vid_ap_std = ds_per_vid_ap[~ds_per_vid_ap.isnan()].std()
@@ -268,8 +299,94 @@ class CocoMetricRGD(CocoMetric):
                         logger_info.append(f'ds_vid_ap: {ds_vid_ap} +- {ds_vid_ap_std}')
                         eval_results['ds_video_average_precision'] = ds_vid_ap
                         eval_results['ds_video_average_precision_std'] = ds_vid_ap_std
+                        print(f"Line 270 from CocoMetricRGD is being called")
+
+                        # Save per-video metrics to CSV
+                        print(f"DEBUG: Starting CSV generation process")
+                        print(f"DEBUG: self.agg = {self.agg}")
+                        print(f"DEBUG: 'per_video' in self.agg = {'per_video' in self.agg}")
+                        print(f"DEBUG: len(ds_preds_per_vid) = {len(ds_preds_per_vid)}")
+                        try:
+                                # Always use the top-level 'results' folder for metrics CSV
+                                results_dir = "metrics"
+                                if not os.path.exists(results_dir):
+                                    os.makedirs(results_dir, exist_ok=True)
+                                    print(f"DEBUG: Created results directory: {results_dir}")
+                                metrics_csv = os.environ.get('METRICS_CSV', 'none')
+                                # Only proceed with CSV generation if metrics_csv is not 'none' and not empty
+                                if metrics_csv == 'none' or not metrics_csv:
+                                    print(f"DEBUG: Skipping CSV generation - METRICS_CSV is '{metrics_csv}'")
+                                    print(f"DEBUG: To enable CSV generation, set METRICS_CSV environment variable to a filename (e.g., 'per_video_metrics.csv')")
+                                else:
+                                    csv_outfile = os.path.join(results_dir, metrics_csv)
+                                    print(f"DEBUG: CSV will be saved to: {csv_outfile}")
+                                    print(f"DEBUG: Current working directory: {os.getcwd()}")
+                                    print(f"DEBUG: Results directory: {results_dir}")
+                                    # Prepare rows: video_id,train_condition,eval_condition,metric,score
+                                    rows = []
+                                    train_corruption = os.environ.get('TRAIN_CORRUPTION', 'none')
+                                    test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
+                                    print(f"DEBUG: train_corruption = {train_corruption}, test_corruption = {test_corruption}")
+                                    # Get unique video IDs safely
+                                    unique_vid_ids, inverse_indices = torch.unique_consecutive(vid_ids, return_inverse=True)
+                                    # For each video, save AP metrics per class
+                                    for vid_idx, (p, gt) in enumerate(zip(ds_preds_per_vid, ds_gt_per_vid)):
+                                        # Get video ID safely
+                                        if vid_idx < len(unique_vid_ids):
+                                            video_id = int(unique_vid_ids[vid_idx].item())
+                                        else:
+                                            # Fallback: use the first frame's video_id for this video
+                                            start_idx = sum(vid_lengths[:vid_idx].tolist()) if vid_idx > 0 else 0
+                                            if start_idx < len(vid_ids):
+                                                video_id = int(vid_ids[start_idx].item())
+                                            else:
+                                                video_id = vid_idx
+                                        # Skip empty videos
+                                        if p.shape[0] == 0:
+                                            continue
+                                        # Compute AP for this video
+                                        ap_scores = torch_ap(p, gt)
+                                        if isinstance(ap_scores, torch.Tensor):
+                                            ap_scores = ap_scores.detach().cpu().numpy()
+                                        # Add AP scores for each class
+                                        for class_idx, score in enumerate(ap_scores):
+                                            rows.append({
+                                                'video_id': video_id,
+                                                'train_condition': train_corruption,
+                                                'test_condition': test_corruption,
+                                                'metric': f'ds_ap_C{class_idx+1}',
+                                                'score': float(score)
+                                            })
+                                        # Always add mean AP score for this video (including zeros)
+                                        mean_ap = float(np.mean(ap_scores))
+                                        rows.append({
+                                            'video_id': video_id,
+                                            'train_condition': train_corruption,
+                                            'test_condition': test_corruption,
+                                            'metric': 'ds_ap_mean',
+                                            'score': mean_ap
+                                        })
+                                    # Write to CSV only if we have data
+                                    if rows:
+                                        # Sort rows by video_id for alignment
+                                        rows.sort(key=lambda x: x['video_id'])
+                                        print(f"Line 331 is being called in CocoMetricRGD.py file")
+                                        with open(csv_outfile, 'w', newline='') as csvfile:
+                                            fieldnames = ['video_id', 'train_condition', 'test_condition', 'metric', 'score']
+                                            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                                            writer.writeheader()
+                                            for row in rows:
+                                                writer.writerow(row)
+                                        print(f"Per-video metrics saved to: {csv_outfile}")
+                                    else:
+                                        print("No per-video metrics to save")
+                        except Exception as e:
+                            print(f"Error saving per-video metrics CSV: {e}")
+                            import traceback
+                            traceback.print_exc()
 
                     else:
+                        print(f"Line 277 from CocoMetricRGD is being called")
                         ds_ap = torch_ap(ds_preds, ds_gt)
 
                         # log overall
@@ -279,6 +396,7 @@ class CocoMetricRGD(CocoMetric):
                         if self.ds_per_class:
                             # log component-wise
                             for ind, i in enumerate(ds_ap):
+                                print(f"Line 283 from CocoMetricRGD is being called")
                                 logger_info.append(f'ds_average_precision_C{ind+1}: {i:.4f}')
                                 eval_results['ds_average_precision_C{}'.format(ind+1)] = i
 
@@ -291,6 +409,7 @@ class CocoMetricRGD(CocoMetric):
                     torch_prec = Precision(task='multiclass', average='none', num_classes=self.num_classes)
                     torch_rec = Recall(task='multiclass', average='none', num_classes=self.num_classes)
                     torch_f1 = F1Score(task='multiclass', average='none', num_classes=self.num_classes)
+                    print(f"Line 295-multiclass from CocoMetricRGD is being called")
 
                     if 'video' in self.agg:
                         # split ds_preds, gt by video

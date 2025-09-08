@@ -18,9 +18,6 @@ try:
     NOISE_MODULE_AVAILABLE = True
     print("Noise module available for Perlin noise corruptions.")
 except ImportError:
-    NOISE_MODULE_AVAILABLE = True
-    print("Noise module available for Perlin noise corruptions.")
-except ImportError:
     NOISE_MODULE_AVAILABLE = False
     print("Warning: 'noise' module not found, Perlin noise corruptions won't be available.")
     print("To enable full functionality, install with: pip install noise")
@@ -390,7 +387,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         else:
             blur_np = to_disp_np(blurred_tensor)
 
-        os.makedirs('debug_images/r_r_1', exist_ok=True)
+        os.makedirs('debug_images/d_d_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(10, 5))
         plt.subplot(1, 2, 1)
@@ -402,7 +399,7 @@ def apply_defocus_blur(image, kernel_size=21): # change kernel size with odd num
         plt.imshow(blur_np)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/r_r_1/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
+        plt.savefig(f'debug_images/d_d_1/input_and_defocus_blur11_ks{kernel_size}_{unique_id}.png')
         plt.close()
         _defocus_blur_save_counter += 1
     # --------------------------------------------------------
@@ -509,7 +506,7 @@ def uneven_illumination(image, strength=50):
             out_np = to_disp_np(result_tensor)
 
         diff = np.abs(out_np.astype(np.int16) - inp_np.astype(np.int16)).astype(np.uint8)
-        os.makedirs('debug_images/u_u_test', exist_ok=True)
+        os.makedirs('debug_images/u_u_1', exist_ok=True)
         unique_id = str(uuid.uuid4())
         plt.figure(figsize=(15, 5))
         plt.subplot(1, 3, 1)
@@ -526,7 +523,7 @@ def uneven_illumination(image, strength=50):
         plt.imshow(diff)
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig(f'debug_images/u_u_test/input_output_diff_u_i_s{strength}_{unique_id}.png')
+        plt.savefig(f'debug_images/u_u_1/input_output_diff_u_i_s{strength}_{unique_id}.png')
         plt.close()
         _uneven_illumination_save_counter += 1
     # --------------------------------------------------------
@@ -537,7 +534,14 @@ def generate_perlin_noise(height, width, scale=10, intensity=0.5):
     if intensity is None:
         raise ValueError("Error: 'intensity' cannot be None. Please provide a valid float value.")
     
-    if not NOISE_MODULE_AVAILABLE:
+    # Try to import noise module again (for worker processes)
+    try:
+        import noise as noise_module
+        noise_available = True
+    except ImportError:
+        noise_available = False
+    
+    if not noise_available:
         # Fallback to simple random noise if noise module is not available
         print("Warning: Using random noise instead of Perlin noise (noise module not available)")
         random_noise = np.random.rand(height, width).astype(np.float32)
@@ -548,7 +552,7 @@ def generate_perlin_noise(height, width, scale=10, intensity=0.5):
 
     for i in range(height):
         for j in range(width):
-            perlin_noise[i, j] = noise.pnoise2(i / scale, j / scale, octaves=6)
+            perlin_noise[i, j] = noise_module.pnoise2(i / scale, j / scale, octaves=6)
 
     # Normalize to [0,1] and apply intensity
     perlin_noise = (perlin_noise - perlin_noise.min()) / (perlin_noise.max() - perlin_noise.min())

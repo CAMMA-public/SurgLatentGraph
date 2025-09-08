@@ -9,7 +9,7 @@ custom_imports = dict(imports=['datasets.custom_loading'], allow_failed_imports=
 # Get corruption type from environment variable (set by shell or main script)
 # corruption_type = os.environ.get('train_corruption', 'none')
 train_corruption = os.environ.get('TRAIN_CORRUPTION', 'none')
-print(f"Using corruption type: {train_corruption}")
+print(f"Using train corruption type: {train_corruption}")
 
 test_corruption = os.environ.get('TEST_CORRUPTION', 'none')
 print(f"Using test corruption type: {test_corruption}")

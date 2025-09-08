@@ -130,7 +130,16 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
-        --help)
+            --metrics-csv)
+            METRICS_CSV="$2"
+            # Validate filename (optional - just check it's not empty)
+            if [[ -z "$METRICS_CSV" ]]; then
+                echo "Error: Metrics CSV filename cannot be empty"
+                exit 1
+            fi
+            shift 2
+            ;;
+                    --help)
             echo "Usage: ./run_train_test.sh [options]"
             echo ""
             echo "Options:"
@@ -281,6 +290,8 @@ fi
 
 export TRAIN_CORRUPTION="$TRAIN_CORRUPTION"
 export TEST_CORRUPTION="$TEST_CORRUPTION"
+export METRICS_CSV="$METRICS_CSV"
+export RESULTS_DIR="${TEST_RESULTS_DIR}"
 # Function to run training
 run_training() {
     local model_type=$1
