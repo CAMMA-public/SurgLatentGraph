@@ -192,48 +192,72 @@ def create_individual_metric_heatmap(df, metric_name, output_path, alpha=0.05, d
                 # Off-diagonal elements: show N/A exactly like reference
                 annot_matrix[i, j] = "N/A"
     
-    # Create color matrix based on p-values for gradient effect
-    color_matrix = np.full_like(pvalue_matrix.values, np.nan)  # Default to NaN for white
+    # Create color matrix based on significance with custom values
+    color_matrix = np.full_like(pvalue_matrix.values, -1.0)  # Default to -1 for white (N/A)
     
     for i, train_corruption in enumerate(pvalue_matrix.index):
         for j, eval_corruption in enumerate(pvalue_matrix.columns):
             if i == j:  # Diagonal elements only
                 p_val = pvalue_matrix.iloc[i, j]
+                is_significant = sig_matrix.iloc[i, j]
+                
                 if not pd.isna(p_val):
-                    # Use p-value directly for gradient: lower p = darker green
-                    color_matrix[i, j] = p_val
+                    if is_significant:
+                        # Significant: use p-value for green gradient (lower p = darker green)
+                        # Scale p-value to range 0.0-0.05 for green gradient
+                        color_matrix[i, j] = min(p_val, 0.05)
+                    else:
+                        # Non-significant: use special value for red
+                        color_matrix[i, j] = 0.1  # Fixed value for red color
     
-    # Create heatmap with gradient color scheme (no borders, no bold text)
-    custom_cmap = create_custom_colormap()
+    # Create custom colormap: White -> Green gradient -> Red
+    from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+    import matplotlib.colors as mcolors
+    
+    # Define colors for different ranges
+    colors_and_bounds = [
+        (-1.0, '#FFFFFF'),    # White for N/A
+        (0.0, '#2E7D32'),     # Dark green for p=0 (most significant)
+        (0.001, '#388E3C'),   # 
+        (0.01, '#4CAF50'),    # Medium green for p=0.01
+        (0.05, '#81C784'),    # Light green for p=0.05 (threshold)
+        (0.1, '#F44336')      # Red for non-significant
+    ]
+    
+    # Create custom colormap
+    bounds = [-1.0, 0.0, 0.001, 0.01, 0.05, 0.1, 1.0]
+    colors = ['#FFFFFF', '#2E7D32', '#388E3C', '#4CAF50', '#81C784', '#F44336']
+    custom_cmap = mcolors.ListedColormap(colors)
+    norm = mcolors.BoundaryNorm(bounds, custom_cmap.N)
+    
+    # Create heatmap with custom color scheme
     ax = sns.heatmap(
         color_matrix,
         annot=annot_matrix,
         fmt='',
         cmap=custom_cmap,
-        vmin=0.0,
-        vmax=0.1,  # Focus on significance region like reference
+        norm=norm,
         xticklabels=pvalue_matrix.columns,
         yticklabels=pvalue_matrix.index,
-        cbar_kws={'label': 'P-Values\n(Green=Significant, Light=Non-Significant)'},
+        cbar_kws={'label': 'Significance Level\n(Green=Significant, Red=Non-Significant, White=N/A)'},
         linewidths=0,  # No border lines
         square=True,
         annot_kws={'size': 10, 'weight': 'normal', 'ha': 'center', 'va': 'center'}  # No bold text
     )
     
-    # Customize the plot to match reference image exactly
-    metric_display = metric_name.replace('ds_ap_', '').replace('_', ' ').title()
-    if 'Mean' in metric_display:
-        metric_display = 'Overall Average Precision'
+    # Simple title formatting like reference image
+    metric_display = metric_name.replace('ds_ap_', '').replace('_', ' ').upper()
+    if 'MEAN' in metric_display:
+        metric_display = 'Mean AP'
     elif 'C1' in metric_display:
-        metric_display = 'Class 1 Precision'
+        metric_display = 'AP C1'
     elif 'C2' in metric_display:
-        metric_display = 'Class 2 Precision'  
+        metric_display = 'AP C2'  
     elif 'C3' in metric_display:
-        metric_display = 'Class 3 Precision'
+        metric_display = 'AP C3'
         
-    plt.title(f'{metric_display} - Cross-Corruption P-Values\n'
-              f'(↑=Positive Effect, ↓=Negative Effect, N/A=Missing Data)', 
-              fontsize=14, fontweight='normal', pad=20)  # No bold
+    plt.title(f'{metric_display} P-Values', 
+              fontsize=14, fontweight='normal', pad=20)  # Simple title, no bold
     plt.xlabel('Training Corruption Type', fontsize=12, fontweight='normal')  # No bold
     plt.ylabel('Evaluation Dataset', fontsize=12, fontweight='normal')  # No bold
     
