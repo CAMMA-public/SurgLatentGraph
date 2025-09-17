@@ -5,7 +5,12 @@
 </div>
 
 # **Latent Graph Representations for Surgical Scene Understanding**
+
+###  News
+- [ **17/06/2025** ]: Check out our [CAMMA Dataset Overlaps](https://github.com/CAMMA-public/camma_dataset_overlaps) repository for an analysis of video overlaps across Cholec80, CholecT50, and Endoscapes to ensure fair dataset splits.
+
 This repository contains the code corresponding to our Transactions on Medical Imaging paper _Latent Graph Representations for Critical View of Safety Assessment_, our MICCAI paper _Encoding Surgical Videos as Latent Spatiotemporal Graphs for Object- and Anatomy-Driven Reasoning_, and our IPCAI/IJCARS paper _Optimizing Latent Graph Representations for Unseen Domain Generalization_.
+
 
 <div align="center">
 <img src="LG_overall.png" width="90%">
